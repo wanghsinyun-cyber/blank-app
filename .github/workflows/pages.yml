@@ -1,0 +1,54 @@
+name: Build and deploy to GitHub Pages
+
+# src/ 是唯一的真實來源；每次推送都重新執行 build.sh，
+# 把串接出來的單檔 dist/index.html 部署到 GitHub Pages。
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# 同時只跑一個部署；不取消進行中的部署，讓它跑完
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build single-file app
+        run: bash build.sh
+
+      - name: Verify build output
+        run: |
+          test -s dist/index.html
+          grep -q '<title>KIDFORUM</title>' dist/index.html
+          echo "dist/index.html $(wc -c < dist/index.html) bytes"
+
+      - name: Copy design docs alongside the app
+        run: |
+          mkdir -p dist/docs
+          cp README.md dist/docs/ 2>/dev/null || true
+          cp docs/*.md dist/docs/ 2>/dev/null || true
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

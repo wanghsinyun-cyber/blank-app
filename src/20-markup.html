@@ -1,0 +1,22 @@
+<div class="app">
+  <header class="topbar">
+    <div class="brand"><b>KIDFORUM</b><span>知識共構診斷平台</span></div>
+    <span class="chip-demo">示範資料（模擬班級）</span>
+    <div class="spacer"></div>
+    <div class="row" style="gap:8px">
+      <span class="row" id="classWrap" style="gap:6px">
+        <label class="small muted" for="classSel">班級</label>
+        <select id="classSel" style="width:auto"></select>
+      </span>
+      <label class="small muted" for="who">身分</label>
+      <select id="who" style="width:auto"></select>
+      <button class="btn sm ghost" id="themeBtn" title="切換淺色／深色">◐</button>
+    </div>
+  </header>
+  <div class="main">
+    <nav class="rail" id="rail"></nav>
+    <main class="stage" id="stage" tabindex="-1"><div class="wrap" id="view"></div></main>
+  </div>
+</div>
+<div id="modalRoot"></div>
+<div id="toastRoot"></div>

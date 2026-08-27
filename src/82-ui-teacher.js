@@ -1,0 +1,380 @@
+/* ==========================================================================
+   82-ui-teacher.js — 教師端：後台、派題精靈、派題分析（KIDMAP）、非選評閱、迷思橋接
+   ========================================================================== */
+
+let TAB = 'overview';
+let WIZ = null;
+
+function viewTeacher(){
+  const k = currentClass();
+  const cond = condition(k.condition);
+  const asgs = state.assignments.slice().sort(function(a, b){ return b.createdAt - a.createdAt; });
+  const cs = communitySummary();
+  const diag = diagnose(state, 'a-pre');
+  const flagged = diag && diag.ready ? diag.flagged.length : 0;
+  const bridged = state.views.filter(function(v){ return v.origin; }).length;
+  const nAll = state.classes.reduce(function(a, c){ return a + c.studentIds.length; }, 0);
+
+  return sectionHead('教師後台',
+    k.name + '　·　加入代碼 ' + k.code + '　·　' + k.studentIds.length + ' 位學生　·　夥伴條件：' + cond.name,
+    '<a class="btn" href="#/research">研究控制台</a><a class="btn primary" href="#/create">建立派題</a>') +
+  '<div class="grid g4" style="margin-bottom:18px">' +
+    statCard('全體樣本', nAll + ' 人', state.classes.length + ' 班 · 四條件叢集分派') +
+    statCard('待處理迷思題', flagged, '迷思比例 ≥ ' + state.settings.misThreshold + '%', flagged ? 'crit' : '') +
+    statCard('共構視圖', state.views.length, '其中 ' + bridged + ' 個由迷思開啟') +
+    statCard('社群貼文', cs.notes, '延伸 ' + cs.buildOns + ' · 躍升 ' + cs.riseAbove) +
+  '</div>' +
+
+  '<div class="card" style="margin-bottom:18px"><div class="card-h"><h3>四條件分派概況</h3>' +
+    '<a class="btn sm" href="#/research">條件分派與歷程分析 →</a></div>' +
+    '<div class="card-p"><div class="grid g4">' + CONDITIONS.map(function(c){
+      const ks = state.classes.filter(function(x){ return x.condition === c.id; });
+      const n = ks.reduce(function(a, x){ return a + x.studentIds.length; }, 0);
+      return '<div class="stat"><div class="k">' + esc(c.name) + '</div>' +
+        '<div class="v">' + n + '</div><div class="s">' +
+        (ks.map(function(x){ return esc(x.name.replace('114 學年 ', '')); }).join('、') || '—') + '</div></div>';
+    }).join('') + '</div>' +
+    '<p class="muted small" style="margin-top:10px">條件在班級層次操弄：同一班的同學拿到同一種夥伴，' +
+    '避免同班互相看到不同條件而造成擴散污染。四個班共用同一份題本、同一次 Rasch 校準，條件之間才可比較。</p>' +
+    '</div></div>' +
+
+  '<div class="card" style="margin-bottom:18px"><div class="card-h"><h3>派過的作業</h3>' +
+    '<span class="muted small">點開任何一份，會看到成績分佈、KIDMAP 診斷、迷思橋接與非選評閱。</span></div>' +
+    '<div class="tablewrap"><table><thead><tr><th>作業標題</th><th>階段</th><th class="n">題數</th>' +
+    '<th class="n">已交</th><th class="n">迷思題</th><th>建立時間</th><th></th></tr></thead><tbody>' +
+    asgs.map(function(a){
+      const d = diagnose(state, a.id);
+      const done = d ? d.done.length : 0;
+      const fl = d && d.ready ? d.flagged.length : '—';
+      return '<tr><td><a href="#/assign/' + a.id + '">' + esc(a.title) + '</a><div class="muted small">' + esc(a.desc || '') + '</div></td>' +
+        '<td><span class="pill">' + (a.phase === 'post' ? '共構後測' : '前測') + '</span></td>' +
+        '<td class="n">' + a.itemIds.length + '</td><td class="n">' + done + ' / ' + assignmentRoster(a).length + '</td>' +
+        '<td class="n">' + fl + '</td><td class="num small">' + fmtDate(a.createdAt) + '</td>' +
+        '<td><a class="btn sm" href="#/assign/' + a.id + '">分析</a></td></tr>';
+    }).join('') + '</tbody></table></div></div>' +
+
+  '<div class="grid g2">' +
+    '<div class="card"><div class="card-h"><h3>班級名單</h3><span class="muted small">共 ' + k.studentIds.length + ' 人</span></div>' +
+    '<div class="card-p"><div class="row" style="gap:6px">' +
+      k.studentIds.map(function(sid){
+        return '<span class="pill" title="切換為此學生檢視" data-act="asrole" data-id="' + sid + '" style="cursor:pointer">' + esc(userName(sid)) + '</span>';
+      }).join('') + '</div>' +
+      '<p class="muted small" style="margin-top:12px">點任一位同學可切換成他的視角，直接看到他的作業、個人 KIDMAP 與知識建構空間。</p>' +
+    '</div></div>' +
+    '<div class="card"><div class="card-h"><h3>從迷思開啟的共構視圖</h3></div><div class="card-p col">' +
+      (state.views.filter(function(v){ return v.origin; }).map(function(v){
+        const it = getItem(v.origin.iid);
+        return '<div class="row" style="justify-content:space-between;border-bottom:1px solid var(--rule-soft);padding-bottom:8px">' +
+          '<div><a href="#/kb/' + v.id + '"><b>' + esc(v.title) + '</b></a>' +
+          '<div class="muted small">源自 ' + (it ? '第 ' + it.no + ' 題' : '—') + '　·　' + notesOfView(v.id).length + ' 則貼文</div></div>' +
+          '<a class="btn sm" href="#/kb/' + v.id + '">進入</a></div>';
+      }).join('') || '<div class="muted small">還沒有由迷思開啟的視圖。到「派題分析 → 迷思橋接」按下〈開啟共構視圖〉。</div>') +
+    '</div></div>' +
+  '</div>';
+}
+
+/* ==========================================================================
+   派題精靈
+   ========================================================================== */
+function viewCreate(){
+  if (!WIZ) WIZ = {step:1, units:{}, items:{}, title:'', desc:'', due:'', phase:'pre'};
+  const steps = ['選單元', '挑題目', '派給學生'];
+  let body = '';
+
+  if (WIZ.step === 1){
+    const books = {};
+    UNITS.forEach(function(u){ (books[u.book] = books[u.book] || []).push(u); });
+    body = '<div class="card card-p"><h3>選要考的單元</h3>' +
+      '<p class="muted small">照康軒章節勾選，之後會從對應單元的會考題目列出來給你挑。目前示範題庫聚焦在第三冊。</p>' +
+      Object.keys(books).map(function(b){
+        const list = books[b];
+        return '<div style="margin-top:14px"><div class="eyebrow">第 ' + b + ' 冊（' + list[0].grade + '）</div>' +
+          '<div class="row" style="gap:6px;margin-top:6px">' + list.map(function(u){
+            const n = ITEMS.filter(function(i){ return i.unit === u.id; }).length;
+            const on = WIZ.units[u.id];
+            return '<button class="btn sm' + (on ? ' primary' : '') + '" data-act="wiz-unit" data-id="' + u.id + '"' +
+              (n ? '' : ' disabled title="題庫中尚無此單元的題目"') + '>' + esc(u.name) +
+              ' <span class="num">' + n + '</span></button>';
+          }).join('') + '</div></div>';
+      }).join('') +
+      '<hr class="hr"><div class="row"><span class="muted small">已選 ' + Object.keys(WIZ.units).length + ' 個單元</span>' +
+      '<div class="spacer"></div><button class="btn primary" data-act="wiz-next"' +
+      (Object.keys(WIZ.units).length ? '' : ' disabled') + '>下一步：挑題目 →</button></div></div>';
+  }
+
+  if (WIZ.step === 2){
+    const cand = ITEMS.filter(function(i){ return WIZ.units[i.unit]; });
+    body = '<div class="card card-p"><h3>挑題目</h3>' +
+      '<p class="muted small">從你選的單元中挑要派的題目。非選題會進入手寫作答與評閱流程。</p>' +
+      '<div class="col" style="margin-top:12px">' + cand.map(function(i){
+        const on = WIZ.items[i.id];
+        return '<label class="item" style="cursor:pointer;border-color:' + (on ? 'var(--accent)' : 'var(--rule)') + '">' +
+          '<div class="row" style="justify-content:space-between">' +
+          '<div class="row"><input type="checkbox" data-act="wiz-item" data-id="' + i.id + '"' + (on ? ' checked' : '') + '>' +
+          '<span class="pill">' + i.year + ' 年</span><span class="pill">' + esc(i.diff) + '</span>' +
+          '<span class="pill">' + (i.type === 'cr' ? '非選題' : '選擇題') + '</span>' +
+          '<span class="muted small">' + esc(unitName(i.unit)) + '</span></div></div>' +
+          '<div class="stem">' + esc(i.stem) + '</div>' +
+          (i.options.length ? '<div class="muted small">' + i.options.map(function(o, k){
+            return String.fromCharCode(65 + k) + '. ' + esc(o); }).join('　') + '　·　正解 ' +
+            String.fromCharCode(65 + i.answer) + '</div>' : '') +
+          '</label>';
+      }).join('') + '</div>' +
+      '<hr class="hr"><div class="row"><button class="btn" data-act="wiz-back">← 上一步</button>' +
+      '<span class="muted small">已選 ' + Object.keys(WIZ.items).length + ' 題</span><div class="spacer"></div>' +
+      '<button class="btn primary" data-act="wiz-next"' + (Object.keys(WIZ.items).length ? '' : ' disabled') +
+      '>下一步：派給學生 →</button></div></div>';
+  }
+
+  if (WIZ.step === 3){
+    body = '<div class="card card-p"><h3>派題細節</h3>' +
+      '<div class="col" style="max-width:520px;margin-top:12px">' +
+      '<div class="field"><label for="wt">作業標題</label><input id="wt" type="text" value="' + esc(WIZ.title) +
+        '" placeholder="例：八上 · 一元二次方程式練習"></div>' +
+      '<div class="field"><label for="wd">說明（給學生的提示，可留空）</label><textarea id="wd">' + esc(WIZ.desc) + '</textarea></div>' +
+      '<div class="field"><label for="wp">階段</label><select id="wp">' +
+        '<option value="pre"' + (WIZ.phase === 'pre' ? ' selected' : '') + '>前測（診斷用，會進入迷思橋接）</option>' +
+        '<option value="post"' + (WIZ.phase === 'post' ? ' selected' : '') + '>共構後測（與前測比較 Δθ）</option></select></div>' +
+      '<div class="field"><label for="wdue">截止時間</label><input id="wdue" type="datetime-local" value="' + esc(WIZ.due) + '"></div>' +
+      '</div><hr class="hr"><div class="row"><button class="btn" data-act="wiz-back">← 上一步</button>' +
+      '<span class="muted small">將派出 ' + Object.keys(WIZ.items).length + ' 題給全部 ' + state.classes.length + ' 個班級</span>' +
+      '<div class="spacer"></div><button class="btn primary" data-act="wiz-submit">派出這份作業</button></div></div>';
+  }
+
+  return sectionHead('建立派題', '從康軒單元開始，三個步驟完成派題。', '<a class="btn" href="#/teacher">回教師後台</a>') +
+    '<div class="steps">' + steps.map(function(s, i){
+      return '<div class="step' + (WIZ.step === i + 1 ? ' on' : '') + '"><b>' + (i + 1) + '</b>' + s + '</div>';
+    }).join('') + '</div>' + body;
+}
+
+/* ==========================================================================
+   派題分析
+   ========================================================================== */
+function viewAssign(aid){
+  const diag = diagnose(state, aid);
+  if (!diag) return '<div class="empty"><h3>找不到這份派題</h3><p>它可能已刪除。</p><a class="btn" href="#/teacher">回教師後台</a></div>';
+  const a = diag.assignment;
+  const tabs = [
+    ['overview', '成績總覽'],
+    ['kidmap', 'KIDMAP 診斷'],
+    ['items', '每題四象限'],
+    ['bridge', '迷思橋接'],
+    ['cr', '非選評閱'],
+    ['ai', 'AI 深度分析']
+  ];
+  let body = '';
+  if (TAB === 'overview') body = tabOverview(diag);
+  else if (TAB === 'kidmap') body = tabKidmap(diag);
+  else if (TAB === 'items') body = tabItems(diag);
+  else if (TAB === 'bridge') body = tabBridge(diag);
+  else if (TAB === 'cr') body = tabCR(diag);
+  else body = tabAI(diag);
+
+  return sectionHead(a.title, (a.phase === 'post' ? '共構後測' : '前測') + '　·　' +
+      diag.done.length + ' / ' + diag.roster.length + ' 位已交　·　' + diag.items.length + ' 道選擇題',
+      '<a class="btn" href="#/teacher">回教師後台</a>') +
+    '<div class="tabs">' + tabs.map(function(t){
+      return '<button data-act="tab" data-id="' + t[0] + '" aria-selected="' + (TAB === t[0]) + '">' + t[1] + '</button>';
+    }).join('') + '</div>' + body;
+}
+
+function tabOverview(diag){
+  const scores = diag.perStudent.map(function(p){ return p.right; });
+  const nItems = diag.items.length;
+  if (!diag.done.length) return '<div class="empty"><h3>還沒有學生作答</h3><p>把班級加入代碼發給學生，作答後這裡會顯示。</p></div>';
+  return '<div class="grid g4" style="margin-bottom:16px">' +
+    statCard('班級平均', fx(mean(scores) / nItems * 100, 1) + '<span style="font-size:15px">%</span>', '答對 ' + fx(mean(scores), 1) + ' / ' + nItems + ' 題') +
+    statCard('已交作答', diag.done.length, '未完成 ' + (diag.roster.length - diag.done.length) + ' 人') +
+    statCard('迷思題次', diag.totals[2], '占全部作答 ' + pct(diag.totals[2] / Math.max(1, diag.cells.length)), diag.totals[2] ? 'crit' : '') +
+    statCard('優勢題次', diag.totals[1], '超越預期答對', 'good') +
+  '</div>' +
+  '<div class="grid g2">' +
+    '<div class="card"><div class="card-h"><h3>成績分佈</h3></div><div class="card-p">' +
+      histSVG(scores, Math.min(10, nItems), '答對題數（滿分 ' + nItems + '）') + '</div></div>' +
+    '<div class="card"><div class="card-h"><h3>全班四象限分佈</h3>' +
+      '<span class="muted small">排列方式與 KIDMAP 圖一致</span></div><div class="card-p">' +
+      // 依 KIDMAP 圖上的位置排列：左上 III、右上 I、左下 II、右下 IV
+      '<div class="grid" style="grid-template-columns:repeat(2,minmax(0,1fr))">' + [3,1,2,4].map(function(q){
+        return '<div class="stat"><div class="k">' + QUAD[q].roman + ' ' + QUAD[q].name + '</div>' +
+          '<div class="v" style="color:var(--' + QUAD[q].key + ')">' + diag.totals[q] + '</div>' +
+          '<div class="s">' + esc(QUAD[q].desc) + '</div></div>';
+      }).join('') + '</div>' +
+      '<p class="muted small" style="margin-top:12px">用簡化 Rasch 模式從全班作答估出每題難度 δ 與每位學生能力 θ，' +
+      '再把每一個「人 × 題」的結果分成四象限。<strong>迷思概念（II）</strong>指能力足以答對卻答錯，是最需要老師介入的格子。</p>' +
+    '</div></div>' +
+  '</div>' +
+  '<div class="card" style="margin-top:16px"><div class="card-h"><h3>學生表現</h3><span class="muted small">依能力估計值排序</span></div>' +
+  '<div class="tablewrap"><table><thead><tr><th>學生</th><th class="n">答對</th><th class="n">θ</th><th class="n">SE</th>' +
+  '<th class="n">Infit</th><th>四象限</th><th class="n">迷思</th><th></th></tr></thead><tbody>' +
+  diag.perStudent.slice().sort(function(a, b){ return (b.theta || 0) - (a.theta || 0); }).map(function(p){
+    return '<tr><td>' + esc(userName(p.sid)) + '</td><td class="n">' + p.right + '/' + p.n + '</td>' +
+      '<td class="n">' + fx(p.theta) + '</td><td class="n">' + fx(p.se) + '</td><td class="n">' + fx(p.infit) + '</td>' +
+      '<td style="min-width:110px">' + quadBar(p.q, p.n) + '</td>' +
+      '<td class="n" style="color:var(--q2)">' + p.q[2] + '</td>' +
+      '<td><button class="btn sm" data-act="kidmap-one" data-id="' + p.sid + '">KIDMAP</button></td></tr>';
+  }).join('') + '</tbody></table></div></div>';
+}
+
+function tabKidmap(diag){
+  if (!diag.ready){
+    return '<div class="empty"><h3>尚無足夠資料</h3><p>至少需要 ' + diag.minN +
+      ' 位學生完成才會執行 KIDMAP，目前完成 ' + diag.done.length + ' 位。</p></div>';
+  }
+  // 預設先看迷思最多的學生——那是老師最需要處理的人
+  const ranked = diag.perStudent.slice().sort(function(a, b){ return b.q[2] - a.q[2]; });
+  const sel = (tabKidmap.sel && diag.perStudent.some(function(p){ return p.sid === tabKidmap.sel; }))
+    ? tabKidmap.sel : ranked[0].sid;
+  tabKidmap.sel = sel;
+  const ps = diag.perStudent.find(function(p){ return p.sid === sel; }) || ranked[0];
+  return '<div class="grid" style="grid-template-columns:230px minmax(0,1fr);gap:16px">' +
+    '<div class="card" style="max-height:660px;overflow:auto"><div class="card-h"><h3>學生</h3>' +
+    '<span class="muted small">依迷思題數排序</span></div>' +
+    '<div style="padding:8px">' + ranked.map(function(p){
+      return '<button class="btn sm" style="width:100%;justify-content:space-between;margin-bottom:4px;' +
+        (p.sid === sel ? 'border-color:var(--accent);font-weight:600' : 'border-color:transparent') + '"' +
+        ' data-act="kidmap-sel" data-id="' + p.sid + '">' + esc(userName(p.sid)) +
+        '<span class="num" style="color:var(--q2)">' + (p.q[2] || '') + '</span></button>';
+    }).join('') + '</div></div>' +
+    '<div class="card"><div class="card-h"><h3>' + esc(userName(ps.sid)) + ' 的 KIDMAP</h3>' +
+      '<span class="pill">θ = ' + fx(ps.theta) + ' ± ' + fx(ps.se) + '</span>' +
+      '<span class="pill">Infit ' + fx(ps.infit) + '</span></div>' +
+    '<div class="card-p">' + kidmapSVG(diag, ps) +
+      '<div class="row" style="margin-top:10px">' + quadLegend() + '</div>' +
+      '<hr class="hr">' +
+      '<p class="small"><strong>怎麼讀這張圖：</strong>縱軸是試題難度（越上面越難），橫向分成答錯／答對兩欄，' +
+      '中間那條虛線是這位學生的能力值 θ。落在<strong style="color:var(--q2)">左下（II 迷思）</strong>的題目，' +
+      '照他的能力本來應該答對卻答錯了——這些題目就是他真正的概念缺口，也是本系統送進共構討論的材料。' +
+      '落在<strong style="color:var(--q1)">右上（I 優勢）</strong>的題目代表他有隱藏實力，可以邀他當該題的知識資源人。</p>' +
+      (ps.q[2] ? '<div class="ai-out" style="margin-top:12px"><p><strong>這位學生的迷思題：</strong></p><ul>' +
+        ps.cells.filter(function(c){ return c.q === 2; }).map(function(c){
+          const it = getItem(c.iid);
+          return '<li>第 ' + it.no + ' 題（' + esc(shortStem(it.stem)) + '）——他選了 ' +
+            (c.choice != null ? String.fromCharCode(65 + c.choice) + '. ' + esc(it.options[c.choice]) : '未作答') +
+            '，正解是 ' + String.fromCharCode(65 + it.answer) + '。預期答對率 ' + pct(c.p) + '。</li>';
+        }).join('') + '</ul></div>' : '<p class="small muted" style="margin-top:12px">這位學生沒有落在迷思象限的題目。</p>') +
+    '</div></div></div>';
+}
+
+function tabItems(diag){
+  if (!diag.ready) return '<div class="empty"><h3>尚無足夠資料</h3><p>等更多學生作答後才能顯示每題分析。</p></div>';
+  const rows = diag.perItem.slice().sort(function(a, b){ return b.misRate - a.misRate; });
+  return '<div class="card"><div class="card-h"><h3>全班每題四象限分佈</h3>' +
+    '<span class="muted small">依迷思(II)比例由高至低排序</span>' + '</div>' +
+    '<div class="tablewrap"><table><thead><tr><th>題號</th><th>單元</th><th class="n">δ</th><th class="n">答對率</th>' +
+    '<th>四象限</th><th class="n">迷思</th><th>迷思誘答</th><th class="n">Outfit</th><th></th></tr></thead><tbody>' +
+    rows.map(function(pi){
+      const it = pi.item;
+      const m = pi.misCode ? MISCONCEPTIONS.find(function(x){ return x.id === pi.misCode; }) : null;
+      return '<tr><td><b>第 ' + it.no + ' 題</b><div class="muted small">' + it.year + ' 年 · ' + esc(it.diff) + '</div></td>' +
+        '<td class="small">' + esc(unitName(it.unit)) + '</td>' +
+        '<td class="n">' + fx(pi.delta) + '</td><td class="n">' + pct(pi.pass) + '</td>' +
+        '<td style="min-width:120px">' + quadBar(pi.q, pi.n) + '</td>' +
+        '<td class="n"' + (pi.misRate >= 0.15 ? ' style="color:var(--q2);font-weight:600"' : '') + '>' +
+          pi.q[2] + '（' + pct(pi.misRate) + '）</td>' +
+        '<td class="small">' + (pi.topDistractor != null
+          ? String.fromCharCode(65 + pi.topDistractor) + '. ' + esc(pi.item.options[pi.topDistractor]) +
+            (m ? '<div class="muted" style="font-size:11.5px">' + esc(m.name) + '</div>' : '')
+          : '<span class="muted">—</span>') + '</td>' +
+        '<td class="n">' + fx(pi.outfit) + '</td>' +
+        '<td><button class="btn sm" data-act="item-strategy" data-id="' + it.id + '">教學策略</button></td></tr>';
+    }).join('') + '</tbody></table></div>' +
+    '<div class="card-p"><div class="row">' + quadLegend() + '</div>' +
+    '<p class="muted small" style="margin-top:10px">Outfit MNSQ 接近 1 代表該題與 Rasch 模式相符；明顯大於 1.3 表示有異常作答型態，' +
+    '通常正是迷思或猜測造成的，值得優先檢視。</p></div></div>';
+}
+
+/* --- 迷思橋接：兩個平台真正接起來的地方 --- */
+function tabBridge(diag){
+  if (!diag.ready) return '<div class="empty"><h3>尚無足夠資料</h3><p>需要至少 ' + diag.minN + ' 位學生完成作答。</p></div>';
+  const list = diag.flagged;
+  return '<div class="card card-p" style="margin-bottom:16px">' +
+    '<h3>從測驗到討論：一鍵把迷思變成社群的問題</h3>' +
+    '<p class="lead" style="margin-top:8px">KIDMAP 的第二象限（<span class="pill q2"><span class="dot"></span>II 迷思概念</span>）指出的是' +
+    '「這個學生的能力應該答得出來，卻答錯了」——這正是最值得全班一起想清楚的真實問題。' +
+    '按下〈開啟共構視圖〉，系統會建立一個 Knowledge Forum 式的視圖，把題目、誘答分析與探究問題貼進去，' +
+    '同時把在該題落在<span class="pill q1"><span class="dot"></span>I 優勢概念</span>的同學標為<strong>知識資源人</strong>，' +
+    '請他們先貼出自己的想法，而不是直接公布答案。</p>' +
+    '<p class="muted small">門檻：迷思比例 ≥ ' + state.settings.misThreshold + '%（可在系統設定調整）。</p></div>' +
+    (list.length ? list.map(function(pi){
+      const it = pi.item;
+      const v = bridgeExists(diag.assignment.id, it.id);
+      const m = pi.misCode ? MISCONCEPTIONS.find(function(x){ return x.id === pi.misCode; }) : null;
+      return '<div class="card" style="margin-bottom:14px"><div class="card-h">' +
+        '<h3>第 ' + it.no + ' 題　<span class="pill q2"><span class="dot"></span>迷思 ' + pi.q[2] + ' 人 · ' + pct(pi.misRate) + '</span></h3>' +
+        (v ? '<a class="btn sm" href="#/kb/' + v.id + '">進入共構視圖 →</a>'
+           : '<button class="btn primary sm" data-act="bridge" data-id="' + it.id + '">開啟共構視圖</button>') + '</div>' +
+        '<div class="card-p"><div class="item" style="margin-bottom:12px"><div class="stem">' + esc(it.stem) + '</div>' +
+        '<div class="opts">' + it.options.map(function(o, k){
+          const isAns = k === it.answer, isTop = k === pi.topDistractor;
+          return '<div class="opt' + (isAns ? ' right' : (isTop ? ' wrong' : '')) + '"><b>' +
+            String.fromCharCode(65 + k) + '</b><span>' + esc(o) + (isAns ? '　<span class="muted small">正解</span>' : '') +
+            (isTop ? '　<span class="muted small">迷思學生最常選（' + pi.topDistractorN + ' 人）</span>' : '') + '</span></div>';
+        }).join('') + '</div></div>' +
+        (m ? '<p class="small"><strong>題庫標記的迷思類型：</strong>' + esc(m.name) + '——' + esc(m.desc) + '</p>' : '') +
+        '<div class="grid g2" style="margin-top:10px">' +
+          '<div><div class="eyebrow">落在迷思象限（待解者）</div><div class="row" style="gap:5px;margin-top:6px">' +
+            pi.q2Students.map(function(s){ return '<span class="pill q2">' + esc(userName(s)) + '</span>'; }).join('') + '</div></div>' +
+          '<div><div class="eyebrow">落在優勢象限（知識資源人）</div><div class="row" style="gap:5px;margin-top:6px">' +
+            (pi.q1Students.map(function(s){ return '<span class="pill q1">' + esc(userName(s)) + '</span>'; }).join('') ||
+             '<span class="muted small">這一題沒有人超越預期答對。</span>') + '</div></div>' +
+        '</div>' +
+        '<hr class="hr"><div class="eyebrow">將貼進視圖的探究問題</div>' +
+        '<div class="ai-out" style="margin-top:6px">' + nl2br(buildInquiryPrompt(pi, diag)) + '</div>' +
+        '</div></div>';
+    }).join('') : '<div class="empty"><h3>目前沒有明顯的迷思題</h3>' +
+      '<p>全班沒有出現迷思比例超過 ' + state.settings.misThreshold + '% 的題目。</p></div>');
+}
+
+/* --- 非選題評閱 --- */
+function tabCR(diag){
+  const crs = diag.assignment.itemIds.map(getItem).filter(function(i){ return i && i.type === 'cr'; });
+  if (!crs.length) return '<div class="empty"><h3>這份作業沒有非選題</h3><p>下次派題時可以在題型中加入非選題。</p></div>';
+  const sel = tabCR.sel || crs[0].id;
+  tabCR.sel = sel;
+  const it = getItem(sel);
+  const rubricKey = 'rubric:' + it.id + ':' + aiEngine();
+  const rubric = state.aiCache[rubricKey];
+  const answers = state.responses.filter(function(r){ return r.aid === diag.assignment.id && r.iid === it.id; });
+
+  return '<div class="row" style="margin-bottom:12px">' + crs.map(function(c){
+      return '<button class="btn sm' + (c.id === sel ? ' primary' : '') + '" data-act="cr-sel" data-id="' + c.id + '">非選第 ' + c.no + ' 題</button>';
+    }).join('') + '</div>' +
+    '<div class="card" style="margin-bottom:14px"><div class="card-h"><h3>題目</h3>' +
+      '<span class="pill">' + it.year + ' 年 · ' + esc(unitName(it.unit)) + '</span></div>' +
+      '<div class="card-p"><div class="stem">' + esc(it.stem) + '</div></div></div>' +
+    '<div class="card" style="margin-bottom:14px"><div class="card-h"><h3>評量規準</h3>' +
+      '<span class="pill">' + esc(engineLabel()) + '</span>' +
+      '<button class="btn sm" data-act="gen-rubric" data-id="' + it.id + '">' + (rubric ? '重新產生規準' : '產生規準') + '</button></div>' +
+      '<div class="card-p"><div id="out-rubric" class="' + (rubric ? 'ai-out' : 'muted small') + '">' +
+      (rubric ? md(rubric) : '尚未撰寫評量規準。點右上〈產生規準〉開始，之後仍可自行修改。') + '</div></div></div>' +
+    '<div class="card"><div class="card-h"><h3>逐生評閱</h3><span class="muted small">分數與評語會即時儲存</span></div>' +
+    '<div class="card-p col">' + answers.map(function(r){
+      return '<div class="note-full"><div class="row" style="justify-content:space-between;margin-bottom:8px">' +
+        '<b>' + esc(userName(r.sid)) + '</b>' +
+        '<span class="row"><label class="small muted">給分</label>' +
+        '<input type="number" min="0" max="6" step="1" style="width:72px" value="' + (r.score === null ? '' : r.score) +
+        '" data-act="cr-score" data-sid="' + r.sid + '" data-iid="' + it.id + '" data-aid="' + diag.assignment.id + '">' +
+        '<span class="muted small">/ 6</span></span></div>' +
+        '<div class="ai-out" style="white-space:pre-wrap;font-family:var(--f-mono);font-size:12.5px">' + esc(r.text || '（未作答）') + '</div>' +
+        '<div class="field" style="margin-top:8px"><label>給學生的評語</label>' +
+        '<textarea style="min-height:56px" data-act="cr-comment" data-sid="' + r.sid + '" data-iid="' + it.id +
+        '" data-aid="' + diag.assignment.id + '" placeholder="可留空">' + esc(r.comment || '') + '</textarea></div>' +
+        '</div>';
+    }).join('') + '</div></div>';
+}
+
+function tabAI(diag){
+  const cached = cacheGet('class', diag.assignment.id);
+  return '<div class="card" style="margin-bottom:14px"><div class="card-h">' +
+    '<h3>請 AI 一次看完整份 KIDMAP 診斷</h3>' +
+    '<span class="pill">' + esc(engineLabel()) + '</span>' +
+    '<button class="btn primary sm" data-act="ai-class">' + (cached ? '重新分析' : '開始分析') + '</button></div>' +
+    '<div class="card-p"><div id="out-ai-class" class="' + (cached ? 'ai-out' : 'muted small') + '">' +
+    (cached ? md(cached) : '會分析全班共同迷思、逐題誘答成因、具體教學策略，並把最值得討論的迷思寫成可直接貼進知識建構空間的問題敘述。') +
+    '</div></div></div>' +
+    '<div class="card card-p"><h4>兩套引擎的差別</h4>' +
+    '<p class="small" style="margin-top:6px"><strong>內建規則引擎</strong>直接讀 Rasch 估計值與題庫的誘答標記，' +
+    '輸出完全可重現、每一句都能追溯到資料，適合寫進研究報告；<strong>外部語言模型</strong>語言較自然、能處理沒有標記的例外情況，' +
+    '但同一份資料兩次結果可能不同。研究上建議兩者都跑一次並比對差異。</p>' +
+    '<p class="muted small">切換引擎請到「系統設定」。</p></div>';
+}

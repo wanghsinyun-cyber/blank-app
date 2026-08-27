@@ -1,0 +1,371 @@
+/* ==========================================================================
+   84-ui-kb.js — 知識建構空間（Knowledge Forum 式）
+   視圖、貼文、支架、延伸貼文、躍升貼文、引用、註記、搜尋、閱讀狀態
+   ========================================================================== */
+
+let KBSEL = false;              // 躍升選取模式
+let KBPICK = {};                // 被選取的貼文
+let KBSEARCH = {field:'content', q:''};
+let EDIT = null;                // 編輯中的貼文草稿
+
+function viewKBList(){
+  const res = KBSEARCH.q ? searchNotes(KBSEARCH.field, KBSEARCH.q) : null;
+  return sectionHead('知識建構空間', '每個視圖是一塊共同的白板。想法貼上去之後就屬於社群，任何人都可以延伸、挑戰、綜整。',
+    (isTeacher() ? '<button class="btn" data-act="new-view">新增視圖</button>' : '')) +
+  '<div class="kb-toolbar">' +
+    '<label class="small muted" for="sf">搜尋</label>' +
+    '<select id="sf" style="width:auto" data-act="search-field">' +
+      [['title','標題'],['scaffold','支架'],['content','內容'],['author','作者'],['keyword','關鍵詞'],['date','建立日期']]
+      .map(function(o){ return '<option value="' + o[0] + '"' + (KBSEARCH.field === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') +
+    '</select>' +
+    '<input type="text" id="sq" placeholder="輸入關鍵字…" value="' + esc(KBSEARCH.q) + '" style="max-width:260px" data-act="search-q">' +
+    (KBSEARCH.q ? '<button class="btn sm" data-act="search-clear">清除</button>' : '') +
+    '<div class="spacer"></div><span class="muted small">未讀 ' + state.notes.filter(isUnread).length + ' 則</span>' +
+  '</div>' +
+  (res ? '<div class="card" style="margin-bottom:16px"><div class="card-h"><h3>搜尋結果</h3>' +
+      '<span class="muted small">' + res.length + ' 則貼文符合</span></div><div class="card-p col">' +
+      (res.map(noteRow).join('') || '<div class="muted small">沒有符合的貼文。</div>') + '</div></div>' : '') +
+  '<div class="grid g2">' + state.views.map(function(v){
+    const ns = notesOfView(v.id);
+    const un = ns.filter(isUnread).length;
+    const it = v.origin ? getItem(v.origin.iid) : null;
+    return '<div class="card"><div class="card-h"><h3>' + esc(v.title) + '</h3>' +
+      (un ? '<span class="pill" style="border-color:var(--accent);color:var(--accent)">未讀 ' + un + '</span>' : '') + '</div>' +
+      '<div class="card-p">' +
+      '<p class="small muted">' + esc(v.desc) + '</p>' +
+      (it ? '<div class="pill q2" style="margin-bottom:8px"><span class="dot"></span>源自迷思題：第 ' + it.no + ' 題</div>' : '') +
+      '<div class="row small muted" style="gap:14px">' +
+        '<span>' + ns.length + ' 則貼文</span>' +
+        '<span>' + ns.filter(function(n){ return n.buildOn; }).length + ' 則延伸</span>' +
+        '<span>' + ns.filter(function(n){ return n.kind === 'rise'; }).length + ' 則躍升</span>' +
+        '<span>' + uniq(ns.reduce(function(a, n){ return a.concat(n.authorIds); }, [])).length + ' 位作者</span>' +
+      '</div>' +
+      (v.links && v.links.length ? '<div class="small muted" style="margin-top:8px">連結視圖：' +
+        v.links.map(function(l){ const t = getView(l); return t ? '<a href="#/kb/' + l + '">' + esc(t.title) + '</a>' : ''; }).join('、') + '</div>' : '') +
+      '<div class="row" style="margin-top:12px"><a class="btn primary sm" href="#/kb/' + v.id + '">進入視圖</a>' +
+      '<a class="btn sm" href="#/synth/' + v.id + '">想法串綜整</a></div>' +
+      '</div></div>';
+  }).join('') + '</div>';
+}
+
+function noteRow(n){
+  const v = getView(n.viewId);
+  return '<div class="row" style="justify-content:space-between;border-bottom:1px solid var(--rule-soft);padding-bottom:8px">' +
+    '<div><a href="#/note/' + n.id + '"><b>' + esc(n.title) + '</b></a>' +
+    '<div class="muted small">' + esc(noteAuthors(n)) + '　·　' + (v ? esc(v.title) : '') + '　·　' + fmtDate(n.createdAt) + '</div></div>' +
+    '<span class="pill">第 ' + epistemicLevel(n) + ' 級</span></div>';
+}
+
+/* --- 視圖畫布 --- */
+function viewKBCanvas(vid){
+  const v = getView(vid);
+  if (!v) return '<div class="empty"><h3>找不到這個視圖</h3><a class="btn" href="#/kb">回知識建構空間</a></div>';
+  const ns = notesOfView(vid);
+  const it = v.origin ? getItem(v.origin.iid) : null;
+
+  const notesHTML = ns.map(function(n){
+    const scaf = (n.segs || [])[0];
+    const cls = ['note', n.kind === 'problem' ? 'problem' : '', n.kind === 'rise' ? 'rise' : '',
+                 isUnread(n) ? 'unread' : '', KBPICK[n.id] ? 'sel' : ''].filter(Boolean).join(' ');
+    const scls = scaf ? (scaffold(scaf.s) || {}).cls : '';
+    return '<div class="' + cls + ' ' + (scls || '') + '" style="left:' + n.x + 'px;top:' + n.y + 'px"' +
+      ' data-note="' + n.id + '" tabindex="0" role="button" aria-label="貼文 ' + esc(n.title) + '">' +
+      '<div class="nt">' + esc(n.title) + '</div>' +
+      (scaf ? '<div class="small" style="color:var(--' + ((scaffold(scaf.s) || {}).cls || '').replace('sc', 'sc-') +
+        ');font-size:11px;font-weight:600;margin-bottom:2px">' + esc(scaffoldLabel(scaf.s)) + '</div>' : '') +
+      '<div class="nb">' + esc((scaf ? scaf.text : '').slice(0, 90)) + '</div>' +
+      '<div class="nf"><span>' + esc(noteAuthors(n)) + '</span>' +
+        (childrenOf(n.id).length ? '<span>↳' + childrenOf(n.id).length + '</span>' : '') +
+        ((n.reads || []).length ? '<span>👁' + n.reads.length + '</span>' : '') +
+        ((n.annotations || []).length ? '<span>✎' + n.annotations.length + '</span>' : '') +
+      '</div></div>';
+  }).join('');
+
+  // 連線
+  const pos = {};
+  ns.forEach(function(n){ pos[n.id] = {x: n.x + 108, y: n.y + 40}; });
+  const edges = [];
+  ns.forEach(function(n){
+    if (n.buildOn && pos[n.buildOn]) edges.push(curve(pos[n.buildOn], pos[n.id], 'build'));
+    (n.contains || []).forEach(function(c){ if (pos[c]) edges.push(curve(pos[c], pos[n.id], 'rise')); });
+    (n.refs || []).forEach(function(r){ if (pos[r.noteId]) edges.push(curve(pos[r.noteId], pos[n.id], 'ref')); });
+  });
+
+  return sectionHead(v.title, v.desc, '<a class="btn" href="#/kb">← 所有視圖</a>' +
+      '<a class="btn" href="#/synth/' + v.id + '">想法串綜整</a>') +
+    (it ? '<div class="card card-p" style="margin-bottom:14px;border-left:3px solid var(--q2)">' +
+      '<div class="eyebrow">這個視圖從哪裡來</div>' +
+      '<p class="small" style="margin-top:6px">來自 <a href="#/assign/' + v.origin.aid + '">' +
+      esc((getAssignment(v.origin.aid) || {}).title || '') + '</a> 第 ' + it.no + ' 題的 KIDMAP 迷思象限。</p>' +
+      '<div class="item"><div class="stem">' + esc(it.stem) + '</div>' +
+      '<div class="muted small">' + it.options.map(function(o, k){ return String.fromCharCode(65 + k) + '. ' + esc(o); }).join('　') + '</div></div>' +
+      '</div>' : '') +
+    '<div class="kb-toolbar">' +
+      '<button class="btn primary sm" data-act="new-note" data-id="' + v.id + '">貼一則新想法</button>' +
+      '<button class="btn sm' + (KBSEL ? ' primary' : '') + '" data-act="toggle-sel">' +
+        (KBSEL ? '選取中（' + Object.keys(KBPICK).length + '）' : '選取貼文做躍升') + '</button>' +
+      (KBSEL && Object.keys(KBPICK).length >= 2 ?
+        '<button class="btn sm" data-act="make-rise" data-id="' + v.id + '">建立躍升貼文</button>' : '') +
+      '<div class="spacer"></div>' +
+      '<span class="legend small">' +
+        '<span><i class="swatch" style="background:var(--accent)"></i>延伸</span>' +
+        '<span><i class="swatch" style="background:var(--sc-6)"></i>躍升收攏</span>' +
+        '<span><i class="swatch" style="background:var(--sc-5)"></i>引用</span>' +
+      '</span>' +
+    '</div>' +
+    '<div class="canvas" id="canvas"><div class="canvas-inner" id="canvasInner">' +
+      '<svg class="edges" viewBox="0 0 1600 1100" preserveAspectRatio="none">' + edges.join('') + '</svg>' +
+      notesHTML + '</div></div>' +
+    '<div class="row" style="margin-top:10px"><span class="muted small">拖曳貼文可以重新安排版面，位置會存下來。' +
+    '點一下貼文開啟完整內容、延伸與註記。</span></div>' +
+    '<div class="card" style="margin-top:16px"><div class="card-h"><h3>這個視圖的支架使用</h3></div><div class="card-p">' +
+      scaffoldUsageBar(ns) + '</div></div>';
+}
+
+function curve(a, b, cls){
+  const mx = (a.x + b.x) / 2;
+  return '<path class="' + cls + '" d="M' + a.x + ' ' + a.y + ' C' + mx + ' ' + a.y + ' ' + mx + ' ' + b.y + ' ' + b.x + ' ' + b.y + '"/>';
+}
+
+function scaffoldUsageBar(ns){
+  const c = {};
+  ns.forEach(function(n){ (n.segs || []).forEach(function(g){ c[g.s] = (c[g.s] || 0) + 1; }); });
+  const mx = Math.max.apply(null, SCAFFOLDS.map(function(s){ return c[s.id] || 0; }).concat([1]));
+  return '<div class="col">' + SCAFFOLDS.map(function(s){
+    const n = c[s.id] || 0;
+    return '<div class="rub-row"><span class="' + s.cls + '" style="border-left:3px solid;padding-left:8px">' + esc(s.label) + '</span>' +
+      '<div class="bar"><i style="width:' + (100 * n / mx) + '%;background:var(--' + s.cls.replace('sc', 'sc-') + ')"></i></div>' +
+      '<span class="lv">' + n + '</span></div>';
+  }).join('') + '</div>' +
+  '<p class="muted small" style="margin-top:10px">支架分布反映論述的形態。若「我的理論」遠多於「這個理論無法解釋」與「更好的理論」，' +
+  '代表大家在各說各話，想法還沒有真的被改進。</p>';
+}
+
+/* --- 貼文詳頁 --- */
+function viewNote(nid){
+  const n = getNote(nid);
+  if (!n) return '<div class="empty"><h3>找不到這則貼文</h3><a class="btn" href="#/kb">回知識建構空間</a></div>';
+  markRead(nid);
+  const v = getView(n.viewId);
+  const root = threadRootOf(n);
+  const seq = threadOf(root.id);
+  const fb = cacheGet('note', n.id);
+  const me = currentUser();
+  const canEdit = n.authorIds.indexOf(me.id) >= 0 || isTeacher();
+
+  return sectionHead(n.title, (v ? v.title + '　·　' : '') + noteAuthors(n) + '　·　' + fmtDateTime(n.createdAt),
+    '<a class="btn" href="#/kb/' + n.viewId + '">← 回視圖</a>' +
+    (canEdit ? '<button class="btn sm" data-act="edit-note" data-id="' + n.id + '">編輯</button>' : '')) +
+  '<div class="grid" style="grid-template-columns:minmax(0,1.6fr) minmax(280px,1fr);gap:16px">' +
+  '<div class="col">' +
+    noteFullHTML(n, true) +
+    '<div class="card"><div class="card-h"><h3>這條想法串</h3>' +
+      '<span class="muted small">' + seq.length + ' 則</span></div><div class="card-p">' +
+      seq.map(function(x){
+        const cur = x.note.id === n.id;
+        return '<div style="margin-left:' + (x.depth * 16) + 'px;margin-bottom:8px">' +
+          '<div class="row" style="gap:8px"><span class="pill">' + (x.depth ? '↳' : '●') + '</span>' +
+          (cur ? '<b>' + esc(x.note.title) + '</b>' : '<a href="#/note/' + x.note.id + '">' + esc(x.note.title) + '</a>') +
+          '<span class="muted small">' + esc(noteAuthors(x.note)) + '</span>' +
+          '<span class="pill">第 ' + epistemicLevel(x.note) + ' 級</span></div></div>';
+      }).join('') + '</div></div>' +
+    '<div class="card"><div class="card-h"><h3>延伸這則想法</h3></div><div class="card-p">' +
+      '<div class="sc-btns" style="margin-bottom:10px">' + SCAFFOLDS.map(function(s){
+        return '<button class="sc-btn ' + s.cls + '" data-act="buildon" data-id="' + n.id + '" data-sc="' + s.id + '">' +
+          esc(s.label) + '</button>';
+      }).join('') + '</div>' +
+      '<p class="muted small">選一個支架開始寫。支架不是格式要求，是提醒你這一則想做的事：提出理論、指出不懂的地方、' +
+      '帶進新資訊、挑戰現有說法、提出更好的版本，或把大家的想法綜整起來。</p></div></div>' +
+  '</div>' +
+  '<div class="col">' +
+    '<div class="card"><div class="card-h"><h3>AI 形成性回饋</h3>' +
+      '<button class="btn sm" data-act="ai-note" data-id="' + n.id + '">' + (fb ? '重新分析' : '分析') + '</button></div>' +
+      '<div class="card-p"><div id="out-ai-note" class="' + (fb ? 'ai-out' : 'muted small') + '">' +
+      (fb ? md(fb) : '會評這則貼文對社群知識的貢獻、想法改進落在哪一級，以及可以立刻做的下一步。不會直接給答案。') +
+      '</div></div></div>' +
+    '<div class="card"><div class="card-h"><h3>註記</h3><span class="muted small">' + (n.annotations || []).length + ' 則</span></div>' +
+      '<div class="card-p col">' + ((n.annotations || []).map(function(a){
+        return '<div style="border-left:2px solid var(--rule);padding-left:10px">' +
+          '<div class="muted small">' + esc(userName(a.authorId)) + '　' + fmtDate(a.at) + '</div>' +
+          '<div class="small">' + nl2br(a.text) + '</div></div>';
+      }).join('') || '<div class="muted small">還沒有人加註記。</div>') +
+      '<div class="field" style="margin-top:8px"><textarea id="annText" placeholder="加一則註記（不會改動原貼文）"></textarea>' +
+      '<button class="btn sm" data-act="add-ann" data-id="' + n.id + '">送出註記</button></div>' +
+      '</div></div>' +
+    '<div class="card"><div class="card-h"><h3>閱讀情形</h3></div><div class="card-p">' +
+      '<div class="row" style="gap:5px">' + ((n.reads || []).map(function(r){
+        return '<span class="pill">' + esc(userName(r)) + '</span>'; }).join('') || '<span class="muted small">還沒有人讀過。</span>') + '</div>' +
+      '<p class="muted small" style="margin-top:10px">閱讀紀錄用來看社群是否真的在互相參照，不作為給分依據。</p></div></div>' +
+  '</div></div>';
+}
+
+function noteFullHTML(n, full){
+  const it = n.itemRef ? getItem(n.itemRef.iid) : null;
+  return '<div class="card"><div class="card-p">' +
+    '<div class="row" style="justify-content:space-between;margin-bottom:10px">' +
+      '<span class="row" style="gap:6px">' +
+        (n.kind === 'problem' ? '<span class="pill q2"><span class="dot"></span>共同問題</span>' : '') +
+        (n.kind === 'rise' ? '<span class="pill" style="color:var(--sc-6);border-color:var(--sc-6)">躍升貼文</span>' : '') +
+        '<span class="pill">第 ' + epistemicLevel(n) + ' 級 · ' + EPI_LABEL[epistemicLevel(n)] + '</span>' +
+      '</span>' +
+      '<span class="meta">' + fmtDateTime(n.createdAt) + (n.editedAt ? '（已修改）' : '') + '</span>' +
+    '</div>' +
+    (n.segs || []).map(function(g){
+      const s = scaffold(g.s) || {cls:'', label:''};
+      return '<div class="sc-seg ' + s.cls + '"><span class="lab">' + esc(s.label) + '</span>' + nl2br(g.text) + '</div>';
+    }).join('') +
+    (it ? '<div class="item" style="margin-top:10px"><div class="eyebrow">連結的題目</div>' +
+      '<div class="stem">' + esc(it.stem) + '</div></div>' : '') +
+    ((n.refs || []).length ? '<div style="margin-top:10px"><div class="eyebrow">引用</div>' +
+      n.refs.map(function(r){
+        const t = getNote(r.noteId);
+        return '<blockquote style="margin:6px 0;padding:6px 12px;border-left:3px solid var(--sc-5)">「' +
+          esc(r.quote) + '」<div class="muted small">— <a href="#/note/' + r.noteId + '">' +
+          esc(t ? t.title : '已刪除的貼文') + '</a></div></blockquote>';
+      }).join('') + '</div>' : '') +
+    ((n.contains || []).length ? '<div style="margin-top:10px"><div class="eyebrow">這則躍升收攏了</div>' +
+      '<div class="row" style="gap:6px;margin-top:6px">' + n.contains.map(function(c){
+        const t = getNote(c);
+        return t ? '<a class="pill" href="#/note/' + c + '">' + esc(t.title) + '</a>' : '';
+      }).join('') + '</div></div>' : '') +
+    ((n.keywords || []).length ? '<div class="row" style="gap:5px;margin-top:10px">' +
+      n.keywords.map(function(k){ return '<span class="pill">#' + esc(k) + '</span>'; }).join('') + '</div>' : '') +
+    '<div class="meta" style="margin-top:12px">作者：' + esc(noteAuthors(n)) +
+      '　·　被延伸 ' + childrenOf(n.id).length + ' 次　·　閱讀 ' + (n.reads || []).length + ' 人次</div>' +
+    '</div></div>';
+}
+
+/* --- 貼文編輯器 --- */
+function openNoteEditor(o){
+  EDIT = {
+    id: o.id || null,
+    viewId: o.viewId,
+    title: o.title || '',
+    segs: o.segs && o.segs.length ? o.segs.slice() : [{s: o.scaffold || 's1', text:''}],
+    keywords: (o.keywords || []).join('、'),
+    authorIds: o.authorIds || [currentUser().id],
+    buildOn: o.buildOn || null,
+    contains: o.contains || [],
+    refs: o.refs || [],
+    kind: o.kind || 'note',
+    x: o.x, y: o.y
+  };
+  renderEditor();
+}
+
+function renderEditor(){
+  const parent = EDIT.buildOn ? getNote(EDIT.buildOn) : null;
+  const others = state.notes.filter(function(n){ return n.id !== EDIT.id; });
+  modal(
+    '<div class="modal-h"><h3>' + (EDIT.id ? '編輯貼文' : (EDIT.kind === 'rise' ? '建立躍升貼文' : (parent ? '延伸：' + esc(parent.title) : '貼一則新想法'))) + '</h3>' +
+    '<button class="btn sm ghost" data-act="close-modal">關閉</button></div>' +
+    '<div class="modal-b col">' +
+    (parent ? '<div class="ai-out small"><strong>你正在延伸：</strong>' + esc(parent.title) + '<br>' +
+      esc(shortStem(noteText(parent))) + '</div>' : '') +
+    '<div class="field"><label for="ntitle">標題</label>' +
+      '<input id="ntitle" type="text" value="' + esc(EDIT.title) + '" placeholder="用一句話說出你的想法，不要只寫「我的答案」"></div>' +
+    '<div><div class="eyebrow" style="margin-bottom:6px">支架段落</div>' +
+    EDIT.segs.map(function(g, i){
+      const s = scaffold(g.s) || SCAFFOLDS[0];
+      return '<div class="sc-seg ' + s.cls + '" style="margin-bottom:12px">' +
+        '<div class="row" style="margin-bottom:6px">' +
+        '<select data-act="seg-sc" data-i="' + i + '" style="width:auto">' + SCAFFOLDS.map(function(x){
+          return '<option value="' + x.id + '"' + (x.id === g.s ? ' selected' : '') + '>' + esc(x.label) + '</option>';
+        }).join('') + '</select>' +
+        '<span class="muted small">' + esc(s.hint) + '</span><div class="spacer"></div>' +
+        (EDIT.segs.length > 1 ? '<button class="btn sm ghost" data-act="seg-del" data-i="' + i + '">移除</button>' : '') +
+        '</div>' +
+        '<textarea data-act="seg-text" data-i="' + i + '" placeholder="' + esc(s.hint) + '">' + esc(g.text) + '</textarea>' +
+        '</div>';
+    }).join('') +
+    '<button class="btn sm" data-act="seg-add">＋ 再加一個支架段落</button></div>' +
+    '<div class="field"><label for="nkw">關鍵詞（用、分隔）</label>' +
+      '<input id="nkw" type="text" value="' + esc(EDIT.keywords) + '" placeholder="平方根、負根、反例"></div>' +
+    '<div class="field"><label for="nauth">共同作者</label>' +
+      '<select id="nauth" multiple size="4">' + state.users.filter(function(u){ return u.role !== 'admin'; }).map(function(u){
+        return '<option value="' + u.id + '"' + (EDIT.authorIds.indexOf(u.id) >= 0 ? ' selected' : '') + '>' + esc(u.name) + '</option>';
+      }).join('') + '</select><span class="muted small">按住 Ctrl／⌘ 可以多選。知識建構鼓勵共同署名。</span></div>' +
+    '<div class="field"><label for="nref">引用其他貼文</label>' +
+      '<select id="nref" style="width:100%"><option value="">（不引用）</option>' +
+      others.map(function(n){ return '<option value="' + n.id + '">' + esc(n.title) + ' — ' + esc(noteAuthors(n)) + '</option>'; }).join('') +
+      '</select><input id="nquote" type="text" placeholder="引用的句子" style="margin-top:6px"></div>' +
+    '</div>' +
+    '<div class="modal-f"><button class="btn" data-act="close-modal">取消</button>' +
+    (EDIT.id ? '<button class="btn danger" data-act="del-note" data-id="' + EDIT.id + '">刪除這則</button>' : '') +
+    '<button class="btn primary" data-act="save-note">貼上去</button></div>', {wide:false});
+}
+
+function collectEditor(){
+  const t = $('#ntitle'); if (t) EDIT.title = t.value;
+  const k = $('#nkw'); if (k) EDIT.keywords = k.value;
+  const a = $('#nauth');
+  if (a) EDIT.authorIds = Array.prototype.slice.call(a.selectedOptions).map(function(o){ return o.value; });
+  $$('[data-act="seg-text"]').forEach(function(el){ EDIT.segs[+el.dataset.i].text = el.value; });
+  const r = $('#nref'), q = $('#nquote');
+  if (r && r.value && q && q.value.trim()){
+    EDIT.refs = [{noteId:r.value, quote:q.value.trim()}];
+  }
+}
+
+function saveEditor(){
+  collectEditor();
+  if (!EDIT.title.trim()){ toast('請先給這則貼文一個標題。'); return; }
+  if (!EDIT.segs.some(function(g){ return g.text.trim(); })){ toast('至少寫一段內容再貼上去。'); return; }
+  const kws = EDIT.keywords.split(/[、,，\s]+/).filter(Boolean);
+  const payload = {title:EDIT.title.trim(), segs:EDIT.segs.filter(function(g){ return g.text.trim(); }),
+                   keywords:kws, authorIds:EDIT.authorIds, refs:EDIT.refs};
+  if (EDIT.id){
+    updateNote(EDIT.id, payload);
+    toast('已更新。');
+  } else {
+    const n = createNote(Object.assign({viewId:EDIT.viewId, buildOn:EDIT.buildOn, kind:EDIT.kind,
+      contains:EDIT.contains, x:EDIT.x, y:EDIT.y}, payload));
+    toast('已貼上去。想法現在屬於社群了。');
+    closeModal(); EDIT = null; go('#/note/' + n.id); return;
+  }
+  closeModal(); EDIT = null; render();
+}
+
+/* --- 想法串綜整 --- */
+function viewSynth(vid){
+  const v = getView(vid);
+  if (!v) return '<div class="empty"><h3>找不到這個視圖</h3></div>';
+  const roots = notesOfView(vid).filter(function(n){ return !n.buildOn; });
+  const sel = viewSynth.sel && roots.some(function(r){ return r.id === viewSynth.sel; }) ? viewSynth.sel : (roots[0] || {}).id;
+  viewSynth.sel = sel;
+  if (!sel) return '<div class="empty"><h3>這個視圖還沒有貼文</h3></div>';
+  const ii = ideaImprovement(sel);
+  const cached = cacheGet('thread', sel);
+
+  return sectionHead('想法串綜整', v.title, '<a class="btn" href="#/kb/' + vid + '">← 回視圖</a>') +
+    '<div class="row" style="margin-bottom:14px">' + roots.map(function(r){
+      return '<button class="btn sm' + (r.id === sel ? ' primary' : '') + '" data-act="synth-sel" data-id="' + r.id + '">' +
+        esc(shortStem(r.title)) + '</button>';
+    }).join('') + '</div>' +
+    '<div class="grid" style="grid-template-columns:minmax(0,1fr) minmax(300px,.9fr);gap:16px">' +
+    '<div class="card"><div class="card-h"><h3>想法改進軌跡</h3>' +
+      '<span class="pill">' + esc(ii.arc) + '</span></div><div class="card-p col">' +
+      ii.steps.map(function(s){
+        return '<div style="margin-left:' + (s.depth * 18) + 'px" class="note-full">' +
+          '<div class="row" style="justify-content:space-between">' +
+          '<a href="#/note/' + s.note.id + '"><b>' + esc(s.note.title) + '</b></a>' +
+          '<span class="pill">第 ' + s.level + ' 級</span></div>' +
+          '<div class="meta">' + esc(noteAuthors(s.note)) + '　·　' +
+          s.scaffolds.map(function(x){ return esc(scaffoldLabel(x)); }).join('／') + '</div>' +
+          (s.newTerms.length ? '<div class="small" style="margin-top:6px">新出現的詞彙：' +
+            s.newTerms.map(function(w){ return '<span class="pill">' + esc(w) + '</span>'; }).join(' ') + '</div>' : '') +
+          '</div>';
+      }).join('') + '</div></div>' +
+    '<div class="col">' +
+      '<div class="card"><div class="card-h"><h3>AI 綜整建議</h3>' +
+        '<button class="btn sm" data-act="ai-thread" data-id="' + sel + '">' + (cached ? '重新分析' : '分析') + '</button></div>' +
+        '<div class="card-p"><div id="out-ai-thread" class="' + (cached ? 'ai-out' : 'muted small') + '">' +
+        (cached ? md(cached) : '會判讀這條想法串走到哪裡、還有哪些問題沒解決，並給一則可以直接貼上去的躍升貼文草稿。') +
+        '</div></div></div>' +
+      '<div class="card"><div class="card-h"><h3>由討論命題</h3>' +
+        '<button class="btn sm" data-act="items-from-view" data-id="' + vid + '">產生後測題</button></div>' +
+        '<div class="card-p"><div id="out-fromview" class="muted small">' +
+        '把討論中形成的共同理解轉成 2–3 道新題目，用來檢核這個理解是不是真的可以遷移。' +
+        '這一步讓「討論 → 再評量」的迴圈閉合。</div></div></div>' +
+    '</div></div>';
+}
