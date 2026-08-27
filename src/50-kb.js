@@ -153,7 +153,7 @@ function buildInquiryPrompt(pi, diag){
   const dis = pi.topDistractor != null ? it.options[pi.topDistractor] : null;
   const mis = pi.misCode ? MISCONCEPTIONS.find(function(m){ return m.id === pi.misCode; }) : null;
   const lines = [];
-  lines.push('前測第 ' + it.no + ' 題（' + it.year + ' 年）有 ' + n2 + ' 位同學落在「迷思」象限——'
+  lines.push('前測第 ' + it.no + ' 題（' + textTitle(it.unit) + '）有 ' + n2 + ' 位同學落在「迷思」象限——'
     + '照他們在其他題目上的表現，這一題本來應該答得出來，實際卻答錯了。');
   if (dis) lines.push('這些同學裡最多人選的是「' + dis + '」（' + pi.topDistractorN + ' 人）。');
   if (mis) lines.push('這通常和「' + mis.name + '」有關：' + mis.desc);

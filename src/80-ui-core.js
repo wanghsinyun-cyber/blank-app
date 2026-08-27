@@ -112,6 +112,21 @@ function renderRail(){
 }
 
 /* --- 共用小元件 --- */
+/* 理解歷程標籤。形狀記號與文字並用，不以顏色單獨傳達訊息（WCAG 1.4.1）。 */
+function procPill(pid){
+  const p = processOf(pid);
+  if (!p) return '';
+  return '<span class="pill ' + p.cls + '"><span aria-hidden="true">' + p.mark + '</span>' +
+    esc(p.name) + '</span>';
+}
+/* 一道題目的識別標籤：文本 · 理解歷程 · 難度 */
+function itemPills(it){
+  if (!it) return '';
+  return '<span class="pill">' + esc(textTitle(it.unit)) + '</span>' +
+    procPill(it.process) +
+    '<span class="pill">' + esc(it.diff) + '</span>';
+}
+
 function qpill(q, n){
   const Q = QUAD[q];
   return '<span class="pill ' + Q.key + '"><span class="dot"></span>' + Q.roman + ' ' + Q.short +

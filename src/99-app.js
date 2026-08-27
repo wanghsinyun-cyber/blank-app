@@ -105,7 +105,7 @@ function researchBundle(){
     };
   }
   return {
-    meta: {system:'KIDFORUM', exportedAt: new Date().toISOString(),
+    meta: {system:'KAIROS', exportedAt: new Date().toISOString(),
            note:'示範資料為固定種子模擬，非真實學生資料。'},
     users: state.users.map(function(u){ return {id:u.id, name:u.name, role:u.role}; }),
     classes: state.classes, units: UNITS, items: ITEMS, misconceptions: MISCONCEPTIONS,
@@ -137,7 +137,7 @@ function researchBundle(){
         roles: PROMPT_ROLE,
         processes: PROCESSES.reduce(function(o, p){ o[p.id] = promptProcessModule(p.id); return o; }, {})
       },
-      itemProcess: ITEM_PROCESS,
+      itemProcess: ITEMS.reduce(function(o, i){ o[i.id] = i.process; return o; }, {}),
       assignmentLog: state.assignmentLog,
       behaviorCodes: BEHAVIOR_CODES,
       enaCodes: ENA_CODES,
@@ -368,7 +368,7 @@ function bindEvents(){
     if (act === 'lsa-cond'){ rLSA.cond = t.value; render(); return; }
     if (act === 'st-out'){ rStats.sel = t.value; render(); return; }
     if (act === 'aal-text'){ return; }
-    if (act === 'bank-year'){ BANKF.year = t.value; render(); return; }
+    if (act === 'bank-process'){ BANKF.process = t.value; render(); return; }
     if (act === 'bank-type'){ BANKF.type = t.value; render(); return; }
     if (act === 'bank-unit'){ BANKF.unit = t.value; render(); return; }
     if (act === 'set-unit'){ const it = getItem(t.dataset.id);
@@ -450,12 +450,41 @@ function bindEvents(){
 
   window.addEventListener('hashchange', render);
 
+  /* --- 無障礙控制 --- */
+  $('#fsSel').addEventListener('change', function(){
+    state.settings.a11y = state.settings.a11y || {};
+    state.settings.a11y.fontScale = parseFloat(this.value) || 1;
+    save(); applyA11y();
+    toast('字級：' + Math.round(state.settings.a11y.fontScale * 100) + '%');
+  });
+  $('#contrastBtn').addEventListener('click', function(){
+    state.settings.a11y = state.settings.a11y || {};
+    state.settings.a11y.highContrast = !state.settings.a11y.highContrast;
+    save(); applyA11y();
+    toast(state.settings.a11y.highContrast ? '已開啟高對比模式' : '已關閉高對比模式');
+  });
+
   $('#themeBtn').addEventListener('click', function(){
     const cur = state.ui.theme || 'system';
     const next = cur === 'system' ? 'light' : (cur === 'light' ? 'dark' : 'system');
     state.ui.theme = next; save(); applyTheme();
     toast('外觀：' + (next === 'system' ? '跟隨系統' : next === 'light' ? '淺色' : '深色'));
   });
+}
+
+/* 字級與高對比：兩者都寫進設定並持久化，換頁不會跑掉 */
+function applyA11y(){
+  const a = (state.settings && state.settings.a11y) || {};
+  const fs = a.fontScale || 1;
+  document.documentElement.style.setProperty('--fs', String(fs));
+  if (a.highContrast) document.documentElement.setAttribute('data-contrast', 'high');
+  else document.documentElement.removeAttribute('data-contrast');
+  const sel = $('#fsSel'); if (sel) sel.value = String(fs);
+  const btn = $('#contrastBtn');
+  if (btn){
+    btn.setAttribute('aria-pressed', a.highContrast ? 'true' : 'false');
+    btn.classList.toggle('primary', !!a.highContrast);
+  }
 }
 
 function applyTheme(){
@@ -612,6 +641,7 @@ function boot(){
     });
   }
   applyTheme();
+  applyA11y();
   bindEvents();
   renderShell();
   if (!location.hash) location.hash = '#/teacher';

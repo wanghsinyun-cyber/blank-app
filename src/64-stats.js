@@ -274,7 +274,7 @@ function mediation(rows, xCond, yGet, mediators, xGet, boot){
 /* --- 可分析的結果變項清單 --- */
 function outcomeList(){
   const out = [
-    {id:'theta_post', name:'閱讀／數學理解表現（後測 θ）', get:function(r){ return r.thetaPost; },
+    {id:'theta_post', name:'閱讀理解表現（後測 θ）', get:function(r){ return r.thetaPost; },
      cov:function(r){ return r.thetaPre; }, covName:'前測 θ'}
   ];
   CONSTRUCTS.forEach(function(c){

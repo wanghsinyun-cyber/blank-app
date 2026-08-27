@@ -90,7 +90,7 @@ function viewQuiz(aid){
         return '<div class="card"><div class="card-p">' +
           '<div class="row" style="justify-content:space-between;margin-bottom:6px">' +
           '<b>第 ' + (idx + 1) + ' 題　非選題</b>' +
-          '<span class="row"><span class="pill">' + it.year + ' 年</span><span class="pill">' + esc(it.diff) + '</span></span></div>' +
+          '<span class="row">' + itemPills(it) + '</span></div>' +
           '<div class="stem">' + esc(it.stem) + '</div>' +
           '<div class="field"><label>請寫出你的解題過程與說明</label>' +
           '<textarea style="min-height:120px" data-act="quiz-text" data-id="' + it.id + '">' + esc(QUIZ.texts[it.id] || '') + '</textarea></div>' +
@@ -108,8 +108,7 @@ function viewQuiz(aid){
       return '<div class="card"><div class="card-p">' +
         '<div class="row" style="justify-content:space-between;margin-bottom:6px">' +
         '<b>第 ' + (idx + 1) + ' 題</b>' +
-        '<span class="row"><span class="pill">' + it.year + ' 年</span><span class="pill">' + esc(it.diff) + '</span>' +
-        '<span class="muted small">' + esc(unitName(it.unit)) + '</span></span></div>' +
+        '<span class="row">' + itemPills(it) + '</span></div>' +
         '<div class="stem">' + esc(it.stem) + '</div>' +
         '<div class="opts">' + it.options.map(function(o, k){
           return '<label class="opt' + (chosen === k ? ' chosen' : '') + '">' +

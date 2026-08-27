@@ -116,7 +116,7 @@ function buildDemoLogs(){
     const t0 = t;
 
     items.forEach(function(it){
-      const proc = it.process || 'K';
+      const proc = it.process || 'FR';
       function push(type, code, extra){
         t += 900 + Math.floor(rnd() * 5200);
         const e = {t:t, rel:t - t0, sid:sid, cid:klass ? klass.id : null, cond:cond,
@@ -223,7 +223,7 @@ function toSDIS(){
     (bySeq[k] = bySeq[k] || []).push(e);
   });
   const out = ['Event'];
-  out.push('% KIDFORUM AaL 事件序列（示範資料為模擬）');
+  out.push('% KAIROS AaL 事件序列（示範資料為模擬）');
   out.push('% 編碼：' + BEHAVIOR_CODES.map(function(b){ return b.code + '=' + b.name; }).join('  '));
   Object.keys(bySeq).sort().forEach(function(k){
     const p = k.split('|');
@@ -242,7 +242,7 @@ function sdisCode(c){ return SDIS_MAP[c] || 'OTHER'; }
 function toENACsv(){
   const rows = [['sid','name','class','grade','condition','lang','assignment','item','item_process',
                  'turn','speaker','rel_code','utterance',
-                 'K','A','R','BELOW','AT','ABOVE','POS','NEG','MARK','OPTION','WRITE','CHECK']];
+                 'FR','SI','II','EE','BELOW','AT','ABOVE','POS','NEG','MARK','OPTION','WRITE','CHECK']];
   const logs = allLogs().slice().sort(function(a, b){ return a.t - b.t; });
   const dial = allDialog();
   const dialKey = {};
@@ -260,7 +260,7 @@ function toENACsv(){
       e.sid, userName(e.sid), k ? k.name : '', k ? k.grade : '', e.cond, e.lang || 'zh',
       e.aid, e.iid, e.proc || '', e.turn || '', e.type === 'AI' ? 'agent' : (e.code === 'A' ? 'agent' : 'student'),
       rel, txt.replace(/\s+/g, ' '),
-      uc === 'K' ? 1 : 0, uc === 'A' ? 1 : 0, uc === 'R' ? 1 : 0,
+      uc === 'FR' ? 1 : 0, uc === 'SI' ? 1 : 0, uc === 'II' ? 1 : 0, uc === 'EE' ? 1 : 0,
       rel === 'BELOW' ? 1 : 0, rel === 'AT' ? 1 : 0, rel === 'ABOVE' ? 1 : 0,
       s.score > 0.2 ? 1 : 0, s.score < -0.2 ? 1 : 0,
       e.code === 'M' ? 1 : 0, e.code === 'O' ? 1 : 0, e.code === 'W' ? 1 : 0, e.code === 'C' ? 1 : 0

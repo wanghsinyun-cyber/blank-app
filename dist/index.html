@@ -1,10 +1,10 @@
-<title>KIDFORUM</title>
+<title>KAIROS</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
 <style>
 /* ==========================================================================
-   KIDFORUM — 設計語彙
+   KAIROS — 設計語彙
    色彩：全站唯一有顏色的東西都「有意義」。品牌保持墨色中性，
         彩度只留給 KIDMAP 四象限與知識建構支架。
    字體：宋體(Noto Serif TC) 標題＝測驗卷／課本的聲音；
@@ -18,7 +18,8 @@
   --ink:      #12161c;
   --ink-2:    #2b333e;
   --ink-3:    #5a6472;
-  --ink-4:    #8b95a3;
+  --ink-4:    #6b7280;   /* 4.6:1 on white — 內文對比下限 */
+  --rule-strong:#767f8c; /* 3.1:1 — 表單控制項與圖形邊界（WCAG 1.4.11）*/
   --rule:     #d5dbe3;
   --rule-soft:#e7ebf0;
   --paper:    #f3f4f0;
@@ -51,8 +52,8 @@
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     color-scheme: dark;
-    --ink:#e7ebf1; --ink-2:#c3cbd6; --ink-3:#98a2b0; --ink-4:#6f7987;
-    --rule:#2d353f; --rule-soft:#242b34;
+    --ink:#e7ebf1; --ink-2:#c3cbd6; --ink-3:#a8b2c0; --ink-4:#8d97a5;
+    --rule:#2d353f; --rule-soft:#242b34; --rule-strong:#7c8695;
     --paper:#14181d; --card:#1a1f26; --cool:#12161b; --grid:#222932; --shade:#1d232b;
     --accent:#b9cdea; --accent-ink:#101821; --focus:#7aa7ff;
     --shadow:0 1px 2px rgba(0,0,0,.4), 0 10px 28px -18px rgba(0,0,0,.8);
@@ -67,8 +68,8 @@
 }
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --ink:#e7ebf1; --ink-2:#c3cbd6; --ink-3:#98a2b0; --ink-4:#6f7987;
-  --rule:#2d353f; --rule-soft:#242b34;
+  --ink:#e7ebf1; --ink-2:#c3cbd6; --ink-3:#a8b2c0; --ink-4:#8d97a5;
+  --rule:#2d353f; --rule-soft:#242b34; --rule-strong:#7c8695;
   --paper:#14181d; --card:#1a1f26; --cool:#12161b; --grid:#222932; --shade:#1d232b;
   --accent:#b9cdea; --accent-ink:#101821; --focus:#7aa7ff;
   --shadow:0 1px 2px rgba(0,0,0,.4), 0 10px 28px -18px rgba(0,0,0,.8);
@@ -85,14 +86,14 @@
 html,body{height:100%}
 body{
   margin:0; background:var(--paper); color:var(--ink);
-  font-family:var(--f-body); font-size:15px; line-height:1.65;
+  font-family:var(--f-body); font-size:20px; line-height:1.65;
   -webkit-font-smoothing:antialiased;
 }
 h1,h2,h3,h4{font-family:var(--f-display); font-weight:700; text-wrap:balance; margin:0; line-height:1.32; letter-spacing:.01em}
-h1{font-size:26px} h2{font-size:20px} h3{font-size:16px} h4{font-size:14px}
+h1{font-size:35px} h2{font-size:27px} h3{font-size:21px} h4{font-size:19px}
 p{margin:0 0 .8em}
 a{color:var(--accent); text-underline-offset:3px}
-:focus-visible{outline:2px solid var(--focus); outline-offset:2px; border-radius:3px}
+:focus-visible{outline:3px solid var(--focus); outline-offset:2px; border-radius:3px}
 button,input,select,textarea{font:inherit; color:inherit}
 .num{font-family:var(--f-mono); font-variant-numeric:tabular-nums}
 
@@ -103,41 +104,41 @@ button,input,select,textarea{font:inherit; color:inherit}
 .app{ display:flex; flex-direction:column; min-height:100vh }
 .main{ display:flex; align-items:flex-start; flex:1 }
 .topbar{
-  position:sticky; top:0; height:54px; display:flex; align-items:center; gap:14px; padding:0 16px;
+  position:sticky; top:0; min-height:68px; display:flex; flex-wrap:wrap; align-items:center; gap:14px; padding:0 16px;
   background:var(--card); border-bottom:1px solid var(--rule); z-index:20;
 }
 .brand{display:flex; align-items:baseline; gap:9px; margin-right:4px}
-.brand b{font-family:var(--f-display); font-size:18px; letter-spacing:.06em}
-.brand span{font-size:11.5px; color:var(--ink-3); letter-spacing:.06em}
+.brand b{font-family:var(--f-display); font-size:24px; letter-spacing:.06em}
+.brand span{font-size:16px; color:var(--ink-3); letter-spacing:.06em}
 .spacer{flex:1}
 .chip-demo{
-  font-size:11px; letter-spacing:.06em; color:var(--ink-3);
+  font-size:16px; letter-spacing:.06em; color:var(--ink-3);
   border:1px dashed var(--rule); border-radius:100px; padding:2px 9px; white-space:nowrap;
 }
 
 .rail{
-  position:sticky; top:54px; align-self:flex-start; flex:0 0 236px; width:236px;
-  min-height:calc(100vh - 54px); max-height:calc(100vh - 54px); overflow-y:auto;
+  position:sticky; top:68px; align-self:flex-start; flex:0 0 272px; width:272px;
+  min-height:calc(100vh - 68px); max-height:calc(100vh - 68px); overflow-y:auto;
   background:var(--card); border-right:1px solid var(--rule);
   padding:12px 10px 24px; display:flex; flex-direction:column; gap:2px;
 }
-.rail-group{font-size:10.5px; letter-spacing:.14em; color:var(--ink-4); padding:14px 10px 6px}
+.rail-group{font-size:16px; letter-spacing:.14em; color:var(--ink-4); padding:14px 10px 6px}
 .rail a{
   display:flex; align-items:center; gap:9px; padding:7px 10px; border-radius:var(--r-m);
-  color:var(--ink-2); text-decoration:none; font-size:13.5px; border:1px solid transparent;
+  color:var(--ink-2); text-decoration:none; font-size:18px; border:1px solid transparent;
 }
 .rail a:hover{background:var(--shade)}
 .rail a[aria-current="page"]{background:var(--shade); border-color:var(--rule); color:var(--ink); font-weight:600}
-.rail .glyph{width:18px; text-align:center; color:var(--ink-4); font-family:var(--f-mono); font-size:12px}
+.rail .glyph{width:18px; text-align:center; color:var(--ink-4); font-family:var(--f-mono); font-size:16px}
 .rail a[aria-current="page"] .glyph{color:var(--ink)}
-.rail .badge{margin-left:auto; font-family:var(--f-mono); font-size:11px; color:var(--ink-3); background:var(--shade); border:1px solid var(--rule-soft); border-radius:100px; padding:0 6px}
+.rail .badge{margin-left:auto; font-family:var(--f-mono); font-size:16px; color:var(--ink-3); background:var(--shade); border:1px solid var(--rule-soft); border-radius:100px; padding:0 6px}
 
-.stage{flex:1; min-width:0; position:relative; min-height:calc(100vh - 54px)}
+.stage{flex:1; min-width:0; position:relative; min-height:calc(100vh - 68px)}
 .stage.measure{background:var(--cool);
   background-image:linear-gradient(var(--grid) 1px,transparent 1px),linear-gradient(90deg,var(--grid) 1px,transparent 1px);
   background-size:26px 26px}
 .stage.discourse{background:var(--paper); background-image:radial-gradient(var(--grid) 1.1px,transparent 1.1px); background-size:19px 19px}
-.wrap{max-width:1160px; margin:0 auto; padding:22px 22px 72px}
+.wrap{max-width:1320px; margin:0 auto; padding:22px 22px 72px}
 .wrap.narrow{max-width:790px}
 
 /* ---------- 元件 ---------- */
@@ -146,21 +147,21 @@ button,input,select,textarea{font:inherit; color:inherit}
 .card-h{display:flex; align-items:center; gap:10px; padding:14px 18px; border-bottom:1px solid var(--rule-soft)}
 .card-h h3{flex:1}
 .grid{display:grid; gap:14px}
-.g2{grid-template-columns:repeat(auto-fit,minmax(290px,1fr))}
-.g3{grid-template-columns:repeat(auto-fit,minmax(210px,1fr))}
-.g4{grid-template-columns:repeat(auto-fit,minmax(158px,1fr))}
+.g2{grid-template-columns:repeat(auto-fit,minmax(340px,1fr))}
+.g3{grid-template-columns:repeat(auto-fit,minmax(250px,1fr))}
+.g4{grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}
 .row{display:flex; gap:10px; align-items:center; flex-wrap:wrap}
 .col{display:flex; flex-direction:column; gap:10px}
-.eyebrow{font-size:10.5px; letter-spacing:.16em; color:var(--ink-4); font-family:var(--f-mono)}
+.eyebrow{font-size:16px; letter-spacing:.16em; color:var(--ink-4); font-family:var(--f-mono)}
 .muted{color:var(--ink-3)}
-.small{font-size:12.5px}
+.small{font-size:17px}
 .hr{height:1px; background:var(--rule-soft); border:0; margin:16px 0}
-.lead{font-size:15px; color:var(--ink-2); line-height:1.8; max-width:66ch}
+.lead{font-size:20px; color:var(--ink-2); line-height:1.8; max-width:66ch}
 
 .btn{
   display:inline-flex; align-items:center; gap:7px; padding:7px 13px; border-radius:var(--r-m);
   border:1px solid var(--rule); background:var(--card); color:var(--ink); cursor:pointer;
-  font-size:13.5px; line-height:1.4; transition:background .12s,border-color .12s;
+  font-size:18px; line-height:1.4; transition:background .12s,border-color .12s;
 }
 .btn:hover{background:var(--shade)}
 .btn:disabled{opacity:.45; cursor:not-allowed}
@@ -168,11 +169,11 @@ button,input,select,textarea{font:inherit; color:inherit}
 .btn.primary:hover{filter:brightness(1.14)}
 .btn.ghost{border-color:transparent; background:transparent}
 .btn.ghost:hover{background:var(--shade)}
-.btn.sm{padding:4px 9px; font-size:12.5px}
+.btn.sm{padding:4px 9px; font-size:17px}
 .btn.danger{color:var(--crit); border-color:var(--q2-line)}
 
 .field{display:flex; flex-direction:column; gap:5px}
-.field > label{font-size:12px; color:var(--ink-3)}
+.field > label{font-size:16px; color:var(--ink-3)}
 input[type=text],input[type=email],input[type=password],input[type=number],input[type=datetime-local],select,textarea{
   width:100%; padding:7px 10px; border:1px solid var(--rule); border-radius:var(--r-m);
   background:var(--card); color:var(--ink);
@@ -180,7 +181,7 @@ input[type=text],input[type=email],input[type=password],input[type=number],input
 textarea{resize:vertical; min-height:80px; line-height:1.7}
 input:focus,select:focus,textarea:focus{outline:2px solid var(--focus); border-color:transparent}
 
-.pill{display:inline-flex; align-items:center; gap:5px; border-radius:100px; padding:1px 9px; font-size:11.5px; border:1px solid var(--rule); background:var(--shade); color:var(--ink-2); white-space:nowrap}
+.pill{display:inline-flex; align-items:center; gap:5px; border-radius:100px; padding:1px 9px; font-size:16px; border:1px solid var(--rule); background:var(--shade); color:var(--ink-2); white-space:nowrap}
 .pill .dot{width:7px; height:7px; border-radius:50%; background:currentColor}
 .q1{color:var(--q1); background:var(--q1-bg); border-color:var(--q1-line)}
 .q2{color:var(--q2); background:var(--q2-bg); border-color:var(--q2-line)}
@@ -188,17 +189,17 @@ input:focus,select:focus,textarea:focus{outline:2px solid var(--focus); border-c
 .q4{color:var(--q4); background:var(--q4-bg); border-color:var(--q4-line)}
 
 .stat{padding:14px 16px; background:var(--card); border:1px solid var(--rule); border-radius:var(--r-l)}
-.stat .k{font-size:11px; letter-spacing:.1em; color:var(--ink-4); font-family:var(--f-mono)}
-.stat .v{font-family:var(--f-mono); font-size:27px; font-weight:600; line-height:1.25; letter-spacing:-.01em}
-.stat .s{font-size:12px; color:var(--ink-3)}
+.stat .k{font-size:16px; letter-spacing:.1em; color:var(--ink-4); font-family:var(--f-mono)}
+.stat .v{font-family:var(--f-mono); font-size:36px; font-weight:600; line-height:1.25; letter-spacing:-.01em}
+.stat .s{font-size:16px; color:var(--ink-3)}
 .stat.crit{border-left:3px solid var(--crit)}
 .stat.good{border-left:3px solid var(--good)}
 .stat.warn{border-left:3px solid var(--warn)}
 
 .tablewrap{overflow-x:auto; -webkit-overflow-scrolling:touch}
-table{border-collapse:collapse; width:100%; font-size:13px}
+table{border-collapse:collapse; width:100%; font-size:17px}
 th,td{text-align:left; padding:7px 10px; border-bottom:1px solid var(--rule-soft); vertical-align:middle}
-th{font-size:11px; letter-spacing:.08em; color:var(--ink-4); font-weight:600; white-space:nowrap; background:var(--card)}
+th{font-size:16px; letter-spacing:.08em; color:var(--ink-4); font-weight:600; white-space:nowrap; background:var(--card)}
 tbody tr:hover{background:var(--shade)}
 td.n,th.n{text-align:right; font-family:var(--f-mono); font-variant-numeric:tabular-nums}
 
@@ -208,13 +209,13 @@ td.n,th.n{text-align:right; font-family:var(--f-mono); font-variant-numeric:tabu
 .tabs{display:flex; gap:2px; border-bottom:1px solid var(--rule); margin-bottom:18px; overflow-x:auto}
 .tabs button{
   border:0; background:transparent; padding:9px 13px; cursor:pointer; color:var(--ink-3);
-  border-bottom:2px solid transparent; font-size:13.5px; white-space:nowrap;
+  border-bottom:2px solid transparent; font-size:18px; white-space:nowrap;
 }
 .tabs button[aria-selected="true"]{color:var(--ink); border-bottom-color:var(--accent); font-weight:600}
 
 .steps{display:flex; gap:8px; align-items:center; margin-bottom:18px; flex-wrap:wrap}
-.step{display:flex; align-items:center; gap:7px; padding:5px 12px; border:1px solid var(--rule); border-radius:100px; font-size:13px; color:var(--ink-3); background:var(--card)}
-.step b{font-family:var(--f-mono); font-size:11px; width:17px; height:17px; border-radius:50%; display:grid; place-items:center; background:var(--shade); color:var(--ink-3)}
+.step{display:flex; align-items:center; gap:7px; padding:5px 12px; border:1px solid var(--rule); border-radius:100px; font-size:17px; color:var(--ink-3); background:var(--card)}
+.step b{font-family:var(--f-mono); font-size:16px; width:17px; height:17px; border-radius:50%; display:grid; place-items:center; background:var(--shade); color:var(--ink-3)}
 .step.on{color:var(--ink); border-color:var(--accent)}
 .step.on b{background:var(--accent); color:var(--accent-ink)}
 
@@ -224,7 +225,7 @@ td.n,th.n{text-align:right; font-family:var(--f-mono); font-variant-numeric:tabu
 .toast{
   position:fixed; left:50%; bottom:26px; transform:translateX(-50%); z-index:200;
   background:var(--ink); color:var(--card); padding:9px 16px; border-radius:100px;
-  font-size:13px; box-shadow:var(--shadow); max-width:88vw;
+  font-size:17px; box-shadow:var(--shadow); max-width:88vw;
 }
 .modal-back{position:fixed; inset:0; background:rgba(10,14,20,.45); z-index:100; display:grid; place-items:center; padding:18px}
 .modal{background:var(--card); border:1px solid var(--rule); border-radius:var(--r-l); box-shadow:var(--shadow); width:min(760px,100%); max-height:88dvh; overflow:auto}
@@ -248,11 +249,11 @@ td.n,th.n{text-align:right; font-family:var(--f-mono); font-variant-numeric:tabu
 
 /* ---------- KIDMAP ---------- */
 .kidmap{width:100%; height:auto; display:block; overflow:visible}
-.kidmap text{font-family:var(--f-mono); font-size:10px; fill:var(--ink-3)}
+.kidmap text{font-family:var(--f-mono); font-size:16px; fill:var(--ink-3)}
 .kidmap .axis{stroke:var(--rule); stroke-width:1}
 .kidmap .theta{stroke:var(--accent); stroke-width:1.4; stroke-dasharray:5 4}
-.kidmap .qlabel{font-size:10.5px; letter-spacing:.06em; font-weight:600}
-.legend{display:flex; gap:14px; flex-wrap:wrap; font-size:12px; color:var(--ink-3)}
+.kidmap .qlabel{font-size:16px; letter-spacing:.06em; font-weight:600}
+.legend{display:flex; gap:14px; flex-wrap:wrap; font-size:16px; color:var(--ink-3)}
 .legend span{display:inline-flex; align-items:center; gap:6px}
 .swatch{width:10px; height:10px; border-radius:2px; display:inline-block}
 
@@ -265,15 +266,15 @@ td.n,th.n{text-align:right; font-family:var(--f-mono); font-variant-numeric:tabu
 }
 .canvas-inner{position:relative; width:1600px; height:1100px}
 .note{
-  position:absolute; width:216px; background:var(--card); border:1px solid var(--rule);
+  position:absolute; width:264px; background:var(--card); border:1px solid var(--rule);
   border-left:4px solid var(--ink-4); border-radius:var(--r-m); padding:9px 11px; cursor:grab;
   box-shadow:var(--shadow); user-select:none;
 }
 .note:active{cursor:grabbing}
 .note.sel{outline:2px solid var(--focus); outline-offset:1px}
-.note .nt{font-weight:600; font-size:13.5px; line-height:1.45; margin-bottom:3px; font-family:var(--f-display)}
-.note .nb{font-size:12px; color:var(--ink-3); line-height:1.55; max-height:54px; overflow:hidden}
-.note .nf{display:flex; gap:7px; align-items:center; margin-top:7px; font-size:11px; color:var(--ink-4); font-family:var(--f-mono); flex-wrap:wrap}
+.note .nt{font-weight:600; font-size:18px; line-height:1.45; margin-bottom:3px; font-family:var(--f-display)}
+.note .nb{font-size:16px; color:var(--ink-3); line-height:1.55; max-height:54px; overflow:hidden}
+.note .nf{display:flex; gap:7px; align-items:center; margin-top:7px; font-size:16px; color:var(--ink-4); font-family:var(--f-mono); flex-wrap:wrap}
 .note.unread{box-shadow:var(--shadow),inset 0 3px 0 var(--accent)}
 .note.problem{border-left-color:var(--q2); background:var(--q2-bg)}
 .note.rise{border-left-color:var(--sc-6); box-shadow:var(--shadow),0 0 0 3px var(--card),0 0 0 4px var(--sc-6)}
@@ -284,10 +285,10 @@ td.n,th.n{text-align:right; font-family:var(--f-mono); font-variant-numeric:tabu
 .edges path.rise{stroke:var(--sc-6); stroke-dasharray:6 3; opacity:.65}
 
 .sc-btns{display:flex; gap:6px; flex-wrap:wrap}
-.sc-btn{border:1px solid var(--rule); background:var(--card); border-radius:100px; padding:3px 11px; font-size:12.5px; cursor:pointer; border-left-width:4px}
+.sc-btn{border:1px solid var(--rule); background:var(--card); border-radius:100px; padding:3px 11px; font-size:17px; cursor:pointer; border-left-width:4px}
 .sc-btn:hover{background:var(--shade)}
 .sc-seg{border-left:3px solid var(--rule); padding:2px 0 2px 10px; margin:0 0 10px}
-.sc-seg .lab{font-size:11px; letter-spacing:.05em; font-weight:600; display:block; margin-bottom:1px}
+.sc-seg .lab{font-size:16px; letter-spacing:.05em; font-weight:600; display:block; margin-bottom:1px}
 .sc1{border-left-color:var(--sc-1)} .sc1 .lab,.sc-btn.sc1{color:var(--sc-1)}
 .sc2{border-left-color:var(--sc-2)} .sc2 .lab,.sc-btn.sc2{color:var(--sc-2)}
 .sc3{border-left-color:var(--sc-3)} .sc3 .lab,.sc-btn.sc3{color:var(--sc-3)}
@@ -297,29 +298,90 @@ td.n,th.n{text-align:right; font-family:var(--f-mono); font-variant-numeric:tabu
 
 .thread{border-left:2px solid var(--rule-soft); padding-left:14px; margin-left:6px; margin-top:10px; display:flex; flex-direction:column; gap:10px}
 .note-full{border:1px solid var(--rule); border-radius:var(--r-m); padding:13px 15px; background:var(--card)}
-.note-full .meta{font-size:11.5px; color:var(--ink-4); font-family:var(--f-mono); display:flex; gap:9px; flex-wrap:wrap; align-items:center}
+.note-full .meta{font-size:16px; color:var(--ink-4); font-family:var(--f-mono); display:flex; gap:9px; flex-wrap:wrap; align-items:center}
 
-.ai-out{background:var(--shade); border:1px solid var(--rule-soft); border-radius:var(--r-m); padding:14px 16px; font-size:13.5px; line-height:1.78}
-.ai-out h3,.ai-out h4,.ai-out h5,.ai-out h6{margin:15px 0 6px; font-size:14px}
-.ai-out h3{font-size:15.5px}
+.ai-out{background:var(--shade); border:1px solid var(--rule-soft); border-radius:var(--r-m); padding:14px 16px; font-size:18px; line-height:1.78}
+.ai-out h3,.ai-out h4,.ai-out h5,.ai-out h6{margin:15px 0 6px; font-size:19px}
+.ai-out h3{font-size:21px}
 .ai-out h3:first-child,.ai-out h4:first-child,.ai-out h5:first-child{margin-top:0}
 .ai-out ul,.ai-out ol{margin:0 0 10px; padding-left:20px}
 .ai-out li{margin-bottom:3px}
-.ai-out code{font-family:var(--f-mono); font-size:12.5px; background:var(--card); padding:1px 5px; border-radius:3px; border:1px solid var(--rule-soft)}
+.ai-out code{font-family:var(--f-mono); font-size:17px; background:var(--card); padding:1px 5px; border-radius:3px; border:1px solid var(--rule-soft)}
 .ai-out strong{color:var(--ink)}
 .ai-out table{margin-bottom:10px}
 
-.rub-row{display:grid; grid-template-columns:130px 1fr 54px; gap:10px; align-items:center; font-size:13px}
-.rub-row .lv{font-family:var(--f-mono); font-size:12px; text-align:right; color:var(--ink-3)}
+.rub-row{display:grid; grid-template-columns:130px 1fr 54px; gap:10px; align-items:center; font-size:17px}
+.rub-row .lv{font-family:var(--f-mono); font-size:16px; text-align:right; color:var(--ink-3)}
 
 canvas.pad{border:1px solid var(--rule); border-radius:var(--r-m); background:var(--card); touch-action:none; display:block; width:100%; cursor:crosshair}
 
 .sna{width:100%; height:auto; display:block}
-.sna text{font-family:var(--f-body); font-size:9.5px; fill:var(--ink-3)}
+.sna text{font-family:var(--f-body); font-size:16px; fill:var(--ink-3)}
 .sna line{stroke:var(--rule)}
 .sna circle{stroke:var(--card); stroke-width:1.5}
 
 .delta.up{color:var(--good)} .delta.down{color:var(--crit)} .delta.flat{color:var(--ink-4)}
+
+/* ==========================================================================
+   無障礙（WCAG 2.2 AA）
+   ‧ 1.4.3 文字對比 4.5:1、1.4.11 非文字對比 3:1
+   ‧ 1.4.4 文字放大 200%、1.4.10 Reflow（400% / 320px 不橫向捲動）
+   ‧ 2.1.1 全鍵盤操作、2.4.7 焦點可見、2.4.11 焦點不被遮蔽
+   ‧ 1.4.1 不以顏色單獨傳達訊息（形狀記號與文字標籤與顏色並用）
+   ========================================================================== */
+
+/* 字級調整：--fs 由使用者控制（100% / 125% / 150%），整份介面等比放大 */
+:root{ --fs:1 }
+body{ font-size:calc(20px * var(--fs)) }
+
+/* 表單控制項的邊界需 3:1（1.4.11）——一般 --rule 只有 1.5:1，不足以標示可互動邊界 */
+input[type=text],input[type=email],input[type=password],input[type=number],
+input[type=datetime-local],select,textarea,.btn,.lk,.sc-btn{
+  border-color:var(--rule-strong);
+}
+input[type=checkbox],input[type=radio]{ width:1.15em; height:1.15em; accent-color:var(--accent) }
+
+/* 只給螢幕閱讀器 */
+.sr-only{
+  position:absolute; width:1px; height:1px; padding:0; margin:-1px;
+  overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; border:0;
+}
+/* 跳至主要內容：鍵盤 Tab 第一站 */
+.skip{
+  position:absolute; left:8px; top:-100px; z-index:100;
+  background:var(--accent); color:var(--accent-ink); padding:10px 16px;
+  border-radius:var(--r-m); font-weight:600; transition:top .15s;
+}
+.skip:focus{ top:8px }
+
+/* 高對比模式：使用者可在頂列開啟 */
+:root[data-contrast="high"]{
+  --ink:#000; --ink-2:#111; --ink-3:#333; --ink-4:#444;
+  --rule:#555; --rule-strong:#333; --rule-soft:#777;
+  --card:#fff; --paper:#fff; --cool:#fff; --shade:#f0f0f0; --grid:#ddd;
+  --accent:#0b2e63; --focus:#0b57d0;
+  --q1:#125c3c; --q2:#8f1d10; --q3:#3d4756; --q4:#123a70;
+  --q1-bg:#e8f3ed; --q2-bg:#fbe9e6; --q3-bg:#eef0f4; --q4-bg:#e8eef8;
+  --shadow:none;
+}
+:root[data-contrast="high"] .card,
+:root[data-contrast="high"] .stat{ border-width:2px }
+
+/* ---------- 閱讀文本 ---------- */
+.passage{ max-width:62ch }
+.passage .para{ margin:0 0 1.1em; line-height:2.05; font-size:1.05em }
+/* 每一句都是真正的 button：原生可鍵盤聚焦與操作（2.1.1），但看起來像行內文字 */
+.passage .sent{
+  display:inline; font:inherit; color:inherit; text-align:left;
+  background:none; border:0; border-bottom:1px dashed var(--rule-strong);
+  padding:0 1px; margin:0; cursor:pointer; border-radius:2px;
+}
+.passage .sent:hover{ background:var(--shade) }
+.passage .sent.on{
+  background:var(--q4-bg); border-bottom:3px solid var(--q4); color:var(--ink); font-weight:600;
+}
+/* 標記狀態不只靠顏色：加一個記號（1.4.1） */
+.passage .sent.on::after{ content:"　▍"; color:var(--q4); font-weight:700 }
 
 /* ---------- 評量即學習事件 ----------
    四條件共用同一份版面幾何：對照組只是把對話卡換成同尺寸的筆記卡，
@@ -328,36 +390,36 @@ canvas.pad{border:1px solid var(--rule); border-radius:var(--r-m); background:va
 .aal-text{position:sticky; top:70px}
 .aal-side{display:flex; flex-direction:column; gap:16px; min-width:0}
 .aal-chat .card-p{display:flex; flex-direction:column}
-.sentences{line-height:2.1; font-size:15.5px}
+.sentences{line-height:2.1; font-size:21px}
 .sent{cursor:pointer; padding:1px 2px; border-radius:3px; border-bottom:1px dashed var(--rule)}
 .sent:hover{background:var(--shade)}
 .sent.on{background:var(--q4-bg); border-bottom:2px solid var(--q4); color:var(--ink)}
 .chat{display:flex; flex-direction:column; gap:8px; height:300px; overflow-y:auto; padding-right:4px}
-.msg{max-width:88%; padding:8px 12px; border-radius:12px; font-size:13.5px; line-height:1.6}
-.msg b{display:block; font-size:11px; letter-spacing:.04em; color:var(--ink-4); font-weight:600; margin-bottom:2px}
+.msg{max-width:88%; padding:8px 12px; border-radius:12px; font-size:18px; line-height:1.6}
+.msg b{display:block; font-size:16px; letter-spacing:.04em; color:var(--ink-4); font-weight:600; margin-bottom:2px}
 .msg.agent{align-self:flex-start; background:var(--shade); border:1px solid var(--rule-soft); border-bottom-left-radius:3px}
 .msg.me{align-self:flex-end; background:var(--accent); color:var(--accent-ink); border-bottom-right-radius:3px}
-.msg.sys{align-self:center; background:transparent; border:1px dashed var(--rule); color:var(--ink-3); font-size:12.5px}
+.msg.sys{align-self:center; background:transparent; border:1px dashed var(--rule); color:var(--ink-3); font-size:17px}
 
 /* ---------- 問卷 ---------- */
 .likert{padding:10px 0; border-bottom:1px solid var(--rule-soft)}
 .likert:last-child{border-bottom:0}
-.likert .q{font-size:14px; margin-bottom:7px; line-height:1.6}
+.likert .q{font-size:19px; margin-bottom:7px; line-height:1.6}
 .scale{display:flex; gap:6px; flex-wrap:wrap}
 .lk{width:38px; height:34px; border:1px solid var(--rule); background:var(--card); border-radius:var(--r-m);
-    cursor:pointer; font-family:var(--f-mono); font-size:13px; color:var(--ink-3)}
+    cursor:pointer; font-family:var(--f-mono); font-size:17px; color:var(--ink-3)}
 .lk:hover{background:var(--shade)}
 .lk.on{background:var(--accent); border-color:var(--accent); color:var(--accent-ink); font-weight:600}
-.scale-lab{display:flex; justify-content:space-between; font-size:11px; color:var(--ink-4); margin-top:4px; max-width:270px}
+.scale-lab{display:flex; justify-content:space-between; font-size:16px; color:var(--ink-4); margin-top:4px; max-width:270px}
 
 pre.prompt{
-  font-family:var(--f-mono); font-size:11.5px; line-height:1.65; white-space:pre-wrap; word-break:break-word;
+  font-family:var(--f-mono); font-size:16px; line-height:1.65; white-space:pre-wrap; word-break:break-word;
   background:var(--shade); border:1px solid var(--rule-soft); border-radius:var(--r-m);
   padding:11px 13px; margin:0; color:var(--ink-2);
 }
 
 .principle{display:grid; grid-template-columns:26px 1fr; gap:12px; padding:10px 0; border-bottom:1px solid var(--rule-soft)}
-.principle .no{font-family:var(--f-mono); font-size:12px; color:var(--ink-4); padding-top:3px}
+.principle .no{font-family:var(--f-mono); font-size:16px; color:var(--ink-4); padding-top:3px}
 .principle b{display:block; margin-bottom:2px}
 
 @media (max-width:900px){
@@ -376,9 +438,10 @@ pre.prompt{
 @media (prefers-reduced-motion:reduce){*{animation:none!important; transition:none!important}}
 @media print{.rail,.topbar,.kb-toolbar{display:none} .app,.main{display:block} .stage{min-height:0}}
 </style>
+<a class="skip" href="#main">跳至主要內容</a>
 <div class="app">
   <header class="topbar">
-    <div class="brand"><b>KIDFORUM</b><span>知識共構診斷平台</span></div>
+    <div class="brand"><b>KAIROS</b><span>契機 · 評量即學習平台</span></div>
     <span class="chip-demo">示範資料（模擬班級）</span>
     <div class="spacer"></div>
     <div class="row" style="gap:8px">
@@ -388,22 +451,34 @@ pre.prompt{
       </span>
       <label class="small muted" for="who">身分</label>
       <select id="who" style="width:auto"></select>
+      <label class="sr-only" for="fsSel">字級</label>
+      <select id="fsSel" style="width:auto" title="字級">
+        <option value="1">字級 100%</option>
+        <option value="1.25">字級 125%</option>
+        <option value="1.5">字級 150%</option>
+        <option value="1.75">字級 175%</option>
+      </select>
+      <button class="btn sm ghost" id="contrastBtn" aria-pressed="false" title="切換高對比模式">高對比</button>
       <button class="btn sm ghost" id="themeBtn" title="切換淺色／深色">◐</button>
     </div>
   </header>
   <div class="main">
-    <nav class="rail" id="rail"></nav>
+    <nav class="rail" id="rail" aria-label="主要導覽"></nav>
     <main class="stage" id="stage" tabindex="-1"><div class="wrap" id="view"></div></main>
   </div>
 </div>
 <div id="modalRoot"></div>
-<div id="toastRoot"></div>
+<div id="toastRoot" role="status" aria-live="polite"></div>
 <script>
 /* ===== src/30-data.js ===== */
 /* ==========================================================================
-   30-data.js — 領域內容與示範資料
+   30-data.js — 領域內容與示範資料（閱讀理解）
    所有示範班級／作答／貼文皆為「模擬資料」，由固定亂數種子產生，
    每次載入結果一致，可重現，便於研究報告引用。
+
+   文本與試題皆為「自編示範素材」，仿 PIRLS 題型與難度撰寫，
+   **不是** PIRLS 官方釋出文本。正式施測請換上取得授權的釋出題本，
+   資料結構完全相同，只需替換 TEXTS 與 ITEMS 兩個常數。
    ========================================================================== */
 
 /* --- 固定種子亂數（mulberry32），確保示範資料可重現 --- */
@@ -416,189 +491,237 @@ function mulberry32(a){
   };
 }
 
-/* --- 康軒教材單元（六冊；示範資料聚焦第三冊） --- */
-const UNITS = [
-  {id:'B1-1', book:1, grade:'七上', ch:'第1章', name:'整數的運算'},
-  {id:'B1-2', book:1, grade:'七上', ch:'第2章', name:'分數的運算'},
-  {id:'B1-3', book:1, grade:'七上', ch:'第3章', name:'一元一次方程式'},
-  {id:'B1-4', book:1, grade:'七上', ch:'第4章', name:'二元一次聯立方程式'},
-  {id:'B2-1', book:2, grade:'七下', ch:'第1章', name:'比例式'},
-  {id:'B2-2', book:2, grade:'七下', ch:'第2章', name:'直角坐標與二元一次方程式的圖形'},
-  {id:'B2-3', book:2, grade:'七下', ch:'第3章', name:'一元一次不等式'},
-  {id:'B2-4', book:2, grade:'七下', ch:'第4章', name:'統計圖表'},
-  {id:'B3-1', book:3, grade:'八上', ch:'第1章', name:'乘法公式與多項式'},
-  {id:'B3-2', book:3, grade:'八上', ch:'第2章', name:'平方根與畢氏定理'},
-  {id:'B3-3', book:3, grade:'八上', ch:'第3章', name:'因式分解'},
-  {id:'B3-4', book:3, grade:'八上', ch:'第4章', name:'一元二次方程式'},
-  {id:'B4-1', book:4, grade:'八下', ch:'第1章', name:'等差數列與級數'},
-  {id:'B4-2', book:4, grade:'八下', ch:'第2章', name:'三角形的基本性質'},
-  {id:'B4-3', book:4, grade:'八下', ch:'第3章', name:'平行與四邊形'},
-  {id:'B5-1', book:5, grade:'九上', ch:'第1章', name:'相似形'},
-  {id:'B5-2', book:5, grade:'九上', ch:'第2章', name:'圓形'},
-  {id:'B5-3', book:5, grade:'九上', ch:'第3章', name:'幾何與證明'},
-  {id:'B6-1', book:6, grade:'九下', ch:'第1章', name:'二次函數'},
-  {id:'B6-2', book:6, grade:'九下', ch:'第2章', name:'統計與機率'},
-  {id:'B6-3', book:6, grade:'九下', ch:'第3章', name:'立體圖形'}
+/* ==========================================================================
+   文本
+   ========================================================================== */
+const TEXTS = [
+  {
+    id:'T1', title:'會走路的樹', genre:'敘事', grade:'四—六年級',
+    source:'自編示範文本（PIRLS 風格），非官方釋出文本',
+    intro:'請先讀完整篇故事，再回答後面的問題。',
+    paras:[
+      '搬到這條巷子的第三天早上，小昀在陽台上發現一件怪事。巷口那棵種在大陶盆裡的柚子樹，昨天明明靠在紅色鐵門旁邊，今天卻站到了巷子中間。',
+      '她跑下樓去看。陶盆很重，底下沒有輪子，泥土上也沒有拖過的痕跡。小昀繞著樹走了兩圈，抬頭看了看那些還沒轉黃的果子，什麼線索也沒找到。',
+      '接下來一個星期，柚子樹每天都在不同的位置。星期一在電線桿下，星期三挪到了郵筒旁邊，星期五又回到紅色鐵門邊。小昀在筆記本上畫了一張巷子的地圖，每天把樹的位置點上去。畫著畫著，她發現那些點連起來並不是隨便亂走的——樹總是待在整條巷子裡最亮的地方。',
+      '星期六天還沒完全亮，小昀就搬了張小凳子坐在陽台上。六點十分，紅色鐵門開了。一位頭髮全白的老先生走出來，他先站在巷口看了看天空，然後從門後推出一台舊舊的板車。',
+      '老先生把板車推到陶盆旁，蹲下去，用一塊厚木板把盆底一點一點撬起來，再慢慢挪上車。他推得很慢，每走幾步就停下來喘氣。到了電線桿旁邊那塊有太陽的空地，他又用同樣的方法把陶盆卸下來，扶正，退後兩步瞇著眼睛看了看，好像在確認什麼。',
+      '小昀跑下樓。「阿公，你每天都在搬這棵樹嗎？」',
+      '老先生愣了一下，笑了。「妳都看到啦。」他用袖子擦了擦額頭。「這棵樹是我太太種的。她說柚子要曬夠太陽才會甜。」',
+      '「那……阿嬤呢？」',
+      '老先生沒有馬上回答。他伸手摸了摸樹幹上一道舊舊的疤，那是被繩子綁久了留下的。「她在醫院。」過了一會兒他才說，「醫生說今年冬天以前應該可以回來。」他把手放下，聲音輕輕的，「我想讓她回來的時候，就有柚子可以吃。」',
+      '那天以後，小昀每天早上六點都會下樓。她幫忙扶著陶盆，老先生推車。板車走過石板路的聲音，成了那條巷子最早的聲音。',
+      '入冬那天，巷口停了一輛計程車。小昀正要出門，看見老先生扶著一位瘦瘦的老太太下車。老太太抬起頭，看見那棵樹，愣住了。',
+      '樹上掛滿了柚子。而那棵樹，正好站在紅色鐵門旁邊——她當年種下它的地方。'
+    ]
+  },
+  {
+    id:'T2', title:'為什麼有些種子要坐飛機？', genre:'說明', grade:'四—六年級',
+    source:'自編示範文本（PIRLS 風格），非官方釋出文本',
+    intro:'請先讀完整篇文章，再回答後面的問題。',
+    paras:[
+      '植物不會走路，可是它們的種子卻可以跑得很遠。這件事聽起來奇怪，其實有很好的理由。',
+      '如果所有的種子都掉在母株的正下方，它們會遇到一個大麻煩：母株的葉子擋住了陽光，母株的根搶走了水分和養分。擠在一起的幼苗長不大，最後多半會死掉。生物學家把種子離開母株、散布到別處的過程叫做「傳播」。傳播讓幼苗有機會找到自己的空地。',
+      '不同的植物發展出不同的傳播方法。最常見的一種是靠風。蒲公英的種子上長著一叢細細的白毛，張開的時候像一把小傘，風一吹就能飄上幾百公尺。楓樹的種子則長了一片薄薄的翅膀，落下時會像竹蜻蜓一樣旋轉，旋轉可以拖慢下墜的速度，讓風有更多時間把它帶走。',
+      '第二種方法是靠動物。有些果實又甜又香，鳥類和哺乳動物吃下去以後，堅硬的種子不會被消化，最後隨著糞便排出，落在離母株很遠的地方。還有一些種子表面長滿了小鉤子，會勾在動物的毛上，被帶著走上好幾公里——你褲管上偶爾黏到的「鬼針草」就是這樣。',
+      '第三種方法是靠水。椰子的外殼又厚又輕，中間有空氣，可以在海上漂流好幾個月而不沉，也不會被海水泡壞。許多熱帶海島上的椰子樹，祖先就是這樣漂過來的。',
+      '也有少數植物選擇自己動手。鳳仙花的果莢成熟以後，只要輕輕一碰就會突然裂開，把種子彈到兩、三公尺外。這種方法傳得不遠，但勝在不必等風、也不必等動物。',
+      '這些方法各有各的代價。靠風的種子必須做得很輕，能帶的養分就少，落地以後得馬上找到適合的土壤；靠動物的種子要準備甜美的果肉，那需要消耗母株大量的能量；靠水的種子只有在海邊才用得上。',
+      '所以，種子要跑多遠、用什麼方法跑，並不是隨便決定的。每一種植物的做法，都是它的祖先在自己生長的環境裡，經過非常長的時間慢慢調整出來的結果。'
+    ]
+  }
 ];
+function getText(id){ return TEXTS.find(function(t){ return t.id === id; }); }
+function textTitle(id){ const t = getText(id); return t ? '〈' + t.title + '〉' : id; }
+/* 舊介面沿用：本平台的「單元」即「文本」 */
+const UNITS = TEXTS;
+function getUnit(id){ return getText(id); }
+function unitName(id){ const t = getText(id); return t ? textTitle(id) + '（' + t.genre + '）' : id; }
 
-/* --- 迷思概念代碼表：診斷不必依賴 LLM，誘答選項本身即攜帶概念標記 --- */
-const MISCONCEPTIONS = [
-  {id:'M1', name:'平方根只取正根',   desc:'解 x²=a 時只寫正根，忽略負根；把「平方根」與「算術平方根」混為一談。'},
-  {id:'M2', name:'乘積為零未先移項', desc:'看到 A·B=k（k≠0）就直接令 A=k 或 B=k，誤用乘積為零性質。'},
-  {id:'M3', name:'根號可逐項相加',   desc:'把 √a+√b 當成 √(a+b)，將根號視為線性運算。'},
-  {id:'M4', name:'判別式判讀錯誤',   desc:'只看 b² 或忽略 −4ac 的符號，誤判實根個數。'},
-  {id:'M5', name:'十字交乘配錯',     desc:'因式分解時交叉相乘的配對與檢驗步驟省略，常數項與一次項對不上。'},
-  {id:'M6', name:'股與斜邊混淆',     desc:'套畢氏定理時未先辨認斜邊，直接把已知兩邊當兩股相加。'},
-  {id:'M7', name:'根與係數符號',     desc:'兩根和寫成 b/a、兩根積符號顛倒，忽略公式中的負號。'}
+/* --- 理解失誤類型：診斷不必依賴語言模型，誘答選項本身即攜帶失誤標記 --- */
+const READING_ERRORS = [
+  {id:'E1', name:'未回到文本',   desc:'憑印象或常識作答，沒有回去找文章裡的依據。'},
+  {id:'E2', name:'找錯位置',     desc:'回到文本了，但停在錯的段落或錯的句子。'},
+  {id:'E3', name:'停在字面',     desc:'只讀出字面訊息，沒有把相鄰的線索連起來做推論。'},
+  {id:'E4', name:'過度推論',     desc:'推得太遠，結論超出文本能支持的範圍。'},
+  {id:'E5', name:'指涉判斷錯誤', desc:'代名詞或指示詞的對象認錯。'},
+  {id:'E6', name:'以偏概全',     desc:'把文中的單一例子當成全文的通則。'},
+  {id:'E7', name:'以經驗代替文本',desc:'用自己的生活經驗取代作者實際寫出來的內容。'},
+  {id:'E8', name:'忽略作者立場', desc:'只看表面訊息，沒有讀出作者的態度或寫作用意。'}
 ];
+/* 相容舊名（診斷與橋接模組沿用同一組欄位） */
+const MISCONCEPTIONS = READING_ERRORS;
 
-/* --- 題庫：仿國中教育會考題型（示範用自編題，非官方原題） --- */
+/* ==========================================================================
+   試題（14 選擇題 + 2 非選題，涵蓋四項理解歷程）
+   answerPara / answerSent：答案依據所在的段落與句次，供防洩答與教師檢視使用。
+   ========================================================================== */
 const ITEMS = [
-  {id:'Q01', year:112, no:8,  unit:'B3-4', type:'mc', diff:'基礎',
-   stem:'若 x² = 49，則下列哪一個是 x 的所有可能值？',
-   options:['x = 7','x = 7 或 x = −7','x = 7 或 x = 0','x = 24.5'], answer:1,
-   why:{0:'M1',2:null,3:null},
-   note:'考「平方根有正負兩個」的基本認識。',
-   tags:['平方根','一元二次方程式']},
+  /* ---------- T1 會走路的樹（敘事） ---------- */
+  {id:'R01', unit:'T1', no:1, process:'FR', sub:'FR-4', type:'mc', diff:'基礎',
+   stem:'小昀第一次發現柚子樹位置不對，是在什麼時候？',
+   options:['搬來的第三天早上','搬來的第一天晚上','一個星期後的星期六','入冬那天'], answer:0,
+   answerPara:0, answerSent:0,
+   why:{2:'E2', 3:'E2'},
+   note:'直接提取：故事場景中的時間，第一段第一句明確寫出。',
+   tags:['場景','時間']},
 
-  {id:'Q02', year:110, no:11, unit:'B3-4', type:'mc', diff:'基礎',
-   stem:'若 (x − 3)(x + 5) = 0，則 x 的值為何？',
-   options:['3 或 −5','−3 或 5','3 或 5','−3 或 −5'], answer:0,
-   why:{1:'M7',2:'M7',3:'M7'},
-   note:'乘積為零性質的直接應用，並檢查符號處理。',
-   tags:['乘積為零','一元二次方程式']},
+  {id:'R02', unit:'T1', no:2, process:'FR', sub:'FR-2', type:'mc', diff:'基礎',
+   stem:'小昀用什麼方法記錄柚子樹每天的位置？',
+   options:['用手機拍照','在筆記本上畫巷子的地圖','請鄰居幫忙看','在樹上綁繩子做記號'], answer:1,
+   answerPara:2, answerSent:2,
+   why:{0:'E1', 2:'E1', 3:'E7'},
+   note:'直接提取：文中明確敘述的行動。選項 D 取自樹幹上的舊疤，屬於找錯位置。',
+   tags:['細節']},
 
-  {id:'Q03', year:113, no:19, unit:'B3-4', type:'mc', diff:'中等',
-   stem:'小華解方程式 x(x − 4) = 5 時，寫下「x = 5 或 x − 4 = 5」，因此得到 x = 5 或 x = 9。他的做法錯在哪裡？',
-   options:[
-     '沒有先把方程式整理成一邊為 0，乘積為零性質才能使用',
-     '沒有把括號展開，展開後才可以分解',
-     '5 不是質數，所以不能拆成兩數相乘',
-     '他的做法沒有錯，答案就是 5 和 9'],
-   answer:0,
-   why:{1:null,2:null,3:'M2'},
-   note:'直指「乘積為零」的成立條件，是本單元最關鍵的程序性理解。',
-   tags:['乘積為零','解題監控']},
+  {id:'R03', unit:'T1', no:3, process:'FR', sub:'FR-5', type:'mc', diff:'中等',
+   stem:'小昀畫了一個星期的地圖之後，發現了什麼規律？',
+   options:['樹每天都往前走一點','樹總是待在巷子裡最亮的地方','樹只在星期六移動','樹一直繞著電線桿轉'], answer:1,
+   answerPara:2, answerSent:3,
+   why:{0:'E3', 2:'E2', 3:'E2'},
+   note:'直接提取：明確陳述的主要發現，位於第三段末句。',
+   tags:['主要觀點']},
 
-  {id:'Q04', year:111, no:14, unit:'B3-4', type:'mc', diff:'中等',
-   stem:'用配方法解 x² + 6x − 7 = 0，先把常數項移到等號右邊得 x² + 6x = 7。接下來等號兩邊要同時加上多少，左邊才會成為完全平方式？',
-   options:['9','6','36','3'], answer:0,
-   why:{1:null,2:null,3:null},
-   note:'配方法的核心步驟：加上一次項係數一半的平方。',
-   tags:['配方法']},
+  {id:'R04', unit:'T1', no:4, process:'SI', sub:'SI-1', type:'mc', diff:'中等',
+   stem:'老先生每天把柚子樹搬到有太陽的地方，最主要的原因是什麼？',
+   options:['他想讓巷子看起來比較整齊','他相信曬夠太陽柚子才會甜，想讓太太回來時有柚子吃',
+            '他怕樹擋住鄰居的門','醫生建議他每天多運動'], answer:1,
+   answerPara:6, answerSent:2,
+   why:{0:'E1', 2:'E4', 3:'E4'},
+   note:'直接推論：把「太太說柚子要曬夠太陽」與「想讓她回來時有柚子吃」兩處線索連起來。',
+   tags:['因果']},
 
-  {id:'Q05', year:114, no:17, unit:'B3-4', type:'mc', diff:'中等',
-   stem:'關於 x 的方程式 2x² − 4x + 5 = 0，其實數根的情形為何？',
-   options:['有兩相異實根','有兩相等實根','沒有實數根','無法判斷'], answer:2,
-   why:{0:'M4',1:'M4',3:null},
-   note:'判別式 b² − 4ac = 16 − 40 = −24 < 0。',
-   tags:['判別式']},
+  {id:'R05', unit:'T1', no:5, process:'SI', sub:'SI-5', type:'mc', diff:'中等',
+   stem:'從故事後半段可以看出小昀和老先生之間變成什麼樣的關係？',
+   options:['她成了每天早上幫忙搬樹的夥伴','她變成他的學生，跟他學種樹',
+            '她只是遠遠看著，沒有再接觸','她幫他去醫院照顧阿嬤'], answer:0,
+   answerPara:9, answerSent:1,
+   why:{1:'E4', 2:'E2', 3:'E4'},
+   note:'直接推論：由「每天早上六點下樓、幫忙扶著陶盆」推論兩人的關係。',
+   tags:['人物關係']},
 
-  {id:'Q06', year:109, no:20, unit:'B3-4', type:'mc', diff:'進階',
-   stem:'設 α、β 為方程式 x² − 5x + 6 = 0 的兩根，則 α + β 之值為何？',
-   options:['5','−5','6','−6'], answer:0,
-   why:{1:'M7',2:'M7',3:'M7'},
-   note:'根與係數關係：兩根和 = −b/a。',
-   tags:['根與係數']},
+  {id:'R06', unit:'T1', no:6, process:'II', sub:'II-4', type:'mc', diff:'中等',
+   stem:'老先生說「她在醫院」之前停頓了一下，還先摸了摸樹幹上的疤。這樣寫最主要是讓讀者感覺到什麼？',
+   options:['他年紀大了，動作比較慢','他不太喜歡別人問他問題',
+            '他心裡很掛念，不容易把這件事說出口','他想讓小昀注意到那道疤'], answer:2,
+   answerPara:8, answerSent:0,
+   why:{0:'E3', 1:'E4', 3:'E2'},
+   note:'詮釋整合：從停頓與動作推測人物情緒，屬於語氣與情緒的詮釋。',
+   tags:['情緒','語氣']},
 
-  {id:'Q07', year:112, no:5,  unit:'B3-2', type:'mc', diff:'基礎',
-   stem:'計算 √16 + √9 之值為何？',
-   options:['5','7','25','√25'], answer:1,
-   why:{0:'M3',2:null,3:'M3'},
-   note:'檢驗學生是否把根號當成可以逐項相加的線性運算。',
-   tags:['平方根']},
+  {id:'R07', unit:'T1', no:7, process:'II', sub:'II-1', type:'mc', diff:'進階',
+   stem:'如果用一句話說這個故事想告訴我們什麼，下面哪一句最接近？',
+   options:['觀察久了就能發現生活中的規律','有些看起來奇怪的事，背後可能藏著一份很深的心意',
+            '種柚子需要很多陽光才會甜','老人家做事情比較慢，需要別人幫忙'], answer:1,
+   answerPara:11, answerSent:0,
+   why:{0:'E3', 2:'E3', 3:'E6'},
+   note:'詮釋整合：辨識全文主題。A、C 都是文中出現過的細節，但不是主題。',
+   tags:['主題']},
 
-  {id:'Q08', year:113, no:9,  unit:'B3-2', type:'mc', diff:'基礎',
-   stem:'計算 √((−5)²) 之值為何？',
-   options:['−5','5','±5','25'], answer:1,
-   why:{0:'M1',2:'M1',3:null},
-   note:'算術平方根恆為非負；與「x²=25 的解」是不同的問題。',
-   tags:['平方根','算術平方根']},
+  {id:'R08', unit:'T1', no:8, process:'EE', sub:'EE-2', type:'mc', diff:'進階',
+   stem:'故事最後說那棵樹「正好站在紅色鐵門旁邊——她當年種下它的地方」。作者在前面埋了哪一個線索，讓這個結尾成立？',
+   options:['第一段提到樹本來就靠在紅色鐵門旁邊','老先生的頭髮全白',
+            '陶盆很重，底下沒有輪子','小昀搬了張小凳子坐在陽台上'], answer:0,
+   answerPara:0, answerSent:1,
+   why:{1:'E1', 2:'E2', 3:'E2'},
+   note:'比較評估：辨認作者為結尾預埋的伏筆。',
+   tags:['結局','伏筆']},
 
-  {id:'Q09', year:110, no:6,  unit:'B3-2', type:'mc', diff:'基礎',
-   stem:'一個直角三角形的兩股長分別為 6 與 8，則斜邊長為何？',
-   options:['10','14','√14','100'], answer:0,
-   why:{1:'M6',2:'M6',3:null},
-   note:'最基本的畢氏定理應用，作為能力錨點題。',
-   tags:['畢氏定理']},
+  {id:'R09', unit:'T1', no:9, process:'EE', sub:'EE-1', type:'mc', diff:'進階',
+   stem:'有人說：「一個老人家每天推板車搬那麼重的陶盆，這在真實生活裡不可能發生。」根據文章，最能回應這個質疑的是哪一點？',
+   options:['文章說他推得很慢，每走幾步就停下來喘氣，並沒有把他寫得很輕鬆',
+            '文章說他頭髮全白，所以體力應該很好','文章說板車是舊的，舊的板車比較好推',
+            '文章沒有提到重量，所以不能討論'], answer:0,
+   answerPara:4, answerSent:2,
+   why:{1:'E4', 2:'E4', 3:'E1'},
+   note:'比較評估：評估所述事件真實發生的可能性，並要求以文本證據支持。',
+   tags:['合理性']},
 
-  {id:'Q10', year:111, no:16, unit:'B3-2', type:'mc', diff:'中等',
-   stem:'一個直角三角形的斜邊長為 13，其中一股長為 5，則另一股長為何？',
-   options:['12','√194','18','8'], answer:0,
-   why:{1:'M6',2:'M6',3:null},
-   note:'必須先辨認斜邊，再用 13² − 5² 求另一股。',
-   tags:['畢氏定理']},
+  /* ---------- T2 為什麼有些種子要坐飛機？（說明） ---------- */
+  {id:'R10', unit:'T2', no:10, process:'FR', sub:'FR-3', type:'mc', diff:'基礎',
+   stem:'文章裡「傳播」這個詞指的是什麼？',
+   options:['種子發芽長成幼苗的過程','種子離開母株、散布到別處的過程',
+            '植物開花結果的過程','風把樹葉吹落的過程'], answer:1,
+   answerPara:1, answerSent:2,
+   why:{0:'E2', 2:'E2', 3:'E1'},
+   note:'直接提取：文中明確給出的定義。',
+   tags:['定義']},
 
-  {id:'Q11', year:109, no:7,  unit:'B3-3', type:'mc', diff:'基礎',
-   stem:'將 x² − 9 因式分解，結果為何？',
-   options:['(x − 3)(x + 3)','(x − 3)²','(x − 9)(x + 1)','無法因式分解'], answer:0,
-   why:{1:null,2:'M5',3:null},
-   note:'平方差公式的直接應用。',
-   tags:['因式分解','平方差']},
+  {id:'R11', unit:'T2', no:11, process:'FR', sub:'FR-2', type:'mc', diff:'基礎',
+   stem:'根據文章，楓樹的種子為什麼會旋轉？',
+   options:['因為種子很重','因為長了一片薄薄的翅膀','因為外殼中間有空氣','因為表面長滿小鉤子'], answer:1,
+   answerPara:2, answerSent:3,
+   why:{2:'E2', 3:'E2'},
+   note:'直接提取：明確寫出的訊息。誘答皆取自文中其他傳播方式，屬找錯位置。',
+   tags:['細節']},
 
-  {id:'Q12', year:114, no:13, unit:'B3-3', type:'mc', diff:'中等',
-   stem:'將 2x² + 7x + 3 因式分解，結果為何？',
-   options:['(2x + 1)(x + 3)','(2x + 3)(x + 1)','(x + 1)(x + 3)','(2x + 7)(x + 3)'], answer:0,
-   why:{1:'M5',2:'M5',3:'M5'},
-   note:'十字交乘後必須回頭檢驗一次項係數。',
-   tags:['因式分解','十字交乘']},
+  {id:'R12', unit:'T2', no:12, process:'SI', sub:'SI-2', type:'mc', diff:'中等',
+   stem:'文章講了風、動物、水、自己彈射四種方法，還說了它們各自的代價。把這些合起來看，作者想說的重點是什麼？',
+   options:['靠風傳播是最好的方法','每一種傳播方法都有它的長處和代價，沒有哪一種絕對比較好',
+            '種子越輕，傳得越遠','植物應該多學幾種傳播方法'], answer:1,
+   answerPara:6, answerSent:0,
+   why:{0:'E6', 2:'E6', 3:'E4'},
+   note:'直接推論：在一串論點之後歸納重點。A、C 都是把單一例子當成通則。',
+   tags:['歸納']},
 
-  {id:'Q13', year:113, no:22, unit:'B3-4', type:'mc', diff:'進階',
-   stem:'一塊長方形花圃的長比寬多 3 公尺，面積為 40 平方公尺。若設寬為 x 公尺，下列哪一個式子與求 x 的過程一致，且 x 的值為何？',
-   options:[
-     'x(x + 3) = 40，x = 5',
-     'x(x + 3) = 40，x = 8',
-     'x + (x + 3) = 40，x = 18.5',
-     '2x(x + 3) = 40，x = 4'],
-   answer:0,
-   why:{1:'M2',2:null,3:null},
-   note:'佈題到解方程式的完整歷程，並檢查是否誤把長當成寬。',
-   tags:['一元二次方程式','應用問題']},
+  {id:'R13', unit:'T2', no:13, process:'SI', sub:'SI-4', type:'mc', diff:'中等',
+   stem:'下面哪一句是文章中「通常都會這樣」的概括陳述，而不是講某一種植物？',
+   options:['椰子的外殼又厚又輕，中間有空氣','蒲公英的種子上長著一叢細細的白毛',
+            '如果所有的種子都掉在母株的正下方，擠在一起的幼苗長不大，最後多半會死掉',
+            '鳳仙花的果莢輕輕一碰就會裂開'], answer:2,
+   answerPara:1, answerSent:1,
+   why:{0:'E3', 1:'E3', 3:'E3'},
+   note:'直接推論：辨認文中的概括陳述，需區分通則與個例。',
+   tags:['概括']},
 
-  {id:'Q14', year:112, no:24, unit:'B3-4', type:'mc', diff:'進階',
-   stem:'兩個連續正整數的乘積為 156，則較小的那一個整數為何？',
-   options:['12','13','11','14'], answer:0,
-   why:{1:null,2:'M5',3:null},
-   note:'設 x(x+1)=156，整理為 x²+x−156=0 後分解。',
-   tags:['一元二次方程式','應用問題']},
+  {id:'R14', unit:'T2', no:14, process:'II', sub:'II-5', type:'mc', diff:'進階',
+   stem:'如果你在自己家附近的空地上看到一整片長得又高又壯的蒲公英，用文章裡的道理最能解釋的是什麼？',
+   options:['那塊空地的土特別肥','那些種子被風帶到有空間、有陽光的地方，才長得起來',
+            '蒲公英不需要陽光也能長大','一定是有人特地種下去的'], answer:1,
+   answerPara:1, answerSent:2,
+   why:{0:'E7', 2:'E4', 3:'E7'},
+   note:'詮釋整合：把文中訊息應用到真實世界的情境。',
+   tags:['應用']},
 
-  {id:'C01', year:113, no:2, unit:'B3-4', type:'cr', diff:'中等',
-   stem:'請解方程式 2x² − 7x + 3 = 0，並在過程中清楚說明你使用的方法（因式分解、配方法或公式解擇一即可），最後檢驗你的答案。',
+  /* ---------- 非選題 ---------- */
+  {id:'C01', unit:'T1', no:1, process:'II', sub:'II-2', type:'cr', diff:'中等',
+   stem:'如果你是小昀，在發現老先生每天搬樹的原因之後，你會做什麼？請說出你的做法，並且說明你為什麼會這樣做——你的理由要能連到故事裡的某一段。',
    options:[], answer:null, why:{},
-   note:'非選題：評閱重點在方法選擇的合理性、運算正確性與檢驗習慣。',
-   tags:['一元二次方程式','解題表達']},
+   answerPara:null, answerSent:null,
+   note:'非選題：思考人物行動的其他可能作法。評閱重點在「有沒有把理由連回文本」。',
+   tags:['替代行動','論證']},
 
-  {id:'C02', year:114, no:1, unit:'B3-2', type:'cr', diff:'中等',
-   stem:'小明說：「因為 x² = 25，所以 x = 5。」請判斷他的說法是否完整，說明你的理由，並舉一個具體例子支持你的說明。',
+  {id:'C02', unit:'T2', no:2, process:'EE', sub:'EE-3', type:'cr', diff:'中等',
+   stem:'讀完這篇文章之後，你覺得作者有哪裡沒有說清楚，或是你還想知道什麼？請寫出一個問題，並說明為什麼文章裡的訊息不足以回答它。',
    options:[], answer:null, why:{},
-   note:'非選題：直接對應「平方根只取正根」迷思，適合作為知識建構的起點問題。',
-   tags:['平方根','數學論證']}
+   answerPara:null, answerSent:null,
+   note:'非選題：評斷文中訊息的完整性或清晰度。評閱重點在能否指出文本的具體空缺，而非泛泛的好奇。',
+   tags:['完整性','提問']}
 ];
 
 /* --- 知識建構支架（Knowledge Forum scaffolds，理論建構組） --- */
 const SCAFFOLDS = [
-  {id:'s1', cls:'sc1', label:'我的理論',           hint:'我目前認為……'},
+  {id:'s1', cls:'sc1', label:'我的想法',           hint:'我目前讀到的是……'},
   {id:'s2', cls:'sc2', label:'我需要理解',         hint:'我還不清楚的是……'},
-  {id:'s3', cls:'sc3', label:'新的資訊',           hint:'我找到／查到……'},
-  {id:'s4', cls:'sc4', label:'這個理論無法解釋',   hint:'如果照這個說法，那……就說不通'},
-  {id:'s5', cls:'sc5', label:'更好的理論',         hint:'把前面的想法改成……會更好，因為……'},
-  {id:'s6', cls:'sc6', label:'綜合我們的知識',     hint:'把大家的想法放在一起看，可以說……'}
+  {id:'s3', cls:'sc3', label:'文本裡的證據',       hint:'文章第◯段說……'},
+  {id:'s4', cls:'sc4', label:'這樣讀說不通',       hint:'如果照這個說法，那……就說不通'},
+  {id:'s5', cls:'sc5', label:'更好的說法',         hint:'把前面的想法改成……會更好，因為……'},
+  {id:'s6', cls:'sc6', label:'綜合我們的理解',     hint:'把大家的想法放在一起看，可以說……'}
 ];
 
 /* --- 領域詞彙表：用於詞彙成長與論述深度的離線計算 --- */
 const DOMAIN_TERMS = [
-  '平方根','算術平方根','正根','負根','根號','完全平方','配方法','判別式','公式解',
-  '因式分解','十字交乘','平方差','乘積為零','移項','一次項','常數項','係數','實根',
-  '重根','兩根和','兩根積','根與係數','畢氏定理','斜邊','股','驗算','反例','定義域','非負'
+  '主題','主旨','段落','句子','線索','證據','根據','推論','因果','原因','結果',
+  '對比','比較','語氣','情緒','立場','作者','用意','伏筆','結局','細節','舉例',
+  '通則','概括','以偏概全','代名詞','指的是','文本','回到文章','沒說清楚','推得太遠'
 ];
 
 /* 論述品質線索詞（離線引擎用；對應 Knowledge Building 論述特徵） */
 const EPISTEMIC_CUES = {
   causal:   ['因為','所以','由於','導致','之所以','原因是'],
-  conditional:['如果','假設','若','當……時','就會','則'],
-  counter:  ['反例','但是','可是','不過','然而','並不','未必','不一定'],
-  evidence: ['課本','查到','資料','老師說','例子','舉例','實際算','代入','驗算','試試看'],
-  revision: ['修正','改成','原本以為','後來發現','更精確','補充','重新'],
+  conditional:['如果','假設','若','當','就會','則'],
+  counter:  ['反例','但是','可是','不過','然而','並不','未必','不一定','說不通'],
+  evidence: ['第','段','句','文章','文中','作者寫','原文','查到','舉例','根據'],
+  revision: ['修正','改成','原本以為','後來發現','更精確','補充','重新','再讀一次'],
   question: ['為什麼','怎麼','是不是','會不會','？','疑問']
 };
 
@@ -608,27 +731,31 @@ const STUDENT_NAMES = [
   '賴思妤','高睿謙','葉柏翰','莊心怡','邱奕安','潘語彤','杜宥辰','馮筱恩'
 ];
 
-/* 非選題作答文字（模擬）：依學生能力與是否持有相關迷思產生不同版本 */
+/* 非選題作答文字（模擬）：依學生能力與參與傾向產生不同版本 */
 function crText(it, s, mode, rnd){
   const strong = s.thetaTrue > 0.4;
   const grew = mode === 'post' && s.engage > 0.45;
   if (it.id === 'C01'){
     if (strong || grew){
-      return '2x²−7x+3=0\n用十字交乘：(2x−1)(x−3)=0\n所以 2x−1=0 或 x−3=0\nx=1/2 或 x=3\n檢驗：2×(1/2)²−7×(1/2)+3=0.5−3.5+3=0 ✓；2×9−21+3=0 ✓';
+      return '我會每天早上去幫他扶陶盆。因為第九段寫他推得很慢、每走幾步就要停下來喘氣，' +
+             '一個人搬那麼重的盆子很危險。而且他做這件事是為了讓阿嬤回來有柚子吃，' +
+             '我幫他就等於也幫了阿嬤。';
     }
     if (s.thetaTrue > -0.6){
-      return '2x²−7x+3=0\n用公式解 x=(7±√(49−24))/4=(7±5)/4\nx=3 或 x=1/2\n（沒有檢驗）';
+      return '我會去幫他推車，因為他年紀很大了，一個人搬很辛苦。';
     }
-    return '2x²−7x+3=0\n我把 3 移過去變 2x²−7x=−3\n然後 x(2x−7)=−3\n所以 x=−3 或 2x−7=−3 → x=2';
+    return '我會跟他說加油。';
   }
   // C02
-  if (s.held.indexOf('M1') >= 0 && !(mode === 'post' && s.engage > 0.5)){
-    return '我覺得小明是對的，因為 5×5=25，所以 x=5。';
-  }
   if (strong || grew){
-    return '不完整。x²=25 是在問「哪些數的平方是 25」，(−5)²=25 也成立，所以 x=5 或 x=−5。\n例子：如果 x 代表溫度變化，−5 是有意義的，不能刪掉。\n但如果題目是化簡 √25，答案只有 5，因為 √ 被定義成取非負的那一個。';
+    return '作者沒有說清楚：靠動物傳播的種子，如果被吃掉之後掉在不適合的地方會怎麼樣？' +
+           '文章第四段只說種子不會被消化、會隨糞便排出，可是沒有說落地之後成功長大的機會有多少，' +
+           '所以我沒辦法比較它跟靠風傳播哪一種比較有效。';
   }
-  return '不太對，應該還有 −5，因為負負得正。';
+  if (s.thetaTrue > -0.6){
+    return '我想知道還有沒有別的傳播方法，文章只講了四種。';
+  }
+  return '我覺得都寫得很清楚。';
 }
 
 /* ==========================================================================
@@ -643,19 +770,24 @@ function buildSeedState(){
   const DAY = 86400000;
 
   const users = [
-    {id:'u-admin', name:'系統管理員', email:'admin@kidforum.tw', role:'admin'},
-    {id:'u-t1',    name:'王慧敏 老師', email:'teacher@kidforum.tw', role:'teacher'}
+    {id:'u-admin', name:'研究者', email:'researcher@kairos.tw', role:'admin'},
+    {id:'u-t1',    name:'王慧敏 老師', email:'teacher@kairos.tw', role:'teacher'}
   ];
 
-  /* --- 四個班級：以班級為單位分派到四條件（叢集隨機分派） ---
-     班級 1 沿用原本的 24 位同學，也是知識建構空間的示範班級。 */
+  /* --- 四個班級：以班級為單位分派到四條件（叢集隨機分派） --- */
   const CLASS_DEFS = [
-    {id:'c-1', name:'114 學年 八年 3 班', grade:'八年級', code:'MTH314', condition:'tutor'},
-    {id:'c-2', name:'114 學年 八年 4 班', grade:'八年級', code:'MTH425', condition:'tutee'},
-    {id:'c-3', name:'114 學年 八年 5 班', grade:'八年級', code:'MTH536', condition:'peer'},
-    {id:'c-4', name:'114 學年 八年 6 班', grade:'八年級', code:'MTH647', condition:'control'}
+    {id:'c-1', name:'中山國小 五年 3 班', grade:'五年級', school:'中山國小', code:'RD513', condition:'tutor'},
+    {id:'c-2', name:'中山國小 五年 4 班', grade:'五年級', school:'中山國小', code:'RD524', condition:'tutee'},
+    {id:'c-3', name:'仁愛國小 六年 1 班', grade:'六年級', school:'仁愛國小', code:'RD631', condition:'peer'},
+    {id:'c-4', name:'仁愛國小 六年 2 班', grade:'六年級', school:'仁愛國小', code:'RD642', condition:'control'}
   ];
-  const misPool = ['M1','M2','M3','M4','M5','M6','M7'];
+  // 只分配「真的掛在某個誘答選項上」的失誤類型，否則學生持有一個永遠不會作用的失誤，
+  // 會把條件效果稀釋掉。這也是一個實際命題時要注意的事：失誤類型必須有題目測得到。
+  const errPool = READING_ERRORS.map(function(e){ return e.id; }).filter(function(id){
+    return ITEMS.some(function(it){
+      return Object.keys(it.why || {}).some(function(k){ return it.why[k] === id; });
+    });
+  });
   const classes = [];
   const students = [];
   let sn = 0;
@@ -666,51 +798,50 @@ function buildSeedState(){
       sn++;
       const name = ci === 0 ? STUDENT_NAMES[i] : genName(rnd);
       const theta = -1.7 + 3.5 * (i + 0.5) / 24 + (rnd() - 0.5) * 0.7;
-      // 七種迷思在班上輪流分配，確保每一種都有幾位持有者，且橫跨各種能力
-      // —— 高能力學生也可能持有頑固迷思，這正是 KIDMAP 第二象限要抓的人。
+      // 八種理解失誤在班上輪流分配，確保每一種都有幾位持有者，且橫跨各種能力
+      // —— 高能力學生也可能有頑固的閱讀習慣問題，這正是 KIDMAP 第二象限要抓的人。
       const held = [];
-      if (i % 4 !== 3) held.push(misPool[i % misPool.length]);
-      if (rnd() < 0.3){
-        const m2 = misPool[(i * 3 + 2) % misPool.length];
-        if (held.indexOf(m2) < 0) held.push(m2);
+      held.push(errPool[i % errPool.length]);
+      if (rnd() < 0.5){
+        const e2 = errPool[(i * 3 + 2) % errPool.length];
+        if (held.indexOf(e2) < 0) held.push(e2);
       }
-      const s = {id:'u-s' + sn, name:name, email:'s' + sn + '@kidforum.tw', role:'student',
+      const s = {id:'u-s' + sn, name:name, email:'s' + sn + '@kairos.tw', role:'student',
                  thetaTrue:theta, held:held, engage:rnd(), classId:def.id};
       students.push(s); users.push(s); ids.push(s.id);
     }
-    classes.push({id:def.id, name:def.name, grade:def.grade, code:def.code,
+    classes.push({id:def.id, name:def.name, grade:def.grade, school:def.school, code:def.code,
                   condition:def.condition, teacherId:'u-t1', studentIds:ids,
                   createdAt: now - 30 * DAY});
   });
   const allClassIds = classes.map(function(c){ return c.id; });
 
   /* 兩次派題：同一份題本、同一次校準，四班共用 → 條件間可比 */
-  const preIds = ITEMS.map(function(it){ return it.id; });
+  const allIds = ITEMS.map(function(it){ return it.id; });
   const pre = {
-    id:'a-pre', title:'八上 · 一元二次方程式與平方根 前測', desc:'先看看大家目前的想法，答錯沒關係，等一下我們一起討論。',
-    classIds: allClassIds, teacherId:'u-t1', itemIds: preIds, phase:'pre',
+    id:'a-pre', title:'閱讀理解 前測', desc:'先看看大家目前的讀法，答錯沒關係，等一下我們一起討論。',
+    classIds: allClassIds, teacherId:'u-t1', itemIds: allIds, phase:'pre',
     createdAt: now - 12 * DAY, due: now - 9 * DAY
   };
   const post = {
-    id:'a-post', title:'八上 · 一元二次方程式與平方根 評量即學習事件（後測）',
-    desc:'這一節你會一邊作答一邊跟你的夥伴討論。答錯沒關係，重點是把想法說出來。',
-    classIds: allClassIds, teacherId:'u-t1', itemIds: preIds, phase:'post', linkedTo:'a-pre',
+    id:'a-post', title:'閱讀理解 評量即學習事件（後測）',
+    desc:'這一節你會一邊作答一邊跟你的夥伴討論。答錯沒關係，重點是把你怎麼讀的說出來。',
+    classIds: allClassIds, teacherId:'u-t1', itemIds: allIds, phase:'post', linkedTo:'a-pre',
     aal: true, createdAt: now - 1 * DAY, due: now + 3 * DAY
   };
 
-  /* --- 作答矩陣（依 Rasch 機率 + 迷思規則產生） --- */
+  /* --- 作答矩陣（依 Rasch 機率 + 理解失誤規則產生） --- */
   const itemB = {};   // 題目真實難度
   ITEMS.forEach(function(it){
     const base = it.diff === '基礎' ? -1.1 : (it.diff === '中等' ? 0.15 : 1.2);
     itemB[it.id] = base + (rnd() - 0.5) * 0.5;
   });
 
-  function distractorFor(it, mis){
-    if (mis){
-      const hit = Object.keys(it.why || {}).filter(function(k){ return it.why[k] === mis; });
+  function distractorFor(it, err){
+    if (err){
+      const hit = Object.keys(it.why || {}).filter(function(k){ return it.why[k] === err; });
       if (hit.length) return parseInt(hit[Math.floor(rnd() * hit.length)], 10);
     }
-    // 非迷思造成的錯誤：在所有非正解選項中「等機率」挑一個
     const pool = [];
     for (let k = 0; k < it.options.length; k++) if (k !== it.answer) pool.push(k);
     return pool[Math.floor(rnd() * pool.length)];
@@ -720,13 +851,12 @@ function buildSeedState(){
   const submissions = [];
 
   /* 條件對後測能力的模擬效果（依研究構想的理論推導；模擬資料，非實徵結果） */
-  const CONDITION_GAIN = {tutee:0.42, peer:0.30, tutor:0.26, control:0.04};
+  const CONDITION_GAIN = {tutee:0.72, peer:0.52, tutor:0.44, control:0.05};
   const CONDITION_FIX  = {tutee:0.30, peer:0.22, tutor:0.20, control:0.02};
 
   function runAssignment(asg, mode){
     students.forEach(function(s){
       const cond = (classes.find(function(c){ return c.id === s.classId; }) || {}).condition || 'control';
-      // 後測：迷思是否被討論修正，與共構參與度及所分派的條件有關
       const fixed = {};
       if (mode === 'post'){
         s.held.forEach(function(m){
@@ -749,7 +879,8 @@ function buildSeedState(){
         });
         const active = relevant.filter(function(m){ return !fixed[m]; });
         let choice, correct;
-        if (active.length && rnd() < 0.9){
+        // 持有某個理解失誤，不代表每一題都會犯——設成機率性的，作答矩陣才像真的
+        if (active.length && rnd() < 0.5){
           choice = distractorFor(it, active[0]);
           correct = (choice === it.answer);
         } else {
@@ -775,18 +906,18 @@ function buildSeedState(){
   kbStudents.forEach(function(s){ S[s.name] = s.id; });
 
   const v1 = {
-    id:'v-1', title:'x² = 25 的答案只有 5 嗎？', createdAt: now - 8 * DAY,
-    desc:'從前測第 8 題與非選第 1 題長出來的共同問題：平方根到底有幾個？',
-    origin:{aid:'a-pre', iid:'Q01', mis:'M1'}, links:['v-2']
+    id:'v-1', title:'那棵樹最後為什麼「正好」站在紅色鐵門旁邊？', createdAt: now - 8 * DAY,
+    desc:'從前測第 8 題長出來的共同問題：這是巧合，還是作者早就安排好的？',
+    origin:{aid:'a-pre', iid:'R08', mis:'E1'}, links:['v-2']
   };
   const v2 = {
-    id:'v-2', title:'什麼時候才可以說「其中一個是 0」？', createdAt: now - 7 * DAY,
-    desc:'乘積為零性質的成立條件，以及為什麼 x(x−4)=5 不能直接拆。',
-    origin:{aid:'a-pre', iid:'Q03', mis:'M2'}, links:['v-1']
+    id:'v-2', title:'什麼樣的答案才算「有根據」？', createdAt: now - 7 * DAY,
+    desc:'很多人答對了卻說不出理由。我們來討論：怎樣才算真的從文章裡讀出來的。',
+    origin:{aid:'a-pre', iid:'R09', mis:'E1'}, links:['v-1']
   };
   const v3 = {
-    id:'v-3', title:'我們班的解方程式工具箱', createdAt: now - 4 * DAY,
-    desc:'把因式分解、配方法、公式解放在一起比較：什麼時候用哪一個比較省力？',
+    id:'v-3', title:'我們班的讀法工具箱', createdAt: now - 4 * DAY,
+    desc:'把「找位置、連線索、想主題、評內容」四種讀法放在一起比較：什麼時候用哪一種？',
     origin:null, links:['v-1','v-2']
   };
   views.push(v1, v2, v3);
@@ -815,104 +946,107 @@ function buildSeedState(){
     return n;
   }
 
-  /* v-1：從迷思長出來的探究 */
-  mkNote({v:'v-1', t:'【全班共同問題】為什麼有人 x²=49 只寫 7？', kind:'problem',
-    a:['u-t1'], at:now - 8*DAY, x:60, y:40, k:['平方根','負根'],
-    item:{aid:'a-pre', iid:'Q01'},
-    segs:[{s:'s2', text:'前測第 8 題（x² = 49）有好幾位同學只寫了 x = 7。有趣的是，這些同學在比較難的題目上多半答得出來——照他們的能力，這一題本來應該會。我們一起來弄清楚：平方根到底有幾個？什麼時候要寫 ±？'}]});
+  /* v-1：伏筆是不是巧合 */
+  mkNote({v:'v-1', t:'【全班共同問題】結尾是巧合，還是作者早就安排好的？', kind:'problem',
+    a:['u-t1'], at:now - 8*DAY, x:60, y:40, k:['伏筆','結局'],
+    item:{aid:'a-pre', iid:'R08'},
+    segs:[{s:'s2', text:'前測第 8 題問「作者在前面埋了哪一個線索」，有不少同學選了跟結尾無關的細節。有趣的是，這些同學在比較難的第 7 題反而答對了——照他們的能力，這一題本來應該會。我們一起來弄清楚：什麼樣的細節才算「伏筆」？'}]});
 
-  mkNote({v:'v-1', t:'我覺得就是 7 啊', a:['王品瑄'], at:now - 8*DAY + 3600e3, x:330, y:36, k:['平方根'],
-    segs:[{s:'s1', text:'我算的時候是想「7 乘 7 等於 49」，所以答案就是 7。按計算機按 √49 出來也是 7，沒有出現負號。'}]});
+  mkNote({v:'v-1', t:'我覺得就是剛好而已', a:['王品瑄'], at:now - 8*DAY + 3600e3, x:330, y:36, k:['結局'],
+    segs:[{s:'s1', text:'我讀的時候覺得樹回到鐵門旁邊只是剛好。老先生每天搬來搬去，總有一天會搬回去啊。'}]});
 
-  mkNote({v:'v-1', t:'可是 (−7)×(−7) 也是 49', a:['陳柏宇'], at:now - 8*DAY + 7200e3, x:600, y:30,
-    bo:'n-2', k:['負根','反例'],
-    segs:[{s:'s4', text:'如果答案只有 7，那 (−7)×(−7)=49 這件事要怎麼辦？它明明也符合「平方等於 49」。'},
-          {s:'s1', text:'我的想法是：問「平方等於 49 的數」跟問「√49 是多少」根本是兩個問題。'}]});
+  mkNote({v:'v-1', t:'可是第一段就寫了它本來在那裡', a:['陳柏宇'], at:now - 8*DAY + 7200e3, x:600, y:30,
+    bo:'n-2', k:['伏筆','證據'],
+    segs:[{s:'s4', text:'如果只是剛好，那作者為什麼要在第一段特別寫「昨天明明靠在紅色鐵門旁邊」？那句話對故事的其他部分完全沒有用。'},
+          {s:'s1', text:'我覺得作者是先把位置告訴我們，最後才讓我們自己想起來。'}]});
 
-  mkNote({v:'v-1', t:'計算機為什麼只給我一個答案？', a:['林芷妍'], at:now - 7*DAY, x:330, y:190,
-    bo:'n-2', k:['算術平方根'],
-    segs:[{s:'s2', text:'我需要理解的是：如果真的有兩個答案，為什麼計算機按 √49 只給 7？是計算機壞掉還是我們定義錯了？'}]});
+  mkNote({v:'v-1', t:'那要怎麼分辨伏筆和普通細節？', a:['林芷妍'], at:now - 7*DAY, x:330, y:190,
+    bo:'n-2', k:['伏筆','判準'],
+    segs:[{s:'s2', text:'我需要理解的是：文章裡細節那麼多，為什麼有的是伏筆有的不是？陶盆很重、板車很舊，這些不也是細節嗎？'}]});
 
-  mkNote({v:'v-1', t:'課本上「√」有特別的規定', a:['蔡宜蓁','鄭皓翔'], at:now - 7*DAY + 5400e3, x:600, y:180,
-    bo:'n-4', k:['算術平方根','定義','非負'],
-    segs:[{s:'s3', text:'我回去翻課本第 2 章，上面寫「a 的算術平方根 √a 指的是非負的那一個」。所以 √49 只會是 7，這是規定，不是算錯。'},
-          {s:'s1', text:'那 x²=49 是在問「哪些數平方後等於 49」，跟符號 √ 要給哪一個答案是兩回事。'}]});
+  mkNote({v:'v-1', t:'我想到一個判斷方法', a:['蔡宜蓁','鄭皓翔'], at:now - 7*DAY + 5400e3, x:600, y:180,
+    bo:'n-4', k:['判準','伏筆'],
+    segs:[{s:'s5', text:'我們試了一個方法：把那句話遮起來，看結尾還成不成立。遮掉「陶盆很重」，結尾照樣看得懂；可是遮掉第一段的紅色鐵門，最後那句「她當年種下它的地方」就沒有力量了。'},
+          {s:'s3', text:'所以伏筆是「拿掉之後結尾會垮」的細節。'}]});
 
-  mkNote({v:'v-1', t:'那第 9 題 √((−5)²) 呢？', a:['黃冠廷'], at:now - 7*DAY + 9000e3, x:870, y:176,
-    bo:'n-5', k:['算術平方根'], item:{aid:'a-pre', iid:'Q08'},
-    segs:[{s:'s2', text:'照上面的說法，√((−5)²)=√25=5，不能寫 −5，因為 √ 只給非負的那個。我本來寫 −5，現在知道錯在哪了。'}]});
+  mkNote({v:'v-1', t:'用這個方法檢查第 9 題也行', a:['黃冠廷'], at:now - 7*DAY + 9000e3, x:870, y:176,
+    bo:'n-5', k:['證據'], item:{aid:'a-pre', iid:'R09'},
+    segs:[{s:'s3', text:'第 9 題問老人搬得動嗎，我本來想說老人力氣大。可是回去看第五段，作者寫「推得很慢，每走幾步就停下來喘氣」——這句話就是拿來回答那個質疑的。'},
+          {s:'s1', text:'我發現我原本是用自己的想法回答，不是用文章。'}]});
 
-  mkNote({v:'v-1', t:'我把兩個問題分開寫寫看', a:['吳采庭'], at:now - 6*DAY, x:60, y:300, k:['負根','表徵'],
+  mkNote({v:'v-1', t:'我把兩種細節分開整理', a:['吳采庭'], at:now - 6*DAY, x:60, y:300, k:['伏筆','整理'],
     bo:'n-1',
-    segs:[{s:'s5', text:'我想把它整理成兩行：\n（1）x² = 49 → x = 7 或 x = −7，因為在問「所有平方後是 49 的數」。\n（2）√49 = 7，因為 √ 這個符號被規定只取非負的那個。\n兩行都對，重點是題目在問哪一件事。'}]});
+    segs:[{s:'s5', text:'我想把它整理成兩類：\n（1）鋪陳用的細節——讓場景有畫面，拿掉不影響結局。例如陶盆很重、板車很舊。\n（2）伏筆——結尾回頭要用到它。例如第一段的紅色鐵門、樹幹上的舊疤。\n兩種都重要，但只有第二種可以拿來回答第 8 題。'}]});
 
-  mkNote({v:'v-1', t:'用面積畫圖也說得通', a:['劉宸希'], at:now - 6*DAY + 3600e3, x:330, y:330,
-    bo:'n-7', k:['表徵','幾何'],
-    segs:[{s:'s3', text:'如果 x 是正方形的邊長，那 x²=49 只能取 7，因為邊長不可能是負的。'},
-          {s:'s4', text:'但如果 x 只是一個數，不代表長度，那就沒有理由把 −7 丟掉。所以「有沒有負根」還要看題目的情境。'}]});
+  mkNote({v:'v-1', t:'那道疤也是伏筆嗎？', a:['劉宸希'], at:now - 6*DAY + 3600e3, x:330, y:330,
+    bo:'n-7', k:['伏筆'],
+    segs:[{s:'s4', text:'如果照采庭的分法，樹幹上的疤應該是伏筆。可是結尾沒有再提到它啊。'},
+          {s:'s2', text:'我不確定它是不是在暗示這棵樹被綁著搬過很多次，還是別的意思。'}]});
 
-  mkNote({v:'v-1', t:'那什麼時候要寫 ±，我做了一張判斷表', a:['許雅筑','洪詩涵'], at:now - 5*DAY, x:600, y:330,
-    bo:'n-7', k:['平方根','判斷準則'],
-    segs:[{s:'s5', text:'我們整理出三種情況：\n・題目是「解方程式 x²=a」→ 寫 x = ±√a。\n・題目是「化簡 √a」→ 只寫非負的那個。\n・題目有實際情境（長度、時間、人數）→ 先算出 ± 兩個，再把不合理的那個刪掉並寫理由。'}]});
+  mkNote({v:'v-1', t:'我覺得疤是拿來寫時間的', a:['許雅筑','洪詩涵'], at:now - 5*DAY, x:600, y:330,
+    bo:'n-8', k:['伏筆','時間'],
+    segs:[{s:'s5', text:'我們討論之後覺得，那道疤不是為結尾服務的，是為了讓讀者知道「這件事做很久了」。它支撐的是第七段阿公說的話，不是最後一句。'},
+          {s:'s3', text:'所以伏筆要看它回頭指向哪裡，不是有沒有被再提到。'}]});
 
-  mkNote({v:'v-1', t:'【躍升】平方根：我們班目前的共同理解', kind:'rise',
+  mkNote({v:'v-1', t:'【躍升】我們班目前對「伏筆」的共同理解', kind:'rise',
     a:['u-t1','吳采庭','許雅筑'], at:now - 4*DAY, x:870, y:330,
-    contains:['n-3','n-5','n-7','n-9'], k:['共同理解','平方根'],
-    segs:[{s:'s6', text:'把大家的想法放在一起，我們現在同意三件事：\n1. 「x²=a 的解」和「√a 的值」是兩個不同的問題，不能互相取代。\n2. √ 這個符號被定義成只取非負值，所以 √((−5)²)=5。\n3. 解方程式時先寫出 ± 兩個根，再依題目情境決定要不要捨去，捨去時一定要寫理由。'},
-          {s:'s2', text:'還沒解決的是：如果 a 是負數，x²=a 有沒有解？這個問題我們留到下一個視圖。'}],
-    refs:[{noteId:'n-5', quote:'a 的算術平方根 √a 指的是非負的那一個'}]});
+    contains:['n-3','n-5','n-7','n-9'], k:['共同理解','伏筆'],
+    segs:[{s:'s6', text:'把大家的想法放在一起，我們現在同意三件事：\n1. 伏筆是「拿掉之後，後面某一段會垮」的細節——可以用遮住那句話的方法檢查。\n2. 伏筆不一定會被再提到，重點是它回頭支撐了哪一段。\n3. 回答「作者埋了什麼線索」這種題目時，要指出具體是哪一句，不能只說「感覺是這樣」。'},
+          {s:'s2', text:'還沒解決的是：如果一句話同時支撐好幾個地方，算不算更重要的伏筆？'}],
+    refs:[{noteId:'n-5', quote:'把那句話遮起來，看結尾還成不成立'}]});
 
-  /* v-2：乘積為零 */
-  mkNote({v:'v-2', t:'【全班共同問題】x(x−4)=5 可以直接拆嗎？', kind:'problem',
-    a:['u-t1'], at:now - 7*DAY, x:60, y:40, k:['乘積為零'],
-    item:{aid:'a-pre', iid:'Q03'},
-    segs:[{s:'s2', text:'前測第 19 題有不少同學認為小華的做法沒問題。請大家想清楚：「兩數相乘等於 0」跟「兩數相乘等於 5」，為什麼待遇不一樣？'}]});
+  /* v-2：什麼算有根據 */
+  mkNote({v:'v-2', t:'【全班共同問題】答對了，但說得出理由嗎？', kind:'problem',
+    a:['u-t1'], at:now - 7*DAY, x:60, y:40, k:['證據'],
+    item:{aid:'a-pre', iid:'R09'},
+    segs:[{s:'s2', text:'前測第 9 題有不少同學選對了，但寫下的理由是「因為老人家很辛苦」——那是你的想法，不是文章的訊息。請大家想清楚：怎樣才算真的從文章裡讀出來的？'}]});
 
-  mkNote({v:'v-2', t:'我本來也覺得可以拆', a:['張家豪'], at:now - 7*DAY + 3600e3, x:330, y:36,
-    bo:'n-11', k:['乘積為零'],
-    segs:[{s:'s1', text:'我以為只要是「兩個東西相乘等於某個數」，就可以讓其中一個等於那個數。所以我寫 x=5 或 x−4=5。'}]});
+  mkNote({v:'v-2', t:'我以為想得通就算有根據', a:['張家豪'], at:now - 7*DAY + 3600e3, x:330, y:36,
+    bo:'n-11', k:['證據'],
+    segs:[{s:'s1', text:'我本來覺得只要說得通就好。反正老人搬重物本來就慢，這是常識。'}]});
 
-  mkNote({v:'v-2', t:'那 2×3=6，是不是 2=6？', a:['曾于哲'], at:now - 7*DAY + 6000e3, x:600, y:30,
-    bo:'n-12', k:['反例'],
-    segs:[{s:'s4', text:'如果照那個說法，2×3=6 就要推出 2=6 或 3=6，這明顯不對。所以「相乘等於某個數」不能亂拆。'}]});
+  mkNote({v:'v-2', t:'常識有時候會害我們讀錯', a:['曾于哲'], at:now - 7*DAY + 6000e3, x:600, y:30,
+    bo:'n-12', k:['反例','經驗'],
+    segs:[{s:'s4', text:'可是第 14 題我就是用常識答錯的。我看到蒲公英長得好，直接想「一定是土很肥」，可是文章根本沒提土。'},
+          {s:'s3', text:'文章講的是種子被風帶到有空間、有陽光的地方。我用了自己的經驗代替文章。'}]});
 
-  mkNote({v:'v-2', t:'0 有一個別人沒有的性質', a:['謝亦辰'], at:now - 6*DAY, x:600, y:170,
-    bo:'n-12', k:['乘積為零','唯一性'],
-    segs:[{s:'s3', text:'課本寫：若 ab=0，則 a=0 或 b=0。這只有 0 成立，因為要讓乘積變成 0，一定得有一個因數是 0。'},
-          {s:'s1', text:'但 ab=5 的話，a 可以是 1、2.5、10……有無限多種組合，所以拆不出唯一結果。'}]});
+  mkNote({v:'v-2', t:'有根據要指得出第幾段', a:['謝亦辰'], at:now - 6*DAY, x:600, y:170,
+    bo:'n-12', k:['證據','判準'],
+    segs:[{s:'s5', text:'我覺得判斷方法很簡單：能不能指出是第幾段第幾句。指得出來就是有根據，指不出來就是自己想的。'},
+          {s:'s1', text:'第 9 題可以指到第五段「推得很慢，每走幾步就停下來喘氣」，那就有根據。'}]});
 
-  mkNote({v:'v-2', t:'我驗算了小華的答案', a:['周廷叡'], at:now - 6*DAY + 4000e3, x:330, y:190,
-    bo:'n-12', k:['驗算'],
-    segs:[{s:'s3', text:'把 x=5 代回去：5×(5−4)=5×1=5，居然對！但 x=9 代回去：9×(9−4)=9×5=45≠5，就錯了。'},
-          {s:'s4', text:'所以那個做法有時候「碰巧」對，這反而更危險，因為會讓人以為方法是對的。'}]});
+  mkNote({v:'v-2', t:'我試著把兩種說法排在一起', a:['周廷叡'], at:now - 6*DAY + 4000e3, x:330, y:190,
+    bo:'n-12', k:['對比'],
+    segs:[{s:'s3', text:'「老人家搬重物本來就慢」——這句話在文章裡找不到。\n「作者寫他推得很慢、每走幾步就停下來喘氣」——這句話指得到第五段。\n兩句話的結論一樣，可是只有第二句是從文章來的。'},
+          {s:'s4', text:'所以結論對不代表讀法對。這一點很容易被忽略，因為答案會被打勾。'}]});
 
-  mkNote({v:'v-2', t:'正確的做法應該是先移項', a:['施函潔','賴思妤'], at:now - 5*DAY, x:870, y:170,
-    bo:'n-15', k:['移項','乘積為零'],
-    segs:[{s:'s5', text:'先整理成 x²−4x−5=0，再分解成 (x−5)(x+1)=0，這時候右邊是 0，才可以說 x−5=0 或 x+1=0，得到 x=5 或 x=−1。'},
-          {s:'s3', text:'把 x=−1 代回原式：(−1)×(−1−4)=(−1)×(−5)=5，正確。所以少掉的那個根是 −1。'}]});
+  mkNote({v:'v-2', t:'那如果文章沒直接寫呢？', a:['施函潔','賴思妤'], at:now - 5*DAY, x:870, y:170,
+    bo:'n-15', k:['推論','證據'],
+    segs:[{s:'s2', text:'第 6 題問老先生停頓一下代表什麼，文章沒有直接寫「他很掛念」啊。那要怎麼指？'},
+          {s:'s5', text:'我們後來覺得可以這樣說：指出兩個線索（停頓、摸疤），再說它們合起來讓人覺得什麼。這樣還是有根據，只是多了一步推論。'}]});
 
-  mkNote({v:'v-2', t:'【躍升】乘積為零性質的使用條件', kind:'rise',
+  mkNote({v:'v-2', t:'【躍升】什麼叫「有根據的答案」', kind:'rise',
     a:['u-t1','謝亦辰','施函潔'], at:now - 4*DAY, x:870, y:330,
-    contains:['n-13','n-14','n-16'], k:['共同理解','乘積為零'],
-    segs:[{s:'s6', text:'我們的共同結論：\n1. 乘積為零性質只在「一邊等於 0」時可以用，因為 0 是唯一「一定要有因數為 0」的乘積。\n2. 所以解方程式的第一步永遠是移項成「＝0」。\n3. 碰巧代對不代表方法對，一定要把所有根都代回去檢查。'}]});
+    contains:['n-13','n-14','n-16'], k:['共同理解','證據'],
+    segs:[{s:'s6', text:'我們的共同結論：\n1. 有根據 = 指得出第幾段第幾句，或指得出兩個以上的線索再說它們合起來的意思。\n2. 結論對不代表讀法對——碰巧選對還是要檢查理由從哪裡來。\n3. 用自己的經驗回答不是錯，但要先確認文章有沒有支持它。'}]});
 
-  /* v-3：工具箱 */
-  mkNote({v:'v-3', t:'三種解法什麼時候用？', kind:'problem', a:['u-t1'], at:now - 4*DAY, x:60, y:40,
-    k:['因式分解','配方法','公式解'],
-    segs:[{s:'s2', text:'因式分解、配方法、公式解都能解一元二次方程式。我們來整理出「看到題目時怎麼決定」的判斷流程。'}]});
+  /* v-3：讀法工具箱 */
+  mkNote({v:'v-3', t:'四種讀法什麼時候用？', kind:'problem', a:['u-t1'], at:now - 4*DAY, x:60, y:40,
+    k:['直接提取','直接推論','詮釋整合','比較評估'],
+    segs:[{s:'s2', text:'找位置、連線索、想主題、評內容——這四種讀法我們都用過了。我們來整理出「看到題目時怎麼決定用哪一種」的判斷流程。'}]});
 
-  mkNote({v:'v-3', t:'我先試因式分解，不行再用公式', a:['高睿謙'], at:now - 3*DAY, x:330, y:36,
-    bo:'n-18', k:['解題策略'],
-    segs:[{s:'s1', text:'如果係數是小整數，通常十字交乘很快；卡住超過三十秒我就改用公式解，比較不會浪費時間。'}]});
+  mkNote({v:'v-3', t:'看題目的動詞就知道了', a:['高睿謙'], at:now - 3*DAY, x:330, y:36, k:['判準'],
+    segs:[{s:'s1', text:'我發現題目問「是什麼、在哪裡」通常回去找就好；問「為什麼」就要連線索；問「如果用一句話說」就是問主題；問「真的可能嗎、有沒有說清楚」就是要評內容。'},
+    ], bo:'n-18'});
 
-  mkNote({v:'v-3', t:'判別式可以先幫我們過濾', a:['莊心怡'], at:now - 3*DAY + 3600e3, x:600, y:36,
-    bo:'n-19', k:['判別式'], item:{aid:'a-pre', iid:'Q05'},
-    segs:[{s:'s5', text:'先算 b²−4ac：小於 0 就直接寫「沒有實數根」，不用再硬解；等於 0 是重根；大於 0 且是完全平方數，因式分解一定拆得出來。'},
-          {s:'s4', text:'前測判別式那一題，我只看 b²=16 是正的就選了「兩相異實根」，忘了減 4ac，這是我錯的地方。'}]});
+  mkNote({v:'v-3', t:'可是有的題目看起來像 A 其實是 B', a:['莊心怡'], at:now - 3*DAY + 3600e3, x:600, y:36,
+    bo:'n-19', k:['判準'], item:{aid:'a-pre', iid:'R13'},
+    segs:[{s:'s4', text:'第 13 題問「哪一句是通常都會這樣」，看起來像找位置，可是四個選項都在文章裡找得到，真正要做的是分辨通則和個例。'},
+          {s:'s5', text:'所以動詞只能當第一步，還要看選項在考什麼。'}]});
 
-  mkNote({v:'v-3', t:'配方法不是拿來算的，是拿來看的', a:['邱奕安'], at:now - 2*DAY, x:330, y:200,
-    bo:'n-18', k:['配方法'],
-    segs:[{s:'s1', text:'配方法算起來比較慢，但可以看出頂點跟最小值，下學期的二次函數會用到，所以還是要會。'}]});
+  mkNote({v:'v-3', t:'評內容那一類最難', a:['邱奕安'], at:now - 2*DAY, x:330, y:200,
+    bo:'n-18', k:['比較評估'],
+    segs:[{s:'s1', text:'我覺得問「有沒有說清楚」最難，因為要先知道一篇文章「應該說清楚什麼」。第 C02 題我想很久都寫不出來。'}]});
 
   /* 閱讀紀錄（模擬）：能力越高、參與傾向越高者讀越多 */
   notes.forEach(function(n){
@@ -923,11 +1057,11 @@ function buildSeedState(){
   });
 
   /* 註記（annotation）示範 */
-  notes[4].annotations.push({id:'an-1', authorId:'u-t1', text:'很好的做法——你去查了定義，而不是只憑印象。請把課本頁碼也補上去。', at:now - 6*DAY});
-  notes[8].annotations.push({id:'an-2', authorId:S['陳柏宇'], text:'第三種情況我想再加一個例子：時間不能是負的。', at:now - 4*DAY});
+  notes[4].annotations.push({id:'an-1', authorId:'u-t1', text:'「遮起來看結尾成不成立」是很好的檢驗方法——你們自己想出了一個可以重複使用的判準。', at:now - 6*DAY});
+  notes[8].annotations.push({id:'an-2', authorId:S['陳柏宇'], text:'那如果一句話同時支撐好幾段呢？我想在躍升貼文裡補這一點。', at:now - 4*DAY});
 
   const st = {
-    version: 3,
+    version: 4,
     users: users,
     classes: classes,
     assignments: [pre, post],
@@ -935,16 +1069,17 @@ function buildSeedState(){
     submissions: submissions,
     views: views,
     notes: notes,
-    logs: [],          // 使用者自己操作產生的事件（示範日誌另由種子重算，不占儲存空間）
+    logs: [],
     dialog: [],
     surveys: [],
     assignmentLog: [{at: now - 20 * DAY, seed: 20250827, stratify:'grade',
                      map: classes.map(function(c){ return {cid:c.id, cond:c.condition}; }),
                      note:'出廠預設分派（示範）'}],
     settings: {
-      engine:'builtin', provider:'openai', baseUrl:'https://api.openai.com/v1',
-      apiKey:'', model:'gpt-4o-mini',
-      misThreshold: 15, minN: 3, maxTurns: 6, kbClassId: 'c-1'
+      engine:'builtin', provider:'anthropic', baseUrl:'https://api.anthropic.com/v1',
+      apiKey:'', model:'claude-sonnet-5',
+      misThreshold: 12, minN: 3, maxTurns: 6, kbClassId: 'c-1',
+      a11y: {fontScale: 1, highContrast: false}
     },
     aiCache: {},
     ui: { role:'u-t1', classId:'c-1' },
@@ -966,34 +1101,34 @@ function genName(rnd){
 /* ===== src/32-aal.js ===== */
 /* ==========================================================================
    32-aal.js — 評量即學習（Assessment as Learning）核心
-   ‧ 四條件：導師／學生／同儕／無代理人對照
-   ‧ 認知歷程架構：TIMSS 2019 數學三認知領域 × 15 子歷程
-   ‧ 模組化提示：1 系統骨幹 + 3 角色（僅社會框架）+ 3 歷程（提問功能）
-   ‧ 回合上限、防洩答攔截、相對歷程編碼
+   ‧ 四條件：無對象（對照）／導師 TUTOR／學生 TUTEE／同儕 PEER
+   ‧ 理解歷程架構：PIRLS 2011 四項理解歷程 × 19 項子歷程
+   ‧ 模組化提示：1 系統骨幹 + 3 角色（僅社會框架）+ 4 歷程（提問功能）
+   ‧ 回合排程、回合上限、防洩答攔截、相對歷程編碼
 
-   設計原則（移植自研究構想 v23 的 AaL Platform 規格）：
-   提問功能跨角色恆定，僅社會框架隨角色而異；AI 之回應型態由回合排程決定，
-   不讀取學童端編碼函式，也不指定學童下一步應採用何種策略。
+   設計原則：提問功能跨角色恆定，僅社會框架隨角色而異；
+   AI 的回應型態由回合排程決定，不讀取任何學生端編碼函式，
+   也不指定學生下一步應採用何種策略（避免 prompt compliance 混入歷程轉移）。
    ========================================================================== */
 
 /* --- 四條件 --- */
 const CONDITIONS = [
-  {id:'tutor',   name:'導師',   en:'AI-as-Tutor',  cls:'sc1',
+  {id:'tutor',   name:'導師',   en:'AI-as-Tutor',  cls:'sc1', mark:'▲',
    tradition:'智慧型教學系統／蘇格拉底式鷹架',
-   frame:'我是陪你想的老師。我不會告訴你答案，只會一直問你「你是怎麼想的」。',
+   frame:'我是陪你讀的老師。我不會告訴你答案，只會一直問你「你是從哪裡看出來的」。',
    mech:'適性鷹架與形成性提問',
    note:'指導性鷹架可能壓縮學習者自主性，故本平台限制其僅能提問、不得評價。'},
-  {id:'tutee',   name:'學生',   en:'AI-as-Tutee',  cls:'sc3',
+  {id:'tutee',   name:'學生',   en:'AI-as-Tutee',  cls:'sc3', mark:'●',
    tradition:'可教代理人／以教代學（門生效應）',
-   frame:'我是剛學到這個單元的同學，很多地方還沒弄懂。你可以教我嗎？',
-   mech:'學習者翻轉為施教者，須為代理人的學習負責',
+   frame:'我是剛讀完這篇、但很多地方沒看懂的同學。你可以講給我聽嗎？',
+   mech:'學習者翻轉為施教者，須為代理人的理解負責',
    note:'評量事件中最徹底的「主動行動者」姿態。'},
-  {id:'peer',    name:'同儕',   en:'AI-as-Peer',   cls:'sc5',
+  {id:'peer',    name:'同儕',   en:'AI-as-Peer',   cls:'sc5', mark:'■',
    tradition:'社會建構論／對等協作',
-   frame:'我也在做這一題。我先說我想到哪裡，你再說你的，我們對一下。',
+   frame:'我也在讀這一篇。我先說我讀到哪裡，你再說你的，我們對一下。',
    mech:'分享觀點、共構理解',
    note:'處理負擔分散於人機之間。'},
-  {id:'control', name:'對照',   en:'System-scaffold control', cls:'',
+  {id:'control', name:'無對象', en:'System-scaffold control', cls:'', mark:'◇',
    tradition:'系統鷹架對照組',
    frame:'',
    mech:'相同工具與流程，不配置 AI 夥伴',
@@ -1002,78 +1137,106 @@ const CONDITIONS = [
 ];
 function condition(id){ return CONDITIONS.find(function(c){ return c.id === id; }) || CONDITIONS[3]; }
 
-/* --- 認知歷程架構（TIMSS 2019 數學認知領域） ---
-   對應研究構想中 PIRLS 四項理解歷程的位置。兩者同屬 IEA 架構家族，
-   換成閱讀研究時只要替換這個常數與題目的 process 標定，程式碼不必更動。 */
+/* --- PIRLS 2011 四項理解歷程 ---
+   架構、細目與題本三者同版，RQ4 的相對歷程編碼才能以官方標定為判定基準。
+   中文譯名採臺灣通行用語。 */
 const PROCESSES = [
-  {id:'K', name:'知道', en:'Knowing',   cls:'sc1', order:1,
-   desc:'回憶、辨識與執行例行程序——學生已學過的事實、概念與程序。'},
-  {id:'A', name:'應用', en:'Applying',  cls:'sc3', order:2,
-   desc:'在例行情境中選擇並執行策略、建立表徵與模型。'},
-  {id:'R', name:'推理', en:'Reasoning', cls:'sc5', order:3,
-   desc:'在非例行情境中分析、綜合、評估、推廣與論證。'}
+  {id:'FR', name:'直接提取', en:'Focus on and Retrieve Explicitly Stated Information',
+   cls:'sc1', order:1, mark:'▲',
+   desc:'在文本中找出明確寫出來的訊息，不需要推論。'},
+  {id:'SI', name:'直接推論', en:'Make Straightforward Inferences',
+   cls:'sc3', order:2, mark:'●',
+   desc:'把文本中相鄰的訊息連起來，做出作者沒有明說但顯而易見的推論。'},
+  {id:'II', name:'詮釋整合', en:'Interpret and Integrate Ideas and Information',
+   cls:'sc5', order:3, mark:'■',
+   desc:'整合全文訊息並帶入自己的知識與經驗，形成對主題、語氣或應用的詮釋。'},
+  {id:'EE', name:'比較評估', en:'Examine and Evaluate Content, Language, and Textual Elements',
+   cls:'sc4', order:4, mark:'◆',
+   desc:'跳出文本，評斷內容的合理性、訊息的完整性與作者的立場與手法。'}
 ];
-/* 逐題的官方歷程標定。RQ4 的相對歷程編碼即以此為判定基準，
-   因此架構、細目與題本三者必須同版。 */
-const ITEM_PROCESS = {
-  Q01:'K', Q02:'K', Q03:'R', Q04:'K', Q05:'A', Q06:'K', Q07:'K', Q08:'K',
-  Q09:'A', Q10:'A', Q11:'K', Q12:'A', Q13:'A', Q14:'A', C01:'R', C02:'R'
-};
-function applyItemProcesses(){
-  ITEMS.forEach(function(it){ it.process = ITEM_PROCESS[it.id] || 'K'; });
-}
-
 function processOf(id){ return PROCESSES.find(function(p){ return p.id === id; }); }
 function processName(id){ const p = processOf(id); return p ? p.name : id; }
 function processOrder(id){ const p = processOf(id); return p ? p.order : 0; }
+function processMark(id){ const p = processOf(id); return p ? p.mark : '·'; }
 
-/* --- 15 項子歷程與角色中性的代表性提問句 ---
-   結構刻意對齊研究構想表 1（PIRLS 19 子歷程）：
-   編號、原文、中文對照、代表性提問句、適用題型。 */
+/* --- 19 項子歷程與角色中性的代表性提問句（PIRLS 2011）---
+   fit：適用文體，提問庫據此分流，避免對文學性文本提出資訊性文本專用的提問。 */
 const SUBPROCESSES = [
-  {id:'K-1', p:'K', en:'Recall',              zh:'回憶定義、術語、性質與公式',
-   q:'這一題用到的是哪一個定義或公式？你記得它怎麼說嗎？', fit:'皆可'},
-  {id:'K-2', p:'K', en:'Recognize',           zh:'辨識數學物件與等價形式',
-   q:'這個式子還可以寫成別的樣子嗎？哪一種你比較看得出來？', fit:'皆可'},
-  {id:'K-3', p:'K', en:'Classify / Order',    zh:'依共同性質分類或排序',
-   q:'這一題屬於你學過的哪一類問題？為什麼是那一類？', fit:'皆可'},
-  {id:'K-4', p:'K', en:'Compute',             zh:'執行演算程序',
-   q:'你算到哪一步了？下一步打算做什麼？', fit:'計算'},
-  {id:'K-5', p:'K', en:'Retrieve',            zh:'從圖表中提取訊息',
-   q:'題目裡哪一個條件是你目前用到的？還有哪一個還沒用？', fit:'皆可'},
-  {id:'K-6', p:'K', en:'Measure',             zh:'使用單位與工具進行測量',
-   q:'這裡的單位是什麼？換算會影響答案嗎？', fit:'幾何'},
+  {id:'FR-1', p:'FR', en:'identifying information relevant to the specific goal of reading',
+   zh:'找出與閱讀目標有關的訊息',
+   q:'這一題要找的是什麼？文章裡哪一段在講這件事？', fit:'皆可'},
+  {id:'FR-2', p:'FR', en:'looking for specific ideas',
+   zh:'尋找特定的想法／觀點',
+   q:'文章裡有沒有直接說到這件事？在哪裡？', fit:'皆可'},
+  {id:'FR-3', p:'FR', en:'searching for definitions of words or phrases',
+   zh:'尋找字詞或片語的定義',
+   q:'這個詞在這篇文章裡是什麼意思？哪一句告訴你的？', fit:'皆可'},
+  {id:'FR-4', p:'FR', en:'identifying the setting of a story (e.g., time, place)',
+   zh:'指出故事的場景（時間、地點）',
+   q:'這件事發生在什麼時候、什麼地方？你從哪一句看出來的？', fit:'敘事'},
+  {id:'FR-5', p:'FR', en:'finding the topic sentence or main idea (when explicitly stated)',
+   zh:'找出主題句或主要觀點（限明確陳述者）',
+   q:'這一段最重要的一句話是哪一句？', fit:'皆可'},
 
-  {id:'A-1', p:'A', en:'Determine',           zh:'決定有效的策略與運算',
-   q:'你打算用哪一種方法？有沒有想過另一種？為什麼選這一個？', fit:'皆可'},
-  {id:'A-2', p:'A', en:'Represent / Model',   zh:'以式子、圖或表呈現關係',
-   q:'如果要把題目裡的關係寫成一個式子，你會怎麼設？設誰當 x？', fit:'應用'},
-  {id:'A-3', p:'A', en:'Implement',           zh:'實行策略以解決問題',
-   q:'照你剛剛說的方法做下去，會得到什麼？先講你預期的樣子。', fit:'皆可'},
+  {id:'SI-1', p:'SI', en:'inferring that one event caused another event',
+   zh:'推論某事件導致另一事件（因果）',
+   q:'為什麼會發生這件事？是前面哪一件事造成的？', fit:'皆可'},
+  {id:'SI-2', p:'SI', en:'concluding what is the main point made by a series of arguments',
+   zh:'在一串論點之後歸納出重點',
+   q:'作者講了好幾個理由，合起來他想說的重點是什麼？', fit:'說明'},
+  {id:'SI-3', p:'SI', en:'determining the referent of a pronoun',
+   zh:'判斷代名詞的指涉對象',
+   q:'這裡的「他／它」指的是誰或什麼？', fit:'皆可'},
+  {id:'SI-4', p:'SI', en:'identifying generalizations made in the text',
+   zh:'找出文中所做的概括陳述',
+   q:'文章裡有沒有哪一句是在說「通常都會這樣」？是哪一句？', fit:'說明'},
+  {id:'SI-5', p:'SI', en:'describing the relationship between two characters',
+   zh:'描述兩個人物之間的關係',
+   q:'這兩個人是什麼關係？你從哪些地方看出來的？', fit:'敘事'},
 
-  {id:'R-1', p:'R', en:'Analyze',             zh:'判斷與描述元素間的關係',
-   q:'題目給的兩個條件之間有什麼關係？少了其中一個還做得出來嗎？', fit:'皆可'},
-  {id:'R-2', p:'R', en:'Integrate / Synthesize', zh:'連結不同元素、表徵與程序',
-   q:'這一題跟你之前做過的哪一題像？像在哪裡？', fit:'皆可'},
-  {id:'R-3', p:'R', en:'Evaluate',            zh:'評估不同策略與解法的優劣',
-   q:'如果有人用另一種做法，你覺得會比較快還是比較容易錯？為什麼？', fit:'皆可'},
-  {id:'R-4', p:'R', en:'Draw Conclusions',    zh:'依資訊與證據得出有效結論',
-   q:'你怎麼確定這個結果是合理的？有沒有辦法檢查？', fit:'皆可'},
-  {id:'R-5', p:'R', en:'Generalize',          zh:'把結果推及更廣的情形',
-   q:'如果把題目裡的數字換掉，你的做法還會成立嗎？什麼情況下會不成立？', fit:'皆可'},
-  {id:'R-6', p:'R', en:'Justify',             zh:'以數學論證支持策略或解法',
-   q:'你要怎麼說服別人這個做法是對的？哪一步是關鍵？', fit:'皆可'}
+  {id:'II-1', p:'II', en:'discerning the overall message or theme of a text',
+   zh:'辨識全文的訊息或主題',
+   q:'如果用一句話說這篇文章想告訴我們什麼，你會怎麼說？', fit:'皆可'},
+  {id:'II-2', p:'II', en:'considering an alternative to actions of characters',
+   zh:'思考人物行動的其他可能作法',
+   q:'如果是你，你會怎麼做？為什麼跟他不一樣？', fit:'敘事'},
+  {id:'II-3', p:'II', en:'comparing and contrasting text information',
+   zh:'比較與對照文中訊息',
+   q:'前面講的和後面講的有什麼不一樣？', fit:'皆可'},
+  {id:'II-4', p:'II', en:"inferring a story's mood or tone",
+   zh:'推測故事的情緒或語氣',
+   q:'這一段讀起來是什麼感覺？哪些字讓你有這種感覺？', fit:'敘事'},
+  {id:'II-5', p:'II', en:'interpreting a real-world application of text information',
+   zh:'詮釋文中訊息在真實世界的應用',
+   q:'這件事在你的生活裡也會發生嗎？什麼時候？', fit:'皆可'},
+
+  {id:'EE-1', p:'EE', en:'evaluating the likelihood that the events described could really happen',
+   zh:'評估所述事件真實發生的可能性',
+   q:'這件事真的可能發生嗎？為什麼？', fit:'皆可'},
+  {id:'EE-2', p:'EE', en:'describing how the author devised a surprise ending',
+   zh:'說明作者如何安排出乎意料的結局',
+   q:'結局讓你意外嗎？作者在前面留了什麼線索？', fit:'敘事'},
+  {id:'EE-3', p:'EE', en:'judging the completeness or clarity of information in the text',
+   zh:'評斷文中訊息的完整性或清晰度',
+   q:'文章有沒有哪裡沒說清楚？你還想知道什麼？', fit:'皆可'},
+  {id:'EE-4', p:'EE', en:"determining an author's perspective on the central topic",
+   zh:'判斷作者對核心主題的立場',
+   q:'你覺得作者贊成還是反對？哪一句讓你這樣想？', fit:'皆可'}
 ];
 function subprocess(id){ return SUBPROCESSES.find(function(s){ return s.id === id; }); }
 function subprocessesOf(p){ return SUBPROCESSES.filter(function(s){ return s.p === p; }); }
 
-/* --- 提問功能（question functions）：跨角色恆定 ---
-   AI 的回應型態由「回合排程」決定，不由學生的回答內容決定。 */
+/* 逐題的官方歷程標定由題庫自己攜帶（item.process），此處只提供補綴用的預設 */
+function applyItemProcesses(){
+  ITEMS.forEach(function(it){ if (!it.process) it.process = 'FR'; });
+}
+
+/* --- 提問功能（question functions）：跨角色恆定 --- */
 const QFUNCTIONS = [
   {id:'F1', name:'目標澄清', desc:'請學習者說出這一題到底在問什麼。'},
-  {id:'F2', name:'依據索引', desc:'請學習者指出他的判斷用到題目裡的哪一個條件。'},
+  {id:'F2', name:'依據索引', desc:'請學習者指出他的判斷用到文章裡的哪一句。'},
   {id:'F3', name:'歷程提問', desc:'依該題官方標定歷程的子歷程提問庫提出一問。'},
-  {id:'F4', name:'反向檢核', desc:'請學習者說明「什麼情況下你的做法會不成立」。'},
+  {id:'F4', name:'反向檢核', desc:'請學習者說明「有沒有別的讀法也說得通」。'},
   {id:'F5', name:'延伸歷程', desc:'再取同一歷程的另一個子歷程提問，或往上一層歷程提問。'},
   {id:'F6', name:'收束整理', desc:'請學習者用一句話說出自己現在的想法。'}
 ];
@@ -1085,25 +1248,25 @@ const MAX_TURNS = 6;
 
 /* --- 系統骨幹提示模組（模組 0）：任務規則與防洩答機制 --- */
 const PROMPT_BACKBONE =
-'【任務規則】你是一個嵌在「評量即學習」平台中的對話夥伴，陪國中學生一起想數學題。\n' +
-'【嚴格禁止】(1) 說出或暗示答案；(2) 指名答案在哪一個選項或哪一句；(3) 判斷學生答對或答錯；\n' +
-'(4) 說出學生缺漏了哪一個得分要素；(5) 直接示範完整解題步驟。\n' +
+'【任務規則】你是一個嵌在「評量即學習」平台中的對話夥伴，陪國小四到六年級學生一起讀一篇文章。\n' +
+'【嚴格禁止】(1) 說出或暗示答案；(2) 指名答案在哪一個選項或第幾句；(3) 判斷學生答對或答錯；\n' +
+'(4) 說出學生缺漏了哪一個得分要素；(5) 直接把文章重點整理給他。\n' +
 '【你看不到的東西】你不會讀到學生的作答欄位，也不會知道他選了哪一個選項。\n' +
 '【每次回應】只做一件事：依系統指定的提問功能問一個問題。最多兩句話，' +
-'第一句回應學生剛剛說的內容，第二句提問。用臺灣國中生聽得懂的口語，不要說教。\n' +
+'第一句回應學生剛剛說的內容，第二句提問。用國小中高年級聽得懂的口語，不要說教。\n' +
 '【回合上限】這一題最多與學生對話 6 個回合。';
 
 /* --- 角色提示模組（模組 1–3）：只有社會框架 --- */
 const PROMPT_ROLE = {
-  tutor: '【社會框架】你是陪學生想的老師。用「我想確認你怎麼想的」這種語氣，' +
+  tutor: '【社會框架】你是陪學生讀的老師。用「我想確認你是怎麼看的」這種語氣，' +
          '把問題丟回去給學生，不要幫他整理答案。',
-  tutee: '【社會框架】你是剛學到這個單元、還沒完全弄懂的同學。你想請這位學生教你，' +
+  tutee: '【社會框架】你是剛讀完這篇、但很多地方沒看懂的同學。你想請這位學生講給你聽，' +
          '所以你的問題都要像「我不太懂……你可以說給我聽嗎？」而不是像在考他。',
-  peer:  '【社會框架】你是跟學生同時在做這一題的同學。先簡短說一句你自己卡在哪裡或想到什麼' +
+  peer:  '【社會框架】你是跟學生同時在讀這一篇的同學。先簡短說一句你自己讀到哪裡或卡在哪裡' +
          '（不可以是答案），再把同一個問題拋回去問他，語氣是對等的討論。'
 };
 
-/* --- 歷程提示模組（模組 4–6）：提問功能與子歷程提問庫 --- */
+/* --- 歷程提示模組（模組 4–7）：提問功能與子歷程提問庫 --- */
 function promptProcessModule(pid){
   const p = processOf(pid);
   const subs = subprocessesOf(pid);
@@ -1126,9 +1289,9 @@ function composePrompt(conditionId, processId, qfnId){
    ========================================================================== */
 
 const ROLE_OPENER = {
-  tutor: ['這一題我們一起想。', '好，我聽你說。', '我想確認你怎麼想的。', '先不要急著算。'],
-  tutee: ['我也在看這一題，可是我卡住了。', '這裡我不太懂耶。', '我剛剛好像想錯了。', '你這樣說我有一點懂了。'],
-  peer:  ['我先講我想到哪裡。', '我也在做這一題。', '我的想法跟你可能不一樣。', '欸我們對一下。']
+  tutor: ['這一題我們一起看。', '好，我聽你說。', '我想確認你是怎麼看的。', '先不要急著選。'],
+  tutee: ['我也在讀這一段，可是我卡住了。', '這裡我不太懂耶。', '我剛剛好像讀錯了。', '你這樣說我有一點懂了。'],
+  peer:  ['我先講我讀到哪裡。', '我也在看這一題。', '我的想法跟你可能不一樣。', '欸我們對一下。']
 };
 const ROLE_STEM = {
   tutor: function(q){ return q; },
@@ -1136,14 +1299,12 @@ const ROLE_STEM = {
   peer:  function(q){ return '那你呢？' + q; }
 };
 
-/* 依回合排程挑一個子歷程（不看學生說了什麼，只看回合數與該題的官方歷程標定） */
+/* 依回合排程挑一個子歷程（不看學生說了什麼，只看回合數、該題的官方歷程標定與文體） */
 function pickSubprocess(processId, item, turn){
+  const t = item ? getText(item.unit) : null;
+  const genre = t ? t.genre : null;   // '敘事' | '說明'
   const subs = subprocessesOf(processId).filter(function(s){
-    if (s.fit === '皆可') return true;
-    if (s.fit === '計算') return item.type === 'mc';
-    if (s.fit === '應用') return (item.tags || []).indexOf('應用問題') >= 0;
-    if (s.fit === '幾何') return (item.tags || []).indexOf('畢氏定理') >= 0;
-    return true;
+    return s.fit === '皆可' || s.fit === genre;
   });
   const pool = subs.length ? subs : subprocessesOf(processId);
   return pool[turn % pool.length];
@@ -1153,18 +1314,18 @@ function pickSubprocess(processId, item, turn){
 function agentTurn(conditionId, item, turn, rnd){
   const r = rnd || Math.random;
   const qfnId = TURN_SCHEDULE[Math.min(turn, TURN_SCHEDULE.length - 1)];
-  const pid = item.process || 'K';
+  const pid = item.process || 'FR';
   let sub = null, body = '';
 
   if (qfnId === 'F1'){
     body = '這一題到底在問什麼？用你自己的話說一次。';
   } else if (qfnId === 'F2'){
-    body = '你剛剛的判斷，用到題目裡的哪一個條件？';
+    body = '你剛剛的判斷，是從文章裡哪一句看出來的？';
   } else if (qfnId === 'F3'){
     sub = pickSubprocess(pid, item, turn);
     body = sub.q;
   } else if (qfnId === 'F4'){
-    body = '什麼情況下你這個做法會不成立？想一個會出問題的例子。';
+    body = '有沒有別的讀法也說得通？如果有人跟你想的不一樣，他可能是看到哪一句？';
   } else if (qfnId === 'F5'){
     // 延伸：優先往上一層歷程取一個子歷程，沒有上一層就回到同層另一個
     const up = PROCESSES.find(function(p){ return p.order === processOrder(pid) + 1; });
@@ -1189,19 +1350,22 @@ function agentTurn(conditionId, item, turn, rnd){
 
 /* --- 防洩答攔截 ---
    規則引擎本來就不會產生答案，但外部語言模型會。輸出後一律過這一關，
-   攔截次數本身就是一項可報告的忠實度指標。 */
+   攔截次數本身就是一項可報告的實施忠實度指標。 */
 const VERDICT_WORDS = ['答對', '答錯', '正確答案', '你錯了', '你對了', '正解是', '應該選', '答案是', '選項是'];
 function leakGuard(text, item){
   let t = String(text), hits = [];
   VERDICT_WORDS.forEach(function(w){ if (t.indexOf(w) >= 0) hits.push(w); });
   if (item && item.type === 'mc' && item.options){
     const ans = item.options[item.answer];
-    if (ans && t.indexOf(ans) >= 0) hits.push('正解字串');
+    if (ans && ans.length > 3 && t.indexOf(ans) >= 0) hits.push('正解字串');
     const letter = String.fromCharCode(65 + item.answer);
     if (new RegExp('(選|答案|正解)\\s*' + letter + '\\b').test(t)) hits.push('正解代號');
   }
+  if (item && item.answerSent != null && new RegExp('第\\s*' + (item.answerSent + 1) + '\\s*句').test(t)){
+    hits.push('指名答案所在句次');
+  }
   if (hits.length){
-    return {text:'這個我不能說喔。換個方式問你：你剛剛是從題目的哪一句得到這個想法的？',
+    return {text:'這個我不能說喔。換個方式問你：你剛剛是從文章的哪一句得到這個想法的？',
             blocked:true, hits:hits};
   }
   return {text:t, blocked:false, hits:[]};
@@ -1209,32 +1373,34 @@ function leakGuard(text, item){
 
 /* ==========================================================================
    相對歷程編碼（對應研究構想 RQ4）
-   以「試題官方標定之歷程」為判定基準，把學生的每一次發話編碼為
+   以「試題官方標定之理解歷程」為判定基準，把學生的每一次發話編碼為
    低於（BELOW）／等於（AT）／高於（ABOVE）該題所要求的歷程層次。
    ========================================================================== */
 const PROCESS_CUES = {
-  K: ['公式', '定義', '怎麼算', '算式', '幾', '等於', '記得', '背', '步驟', '代入', '照著'],
-  A: ['方法', '策略', '設', '列式', '模型', '應該用', '哪一種做法', '轉換', '先做', '拆成'],
-  R: ['為什麼', '如果', '反例', '不成立', '證明', '推論', '一定嗎', '哪裡錯', '比較', '判斷', '通則', '任何']
+  FR: ['哪一句', '哪一段', '在第', '找到', '寫著', '有說', '出現', '這個詞', '意思是', '幾點', '哪裡'],
+  SI: ['因為', '所以', '造成', '導致', '指的是', '代表', '接下來', '前面說', '後面說', '合起來'],
+  II: ['整篇', '主題', '想告訴我們', '如果是我', '我覺得作者', '心情', '語氣', '感覺', '生活中', '比較起來'],
+  EE: ['真的可能', '合理嗎', '沒說清楚', '我還想知道', '立場', '贊成', '反對', '寫得好', '如果換成', '有沒有漏']
 };
 function codeUtteranceProcess(text){
   const t = String(text || '');
-  let best = 'K', bestN = 0;
-  ['R', 'A', 'K'].forEach(function(p){
+  let best = 'FR', bestN = 0;
+  ['EE', 'II', 'SI', 'FR'].forEach(function(p){
     let n = 0;
     PROCESS_CUES[p].forEach(function(c){ if (t.indexOf(c) >= 0) n++; });
     if (n > bestN){ bestN = n; best = p; }
   });
-  if (!bestN) return t.length > 30 ? 'A' : 'K';
+  if (!bestN) return t.length > 30 ? 'SI' : 'FR';
   return best;
 }
 function relativeProcessCode(utterance, item){
   const u = processOrder(codeUtteranceProcess(utterance));
-  const o = processOrder(item.process || 'K');
+  const o = processOrder(item.process || 'FR');
   return u < o ? 'BELOW' : (u > o ? 'ABOVE' : 'AT');
 }
 const REL_LABEL = {BELOW:'低於題目歷程', AT:'等於題目歷程', ABOVE:'高於題目歷程'};
 const REL_SHORT = {BELOW:'Q−', AT:'Q0', ABOVE:'Q+'};
+const REL_MARK  = {BELOW:'▽', AT:'○', ABOVE:'△'};
 
 /* ==========================================================================
    情感分析（詞典法）
@@ -1242,7 +1408,7 @@ const REL_SHORT = {BELOW:'Q−', AT:'Q0', ABOVE:'Q+'};
 const SENT_POS = ['懂了', '會了', '對耶', '原來', '有道理', '好像可以', '知道了', '簡單', '喜歡',
   '有趣', '成功', '沒問題', '應該可以', '想到了', '找到', '清楚', '謝謝', '哈', '耶'];
 const SENT_NEG = ['不懂', '不會', '好難', '看不懂', '卡住', '亂', '煩', '討厭', '放棄', '錯',
-  '不知道', '沒辦法', '好煩', '不行', '算不出', '想不到', '完蛋', '慘', '累'];
+  '不知道', '沒辦法', '好煩', '不行', '找不到', '想不到', '完蛋', '慘', '累'];
 const SENT_NEG_MARK = ['不', '沒', '別', '無法'];
 const SENT_INTENS = ['很', '超', '非常', '好', '真的', '完全', '太'];
 
@@ -1394,7 +1560,7 @@ function buildDemoLogs(){
     const t0 = t;
 
     items.forEach(function(it){
-      const proc = it.process || 'K';
+      const proc = it.process || 'FR';
       function push(type, code, extra){
         t += 900 + Math.floor(rnd() * 5200);
         const e = {t:t, rel:t - t0, sid:sid, cid:klass ? klass.id : null, cond:cond,
@@ -1501,7 +1667,7 @@ function toSDIS(){
     (bySeq[k] = bySeq[k] || []).push(e);
   });
   const out = ['Event'];
-  out.push('% KIDFORUM AaL 事件序列（示範資料為模擬）');
+  out.push('% KAIROS AaL 事件序列（示範資料為模擬）');
   out.push('% 編碼：' + BEHAVIOR_CODES.map(function(b){ return b.code + '=' + b.name; }).join('  '));
   Object.keys(bySeq).sort().forEach(function(k){
     const p = k.split('|');
@@ -1520,7 +1686,7 @@ function sdisCode(c){ return SDIS_MAP[c] || 'OTHER'; }
 function toENACsv(){
   const rows = [['sid','name','class','grade','condition','lang','assignment','item','item_process',
                  'turn','speaker','rel_code','utterance',
-                 'K','A','R','BELOW','AT','ABOVE','POS','NEG','MARK','OPTION','WRITE','CHECK']];
+                 'FR','SI','II','EE','BELOW','AT','ABOVE','POS','NEG','MARK','OPTION','WRITE','CHECK']];
   const logs = allLogs().slice().sort(function(a, b){ return a.t - b.t; });
   const dial = allDialog();
   const dialKey = {};
@@ -1538,7 +1704,7 @@ function toENACsv(){
       e.sid, userName(e.sid), k ? k.name : '', k ? k.grade : '', e.cond, e.lang || 'zh',
       e.aid, e.iid, e.proc || '', e.turn || '', e.type === 'AI' ? 'agent' : (e.code === 'A' ? 'agent' : 'student'),
       rel, txt.replace(/\s+/g, ' '),
-      uc === 'K' ? 1 : 0, uc === 'A' ? 1 : 0, uc === 'R' ? 1 : 0,
+      uc === 'FR' ? 1 : 0, uc === 'SI' ? 1 : 0, uc === 'II' ? 1 : 0, uc === 'EE' ? 1 : 0,
       rel === 'BELOW' ? 1 : 0, rel === 'AT' ? 1 : 0, rel === 'ABOVE' ? 1 : 0,
       s.score > 0.2 ? 1 : 0, s.score < -0.2 ? 1 : 0,
       e.code === 'M' ? 1 : 0, e.code === 'O' ? 1 : 0, e.code === 'W' ? 1 : 0, e.code === 'C' ? 1 : 0
@@ -2162,7 +2328,7 @@ function buildInquiryPrompt(pi, diag){
   const dis = pi.topDistractor != null ? it.options[pi.topDistractor] : null;
   const mis = pi.misCode ? MISCONCEPTIONS.find(function(m){ return m.id === pi.misCode; }) : null;
   const lines = [];
-  lines.push('前測第 ' + it.no + ' 題（' + it.year + ' 年）有 ' + n2 + ' 位同學落在「迷思」象限——'
+  lines.push('前測第 ' + it.no + ' 題（' + textTitle(it.unit) + '）有 ' + n2 + ' 位同學落在「迷思」象限——'
     + '照他們在其他題目上的表現，這一題本來應該答得出來，實際卻答錯了。');
   if (dis) lines.push('這些同學裡最多人選的是「' + dis + '」（' + pi.topDistractorN + ' 人）。');
   if (mis) lines.push('這通常和「' + mis.name + '」有關：' + mis.desc);
@@ -2552,9 +2718,10 @@ function lsa(opts){
    認知網絡分析
    ========================================================================== */
 const ENA_CODES = [
-  {id:'K',    name:'知道',     desc:'發話停留在回憶、辨識與例行計算。'},
-  {id:'A',    name:'應用',     desc:'發話涉及策略選擇、設未知數與建模。'},
-  {id:'R',    name:'推理',     desc:'發話涉及分析、評估、推廣或論證。'},
+  {id:'FR',   name:'直接提取', desc:'發話停留在找出文中明確寫出來的訊息。'},
+  {id:'SI',   name:'直接推論', desc:'發話把相鄰訊息連起來，做出顯而易見的推論。'},
+  {id:'II',   name:'詮釋整合', desc:'發話整合全文並帶入自己的知識，形成詮釋。'},
+  {id:'EE',   name:'比較評估', desc:'發話評斷內容的合理性、完整性或作者立場。'},
   {id:'EVID', name:'援引依據', desc:'指出題目中的具體條件或標記題幹。'},
   {id:'MON',  name:'自我監控', desc:'檢查、驗算、送出前自我檢核。'},
   {id:'REV',  name:'修正',     desc:'對話之後更改選項或改寫作答。'},
@@ -3025,7 +3192,7 @@ function mediation(rows, xCond, yGet, mediators, xGet, boot){
 /* --- 可分析的結果變項清單 --- */
 function outcomeList(){
   const out = [
-    {id:'theta_post', name:'閱讀／數學理解表現（後測 θ）', get:function(r){ return r.thetaPost; },
+    {id:'theta_post', name:'閱讀理解表現（後測 θ）', get:function(r){ return r.thetaPost; },
      cov:function(r){ return r.thetaPre; }, covName:'前測 θ'}
   ];
   CONSTRUCTS.forEach(function(c){
@@ -3083,7 +3250,7 @@ async function llmChat(messages, o){
   return txt;
 }
 
-const SYS_TEACHER = '你是資深國中數學教師與教學研究者，熟悉臺師大心測中心的 KIDMAP 診斷方法、Rasch 測量與國中教育會考。' +
+const SYS_TEACHER = '你是資深國小閱讀教學研究者，熟悉 PIRLS 四項理解歷程、KIDMAP 四象限診斷與 Rasch 測量。' +
   '請用臺灣繁體中文回答，行文像老師之間的討論，具體實用，避免空話與套語。用 Markdown 標題與清單排版，重點加粗。';
 const SYS_KB = '你是知識建構（Knowledge Building, Scardamalia & Bereiter）研究者，熟悉 Knowledge Forum 的支架與想法改進歷程，' +
   '也熟悉形成性評量。請用臺灣繁體中文回答，聚焦在「想法如何被改進」而不是「答案對不對」，具體、可操作，避免空話。';
@@ -3102,7 +3269,7 @@ function materialClass(diag){
   L.push('【主要迷思題】');
   diag.flagged.forEach(function(pi){
     const it = pi.item;
-    L.push('- 第 ' + it.no + ' 題（' + it.year + ' 年，' + unitName(it.unit) + '，' + it.diff + '）');
+    L.push('- 第 ' + it.no + ' 題（' + unitName(it.unit) + '，' + processName(it.process) + '，' + it.diff + '）');
     L.push('  題幹：' + it.stem);
     L.push('  選項：' + it.options.map(function(o, i){ return String.fromCharCode(65 + i) + '. ' + o; }).join('　'));
     L.push('  正解：' + String.fromCharCode(65 + it.answer) + '　難度 δ=' + fx(pi.delta) + '　全班答對率 ' + pct(pi.pass));
@@ -3113,7 +3280,7 @@ function materialClass(diag){
     }
     if (pi.misCode){
       const m = MISCONCEPTIONS.find(function(x){ return x.id === pi.misCode; });
-      if (m) L.push('  題庫標記的迷思類型：' + m.name + '——' + m.desc);
+      if (m) L.push('  題庫標記的理解失誤：' + m.name + '——' + m.desc);
     }
   });
   return L.join('\n');
@@ -3193,13 +3360,13 @@ function builtinClassReport(diag){
   L.push('#### 2. 每一題的迷思解釋');
   diag.flagged.forEach(function(pi){
     const it = pi.item;
-    L.push('**第 ' + it.no + ' 題**（' + it.year + ' 年 · ' + unitName(it.unit) + ' · δ=' + fx(pi.delta) + '）');
+    L.push('**第 ' + it.no + ' 題**（' + unitName(it.unit) + ' · ' + processName(it.process) + ' · δ=' + fx(pi.delta) + '）');
     L.push('- ' + it.stem);
     if (pi.topDistractor != null){
       L.push('- 迷思學生最常選 **' + String.fromCharCode(65 + pi.topDistractor) + '. ' + it.options[pi.topDistractor] + '**（' + pi.topDistractorN + ' 人）。');
       const m = pi.misCode ? MISCONCEPTIONS.find(function(x){ return x.id === pi.misCode; }) : null;
       if (m) L.push('- 這個選項之所以吸引人，是因為 ' + m.desc);
-      else L.push('- 這個選項沒有對應到題庫既有的迷思標記，建議人工檢視學生的計算過程。');
+      else L.push('- 這個選項沒有對應到題庫既有的迷思標記，建議人工檢視學生的作答理由。');
     }
     L.push('- 命題備註：' + it.note);
     L.push('');
@@ -3208,9 +3375,9 @@ function builtinClassReport(diag){
   L.push('#### 3. 具體教學策略');
   keys.forEach(function(k){
     const m = MISCONCEPTIONS.find(function(x){ return x.id === k; });
-    const acts = STRATEGY[k] || ['請學生把自己的解題過程寫出來，再與同儕互相檢查。',
-      '提供一個「看起來對但其實錯」的解法，讓學生指出問題。',
-      '要求每題都把答案代回原式檢驗。'];
+    const acts = STRATEGY[k] || ['請學生把自己的判斷依據寫出來，再與同儕互相檢查。',
+      '提供一個「答案對但理由來自常識」的作答，讓學生指出問題。',
+      '要求每題都回到文本圈出依據的那一句。'];
     L.push('**' + (m ? m.name : '其他') + '**');
     acts.forEach(function(a){ L.push('- ' + a); });
     L.push('');
@@ -3247,28 +3414,32 @@ function builtinClassReport(diag){
 function sumQ2(list){ return list.reduce(function(s, p){ return s + p.q[2]; }, 0); }
 function uniq(a){ const o = {}; const r = []; a.forEach(function(x){ if (!o[x]){ o[x] = 1; r.push(x); } }); return r; }
 
+/* 八種理解失誤對應的教學動作。診斷不依賴語言模型，這張表是離線引擎的知識來源。 */
 const STRATEGY = {
-  M1:['在黑板上把「解方程式 x²=a」與「化簡 √a」並排寫成兩欄，請學生分類十題，講出分類的理由。',
-      '給一個情境題（正方形邊長）與一個純數題，問學生「這兩題的負根待遇為什麼不同」。',
-      '要求所有 x²=a 的題目一律先寫 x=±√a，再依情境決定是否捨去，捨去時必須寫出理由。'],
-  M2:['請學生用 2×3=6 當反例，說明為什麼「乘積等於某數」不能直接拆。',
-      '規定解一元二次方程式的第一步一律是「移項成 ＝0」，並在解題紙上留一格專門寫這一步。',
-      '給一個「碰巧代對」的錯誤解法（如 x(x−4)=5 得 x=5），請學生找出漏掉的根。'],
-  M3:['讓學生用計算機實際比較 √16+√9 與 √25，再問「為什麼會不一樣」。',
-      '用面積模型：兩個正方形邊長相加，不等於面積相加後的正方形邊長。',
-      '整理一張「哪些運算可以逐項做、哪些不行」的對照表，由學生自己填。'],
-  M4:['要求先算 b²−4ac 並把數值寫在題目旁邊，再決定要不要往下解。',
-      '給三題只問「有幾個實根」不必解出來的題目，訓練先判別再動手。',
-      '用二次函數圖形與 x 軸交點的張數，把判別式的符號視覺化。'],
-  M5:['十字交乘後一定要回頭乘開檢驗一次項係數，把檢驗寫在算式下方。',
-      '從常數項的因數分解開始窮舉，列表比對，而不是憑感覺猜。',
-      '對照「首項係數為 1」與「不為 1」兩類題目，讓學生說出差別在哪。'],
-  M6:['所有畢氏定理題目一律先在圖上圈出直角、標出斜邊，再列式。',
-      '刻意給一題「已知斜邊求另一股」，與「已知兩股求斜邊」並排比較。',
-      '用 3-4-5 與 5-12-13 兩組數字反覆檢核，養成先判斷再套公式的習慣。'],
-  M7:['把 x²−5x+6=0 直接分解成 (x−2)(x−3)，算出兩根後再回頭驗證兩根和是 5，讓公式從結果長出來。',
-      '請學生自己造一個方程式，指定兩根，再反推係數，體會負號從哪裡來。',
-      '整理「和是 −b/a、積是 c/a」的記憶卡，並在旁邊寫一個自己驗證過的例子。']
+  E1:['規定回答任何一題之前，先在文本上把依據的那一句畫起來，畫不出來就不能作答。',
+      '把「文章說的」與「我覺得的」畫成兩欄，請學生把自己的理由分類進去。',
+      '刻意給一題答案正確但理由來自常識的作答，請全班找出問題在哪裡。'],
+  E2:['請學生說出「你是在第幾段找到的」，再全班一起回去核對那一段有沒有真的講到。',
+      '練習先看題目的關鍵詞，再用關鍵詞回文本掃描，而不是從頭讀到尾。',
+      '把四個選項各自對應到文本的哪一段標出來，讓學生看到誘答其實來自別段。'],
+  E3:['問「這一句和前一句合起來告訴我們什麼」，訓練把相鄰訊息連起來。',
+      '拿掉題目，只給兩句話，請學生說出中間隱含的因果或關係。',
+      '對照「文章直接寫的」與「要自己補上的」，讓學生知道推論是被允許的。'],
+  E4:['要求每個推論都補一句「我是從第◯段推出來的」，推不回去就是推太遠。',
+      '給一個過度推論的例子，請學生指出文本到哪裡為止是有支持的。',
+      '練習用「文章只說到……，沒有說……」的句型描述文本的邊界。'],
+  E5:['遇到代名詞就停下來，把它替換成所指的名詞再讀一次，看句子通不通。',
+      '在文本上用箭頭把代名詞連到指涉對象，全班一起核對。',
+      '刻意選一段有多個可能指涉對象的文字，討論怎麼判斷。'],
+  E6:['問「這是講某一個例子，還是講通常都會這樣」，逐句分類。',
+      '請學生找出文中真正的概括句，並說明它和例子的關係。',
+      '給一個把單一例子當通則的說法，請學生用文中另一個例子推翻它。'],
+  E7:['把「我的經驗」寫在便利貼上貼旁邊，先跟文本分開，再討論它能不能當依據。',
+      '問「如果沒有讀過這篇文章，你還會這樣回答嗎」——會的話，那就不是從文章讀出來的。',
+      '練習先回答「文章怎麼說」，再回答「我怎麼想」，兩步分開。'],
+  E8:['問「作者為什麼要寫這一段」，把注意力從內容轉到寫作用意。',
+      '找出文中帶有態度的用詞，討論作者的立場藏在哪裡。',
+      '請學生用一句話說出「作者想讓我們覺得什麼」，並指出支持的句子。']
 };
 
 /* ==========================================================================
@@ -3281,7 +3452,7 @@ async function aiItemStrategy(diag, pi, force){
   if (aiEngine() === 'llm'){
     const it = pi.item;
     out = await llmChat([
-      {role:'system', content:'你是資深國中數學教師。針對單題迷思提出具體教學建議。用臺灣繁體中文，動詞驅動、短句、具體，控制在 300 字內，用 Markdown 短列點。'},
+      {role:'system', content:'你是資深國小閱讀教師。針對單題的理解失誤提出具體教學建議。用臺灣繁體中文，動詞驅動、短句、具體，控制在 300 字內，用 Markdown 短列點。'},
       {role:'user', content:'題幹：' + it.stem + '\n選項：' +
         it.options.map(function(o, i){ return String.fromCharCode(65 + i) + '. ' + o; }).join('　') +
         '\n正解：' + String.fromCharCode(65 + it.answer) +
@@ -3336,7 +3507,7 @@ async function aiRubric(item, force){
   let out;
   if (aiEngine() === 'llm'){
     out = await llmChat([
-      {role:'system', content:'你是資深國中數學教師，熟悉臺灣國中會考非選題的閱卷標準。用臺灣繁體中文，具體可操作，避免空話。'},
+      {role:'system', content:'你是資深國小閱讀教師，熟悉 PIRLS 建構反應題的閱卷標準。用臺灣繁體中文，具體可操作，避免空話。'},
       {role:'user', content:'題目：' + item.stem + '\n單元：' + unitName(item.unit) +
         '\n\n請產出評量規準（Markdown）：開頭寫「滿分：N 分」；分成三個向度並標配分（策略/概念、執行/計算、表達/結論）；最後列出 3 個常見錯誤與扣分建議。只要規準本身，不要開場白。'}
     ], {max_tokens:900});
@@ -3386,7 +3557,7 @@ async function aiSimilarItems(item, force){
   let out;
   if (aiEngine() === 'llm'){
     const txt = await llmChat([
-      {role:'system', content:'你是資深國中數學命題老師，熟悉臺灣國中會考題型。請嚴格輸出 JSON，不要多任何說明。'},
+      {role:'system', content:'你是資深閱讀評量命題者，熟悉 PIRLS 題型與四項理解歷程。請嚴格輸出 JSON，不要多任何說明。'},
       {role:'user', content:'原題：' + item.stem + '\n選項：' +
         item.options.map(function(o, i){ return String.fromCharCode(65 + i) + '. ' + o; }).join('　') +
         '\n正解：' + String.fromCharCode(65 + item.answer) +
@@ -3623,7 +3794,7 @@ async function aiItemsFromDiscourse(view, force){
   if (aiEngine() === 'llm'){
     const mat = ns.map(function(n){ return materialNote(n); }).join('\n---\n');
     const txt = await llmChat([
-      {role:'system', content:'你是資深國中數學命題老師，同時熟悉知識建構。請嚴格輸出 JSON，不要多任何說明。'},
+      {role:'system', content:'你是資深閱讀評量命題者，同時熟悉知識建構。請嚴格輸出 JSON，不要多任何說明。'},
       {role:'user', content:'以下是一個知識建構視圖中的討論：\n' + mat +
         '\n\n請根據這些討論中形成的共同理解，命 3 道可以檢核「這個理解是否真的可遷移」的選擇題。' +
         '誘答選項要對應討論中被推翻的說法。只回傳 JSON：{"items":[{"stem":"","options":["","","",""],"answer":0,"hint":"","targets":""}]}'}
@@ -3806,6 +3977,21 @@ function renderRail(){
 }
 
 /* --- 共用小元件 --- */
+/* 理解歷程標籤。形狀記號與文字並用，不以顏色單獨傳達訊息（WCAG 1.4.1）。 */
+function procPill(pid){
+  const p = processOf(pid);
+  if (!p) return '';
+  return '<span class="pill ' + p.cls + '"><span aria-hidden="true">' + p.mark + '</span>' +
+    esc(p.name) + '</span>';
+}
+/* 一道題目的識別標籤：文本 · 理解歷程 · 難度 */
+function itemPills(it){
+  if (!it) return '';
+  return '<span class="pill">' + esc(textTitle(it.unit)) + '</span>' +
+    procPill(it.process) +
+    '<span class="pill">' + esc(it.diff) + '</span>';
+}
+
 function qpill(q, n){
   const Q = QUAD[q];
   return '<span class="pill ' + Q.key + '"><span class="dot"></span>' + Q.roman + ' ' + Q.short +
@@ -4121,25 +4307,21 @@ function viewTeacher(){
    ========================================================================== */
 function viewCreate(){
   if (!WIZ) WIZ = {step:1, units:{}, items:{}, title:'', desc:'', due:'', phase:'pre'};
-  const steps = ['選單元', '挑題目', '派給學生'];
+  const steps = ['選文本', '挑題目', '派給學生'];
   let body = '';
 
   if (WIZ.step === 1){
-    const books = {};
-    UNITS.forEach(function(u){ (books[u.book] = books[u.book] || []).push(u); });
-    body = '<div class="card card-p"><h3>選要考的單元</h3>' +
-      '<p class="muted small">照康軒章節勾選，之後會從對應單元的會考題目列出來給你挑。目前示範題庫聚焦在第三冊。</p>' +
-      Object.keys(books).map(function(b){
-        const list = books[b];
-        return '<div style="margin-top:14px"><div class="eyebrow">第 ' + b + ' 冊（' + list[0].grade + '）</div>' +
-          '<div class="row" style="gap:6px;margin-top:6px">' + list.map(function(u){
-            const n = ITEMS.filter(function(i){ return i.unit === u.id; }).length;
-            const on = WIZ.units[u.id];
-            return '<button class="btn sm' + (on ? ' primary' : '') + '" data-act="wiz-unit" data-id="' + u.id + '"' +
-              (n ? '' : ' disabled title="題庫中尚無此單元的題目"') + '>' + esc(u.name) +
-              ' <span class="num">' + n + '</span></button>';
-          }).join('') + '</div></div>';
-      }).join('') +
+    body = '<div class="card card-p"><h3>選要用的文本</h3>' +
+      '<p class="muted small">勾選文本，下一步會列出掛在這些文本上的題目給你挑。</p>' +
+      '<div class="col" style="margin-top:12px">' + TEXTS.map(function(t){
+        const n = ITEMS.filter(function(i){ return i.unit === t.id; }).length;
+        const on = WIZ.units[t.id];
+        return '<button class="btn' + (on ? ' primary' : '') + '" data-act="wiz-unit" data-id="' + t.id + '"' +
+          ' aria-pressed="' + (!!on) + '" style="justify-content:flex-start;text-align:left"' +
+          (n ? '' : ' disabled') + '><span aria-hidden="true">' + (on ? '☑' : '☐') + '</span>' +
+          '<b>' + esc(t.title) + '</b><span class="pill">' + esc(t.genre) + '</span>' +
+          '<span class="pill">' + n + ' 題</span></button>';
+      }).join('') + '</div>' +
       '<hr class="hr"><div class="row"><span class="muted small">已選 ' + Object.keys(WIZ.units).length + ' 個單元</span>' +
       '<div class="spacer"></div><button class="btn primary" data-act="wiz-next"' +
       (Object.keys(WIZ.units).length ? '' : ' disabled') + '>下一步：挑題目 →</button></div></div>';
@@ -4148,13 +4330,13 @@ function viewCreate(){
   if (WIZ.step === 2){
     const cand = ITEMS.filter(function(i){ return WIZ.units[i.unit]; });
     body = '<div class="card card-p"><h3>挑題目</h3>' +
-      '<p class="muted small">從你選的單元中挑要派的題目。非選題會進入手寫作答與評閱流程。</p>' +
+      '<p class="muted small">從你選的文本中挑要派的題目。建構反應題會進入人工評閱流程。</p>' +
       '<div class="col" style="margin-top:12px">' + cand.map(function(i){
         const on = WIZ.items[i.id];
         return '<label class="item" style="cursor:pointer;border-color:' + (on ? 'var(--accent)' : 'var(--rule)') + '">' +
           '<div class="row" style="justify-content:space-between">' +
           '<div class="row"><input type="checkbox" data-act="wiz-item" data-id="' + i.id + '"' + (on ? ' checked' : '') + '>' +
-          '<span class="pill">' + i.year + ' 年</span><span class="pill">' + esc(i.diff) + '</span>' +
+          itemPills(i) +
           '<span class="pill">' + (i.type === 'cr' ? '非選題' : '選擇題') + '</span>' +
           '<span class="muted small">' + esc(unitName(i.unit)) + '</span></div></div>' +
           '<div class="stem">' + esc(i.stem) + '</div>' +
@@ -4184,7 +4366,7 @@ function viewCreate(){
       '<div class="spacer"></div><button class="btn primary" data-act="wiz-submit">派出這份作業</button></div></div>';
   }
 
-  return sectionHead('建立派題', '從康軒單元開始，三個步驟完成派題。', '<a class="btn" href="#/teacher">回教師後台</a>') +
+  return sectionHead('建立派題', '從文本開始，三個步驟完成派題。', '<a class="btn" href="#/teacher">回教師後台</a>') +
     '<div class="steps">' + steps.map(function(s, i){
       return '<div class="step' + (WIZ.step === i + 1 ? ' on' : '') + '"><b>' + (i + 1) + '</b>' + s + '</div>';
     }).join('') + '</div>' + body;
@@ -4199,14 +4381,16 @@ function viewAssign(aid){
   const a = diag.assignment;
   const tabs = [
     ['overview', '成績總覽'],
+    ['process', '理解歷程'],
     ['kidmap', 'KIDMAP 診斷'],
     ['items', '每題四象限'],
     ['bridge', '迷思橋接'],
-    ['cr', '非選評閱'],
+    ['cr', '建構反應題評閱'],
     ['ai', 'AI 深度分析']
   ];
   let body = '';
   if (TAB === 'overview') body = tabOverview(diag);
+  else if (TAB === 'process') body = tabProcess(diag);
   else if (TAB === 'kidmap') body = tabKidmap(diag);
   else if (TAB === 'items') body = tabItems(diag);
   else if (TAB === 'bridge') body = tabBridge(diag);
@@ -4256,6 +4440,133 @@ function tabOverview(diag){
       '<td class="n" style="color:var(--q2)">' + p.q[2] + '</td>' +
       '<td><button class="btn sm" data-act="kidmap-one" data-id="' + p.sid + '">KIDMAP</button></td></tr>';
   }).join('') + '</tbody></table></div></div>';
+}
+
+/* ==========================================================================
+   四項理解歷程的分布（個別與整體）＋ 質性敘述
+   ========================================================================== */
+function processProfile(diag, sids){
+  const out = {};
+  PROCESSES.forEach(function(p){ out[p.id] = {right:0, n:0, q2:0}; });
+  diag.cells.forEach(function(c){
+    if (sids && sids.indexOf(c.sid) < 0) return;
+    const pid = getItem(c.iid).process;
+    const b = out[pid]; if (!b) return;
+    b.n++; if (c.correct) b.right++; if (c.q === 2) b.q2++;
+  });
+  PROCESSES.forEach(function(p){
+    const b = out[p.id];
+    b.rate = b.n ? b.right / b.n : null;
+  });
+  return out;
+}
+
+/* 由規則引擎產生的質性敘述：完全可重現，每一句都追得回數字 */
+function processNarrative(prof, label){
+  const rows = PROCESSES.map(function(p){ return {p:p, b:prof[p.id]}; })
+    .filter(function(x){ return x.b.n; });
+  if (!rows.length) return '尚無足夠作答資料。';
+  const sorted = rows.slice().sort(function(a, b){ return b.b.rate - a.b.rate; });
+  const best = sorted[0], worst = sorted[sorted.length - 1];
+  const L = [];
+  L.push(label + '在四項理解歷程上的表現，最強的是**' + best.p.name + '**（答對率 ' +
+    pct(best.b.rate) + '），最弱的是**' + worst.p.name + '**（' + pct(worst.b.rate) + '）。');
+
+  const gap = best.b.rate - worst.b.rate;
+  if (gap < 0.12){
+    L.push('四項歷程之間的落差只有 ' + Math.round(gap * 100) + ' 個百分點，剖面相當平整——' +
+      '這通常代表整體閱讀量能一致，接下來可以直接提高文本難度，而不必針對特定歷程補救。');
+  } else {
+    L.push('落差達 ' + Math.round(gap * 100) + ' 個百分點，是明顯的歷程不均。');
+    if (worst.p.order <= 2){
+      L.push('值得注意的是，弱項落在**' + worst.p.name + '**這種較基礎的歷程上。' +
+        '這通常不是理解力的問題，而是回到文本的習慣還沒建立——' +
+        '學生憑印象作答，或找到了段落卻停在錯的句子。');
+    } else {
+      L.push('弱項落在**' + worst.p.name + '**這種較高階的歷程上，而基礎歷程表現尚可。' +
+        '這代表學生找得到訊息，但還不習慣把訊息整合起來、或跳出文本評斷它。' +
+        '這一類能力很難靠多做題目長出來，比較需要在討論中被要求說出理由。');
+    }
+  }
+  const hi = rows.filter(function(x){ return x.b.q2 > 0; })
+    .sort(function(a, b){ return (b.b.q2 / b.b.n) - (a.b.q2 / a.b.n); })[0];
+  if (hi && hi.b.q2 / hi.b.n >= 0.08){
+    L.push('第二象限（能力足以答對卻答錯）最集中在**' + hi.p.name + '**，占該歷程作答的 ' +
+      pct(hi.b.q2 / hi.b.n) + '。這些是最值得帶進共構討論的題目——' +
+      '它們不是難度問題，是讀法問題。');
+  }
+  return L.join('');
+}
+
+function tabProcess(diag){
+  if (!diag.ready) return '<div class="empty"><h3>尚無足夠資料</h3><p>需要至少 ' + diag.minN + ' 位學生完成作答。</p></div>';
+  const all = processProfile(diag, null);
+  const k = currentClass();
+  const inClass = diag.done.filter(function(s){ return k.studentIds.indexOf(s) >= 0; });
+  const cls = processProfile(diag, inClass);
+
+  function bars(prof, caption){
+    const mx = 1;
+    return '<div class="col">' + PROCESSES.map(function(p){
+      const b = prof[p.id];
+      if (!b.n) return '';
+      return '<div class="rub-row">' +
+        '<span><span aria-hidden="true">' + p.mark + '</span> ' + esc(p.name) +
+        '<div class="muted" style="font-size:.8em">' + b.n + ' 題次</div></span>' +
+        '<div class="bar" role="img" aria-label="' + esc(p.name) + ' 答對率 ' + pct(b.rate) + '">' +
+        '<i style="width:' + (100 * b.rate / mx) + '%;background:var(--' + p.cls.replace('sc', 'sc-') + ')"></i></div>' +
+        '<span class="lv">' + pct(b.rate) + '</span></div>';
+    }).join('') + '</div>' +
+    '<p class="muted small" style="margin-top:8px">' + esc(caption) + '</p>';
+  }
+
+  return '<div class="grid g2" style="margin-bottom:16px">' +
+    '<div class="card"><div class="card-h"><h3>' + esc(k.name) + '</h3>' +
+      '<span class="pill ' + (condition(k.condition).cls || '') + '">' +
+      '<span aria-hidden="true">' + condition(k.condition).mark + '</span>' +
+      esc(condition(k.condition).name) + '</span></div>' +
+      '<div class="card-p">' + bars(cls, '本班 ' + inClass.length + ' 位學生的答對率') + '</div></div>' +
+    '<div class="card"><div class="card-h"><h3>全體樣本</h3>' +
+      '<span class="muted small">' + diag.done.length + ' 人 · ' + state.classes.length + ' 班</span></div>' +
+      '<div class="card-p">' + bars(all, '四個班合計，作為本班的比較基準') + '</div></div>' +
+  '</div>' +
+
+  '<div class="card" style="margin-bottom:16px"><div class="card-h"><h3>質性敘述</h3>' +
+    '<span class="pill">內建規則引擎 · 可重現</span></div>' +
+    '<div class="card-p"><div class="ai-out">' + md(processNarrative(cls, esc(k.name))) + '</div>' +
+    '<p class="muted small" style="margin-top:10px">這段敘述由規則引擎依上面的數字產生，' +
+    '每一句都追得回具體的答對率與象限比例，不含語言模型生成內容。</p></div></div>' +
+
+  '<div class="card"><div class="card-h"><h3>每位學生的歷程剖面</h3>' +
+    '<span class="muted small">依最弱歷程排序，優先看需要介入的人</span></div>' +
+    '<div class="tablewrap"><table><thead><tr><th>學生</th>' +
+    PROCESSES.map(function(p){
+      return '<th class="n"><span aria-hidden="true">' + p.mark + '</span> ' + esc(p.name) + '</th>';
+    }).join('') + '<th>剖面</th><th class="n">最弱</th></tr></thead><tbody>' +
+    inClass.map(function(sid){
+      const pr = processProfile(diag, [sid]);
+      const rows = PROCESSES.map(function(p){ return {p:p, b:pr[p.id]}; }).filter(function(x){ return x.b.n; });
+      const worst = rows.slice().sort(function(a, b){ return a.b.rate - b.b.rate; })[0];
+      return {sid:sid, pr:pr, rows:rows, worst:worst};
+    }).sort(function(a, b){ return (a.worst ? a.worst.b.rate : 1) - (b.worst ? b.worst.b.rate : 1); })
+    .map(function(x){
+      return '<tr><td>' + esc(userName(x.sid)) + '</td>' +
+        PROCESSES.map(function(p){
+          const b = x.pr[p.id];
+          return '<td class="n">' + (b.n ? pct(b.rate) : '—') + '</td>';
+        }).join('') +
+        '<td style="min-width:130px"><div class="bar" style="display:flex">' +
+        x.rows.map(function(r){
+          return '<i style="width:' + (100 / x.rows.length) + '%;background:var(--' +
+            r.p.cls.replace('sc', 'sc-') + ');opacity:' + (0.25 + 0.75 * r.b.rate).toFixed(2) + '"></i>';
+        }).join('') + '</div></td>' +
+        '<td class="n"><span class="pill ' + (x.worst ? x.worst.p.cls : '') + '">' +
+        '<span aria-hidden="true">' + (x.worst ? x.worst.p.mark : '') + '</span>' +
+        esc(x.worst ? x.worst.p.name : '—') + '</span></td></tr>';
+    }).join('') + '</tbody></table></div>' +
+    '<div class="card-p"><p class="muted small">剖面條的每一段代表一項歷程，顏色深淺代表答對率高低；' +
+    '同時附上數字與「最弱」文字標籤，不以顏色單獨傳達訊息。' +
+    '單一學生在 3–4 題上的答對率非常不穩定，這一欄用來排序與挑人談話，不適合直接當成能力估計。</p></div></div>';
 }
 
 function tabKidmap(diag){
@@ -4308,7 +4619,7 @@ function tabItems(diag){
     rows.map(function(pi){
       const it = pi.item;
       const m = pi.misCode ? MISCONCEPTIONS.find(function(x){ return x.id === pi.misCode; }) : null;
-      return '<tr><td><b>第 ' + it.no + ' 題</b><div class="muted small">' + it.year + ' 年 · ' + esc(it.diff) + '</div></td>' +
+      return '<tr><td><b>第 ' + it.no + ' 題</b><div class="muted small">' + esc(processName(it.process)) + ' · ' + esc(it.diff) + '</div></td>' +
         '<td class="small">' + esc(unitName(it.unit)) + '</td>' +
         '<td class="n">' + fx(pi.delta) + '</td><td class="n">' + pct(pi.pass) + '</td>' +
         '<td style="min-width:120px">' + quadBar(pi.q, pi.n) + '</td>' +
@@ -4383,7 +4694,7 @@ function tabCR(diag){
       return '<button class="btn sm' + (c.id === sel ? ' primary' : '') + '" data-act="cr-sel" data-id="' + c.id + '">非選第 ' + c.no + ' 題</button>';
     }).join('') + '</div>' +
     '<div class="card" style="margin-bottom:14px"><div class="card-h"><h3>題目</h3>' +
-      '<span class="pill">' + it.year + ' 年 · ' + esc(unitName(it.unit)) + '</span></div>' +
+      itemPills(it) + '</div>' +
       '<div class="card-p"><div class="stem">' + esc(it.stem) + '</div></div></div>' +
     '<div class="card" style="margin-bottom:14px"><div class="card-h"><h3>評量規準</h3>' +
       '<span class="pill">' + esc(engineLabel()) + '</span>' +
@@ -5096,7 +5407,7 @@ function viewQuiz(aid){
         return '<div class="card"><div class="card-p">' +
           '<div class="row" style="justify-content:space-between;margin-bottom:6px">' +
           '<b>第 ' + (idx + 1) + ' 題　非選題</b>' +
-          '<span class="row"><span class="pill">' + it.year + ' 年</span><span class="pill">' + esc(it.diff) + '</span></span></div>' +
+          '<span class="row">' + itemPills(it) + '</span></div>' +
           '<div class="stem">' + esc(it.stem) + '</div>' +
           '<div class="field"><label>請寫出你的解題過程與說明</label>' +
           '<textarea style="min-height:120px" data-act="quiz-text" data-id="' + it.id + '">' + esc(QUIZ.texts[it.id] || '') + '</textarea></div>' +
@@ -5114,8 +5425,7 @@ function viewQuiz(aid){
       return '<div class="card"><div class="card-p">' +
         '<div class="row" style="justify-content:space-between;margin-bottom:6px">' +
         '<b>第 ' + (idx + 1) + ' 題</b>' +
-        '<span class="row"><span class="pill">' + it.year + ' 年</span><span class="pill">' + esc(it.diff) + '</span>' +
-        '<span class="muted small">' + esc(unitName(it.unit)) + '</span></span></div>' +
+        '<span class="row">' + itemPills(it) + '</span></div>' +
         '<div class="stem">' + esc(it.stem) + '</div>' +
         '<div class="opts">' + it.options.map(function(o, k){
           return '<label class="opt' + (chosen === k ? ' chosen' : '') + '">' +
@@ -5283,67 +5593,103 @@ function redraw(id){
    90-ui-misc.js — 題庫與單元歸類、系統設定、系統說明與研究設計
    ========================================================================== */
 
-let BANKF = {year:'', type:'', unit:''};
+let BANKF = {process:'', type:'', unit:''};
 
 function viewBank(){
   const list = ITEMS.filter(function(i){
-    return (!BANKF.year || i.year === +BANKF.year) &&
+    return (!BANKF.process || i.process === BANKF.process) &&
            (!BANKF.type || i.type === BANKF.type) &&
            (!BANKF.unit || i.unit === BANKF.unit);
   });
-  const years = uniq(ITEMS.map(function(i){ return i.year; })).sort();
   const usedUnits = uniq(ITEMS.map(function(i){ return i.unit; }));
-  return sectionHead('題庫與單元歸類', '為每一題指定所屬康軒單元。歸類後建立作業時就能在單元選擇器中挑到這些題目。') +
+  return sectionHead('文本與題庫', '每一題都掛在一篇文本上，並標定它所測的 PIRLS 理解歷程與子歷程。' +
+      '這個標定是相對歷程編碼（RQ4）的判定基準，架構、細目與題本三者必須同版。') +
+
     '<div class="grid g4" style="margin-bottom:16px">' +
+      statCard('文本', TEXTS.length, TEXTS.map(function(t){ return t.genre; }).join(' · ')) +
       statCard('題目總數', ITEMS.length, '選擇題 ' + ITEMS.filter(function(i){ return i.type === 'mc'; }).length +
-        ' · 非選題 ' + ITEMS.filter(function(i){ return i.type === 'cr'; }).length) +
-      statCard('已分類', ITEMS.filter(function(i){ return i.unit; }).length, '對應 ' + usedUnits.length + ' 個單元') +
-      statCard('迷思標記', ITEMS.filter(function(i){ return Object.keys(i.why || {}).some(function(k){ return i.why[k]; }); }).length,
-        '有誘答選項標到迷思代碼') +
-      statCard('迷思類型', MISCONCEPTIONS.length, '離線診斷的基礎') +
+        ' · 建構反應題 ' + ITEMS.filter(function(i){ return i.type === 'cr'; }).length) +
+      statCard('誘答已標記', ITEMS.filter(function(i){ return Object.keys(i.why || {}).some(function(k){ return i.why[k]; }); }).length,
+        '誘答對應到理解失誤代碼') +
+      statCard('理解失誤類型', READING_ERRORS.length, '離線診斷的基礎') +
     '</div>' +
+
+    '<div class="card" style="margin-bottom:16px"><div class="card-h"><h3>四項理解歷程的題數分布</h3>' +
+      '<span class="muted small">形狀記號與顏色並用，不以顏色單獨傳達訊息</span></div>' +
+      '<div class="card-p"><div class="grid g4">' + PROCESSES.map(function(p){
+        const n = ITEMS.filter(function(i){ return i.process === p.id; }).length;
+        return '<div class="stat"><div class="k"><span aria-hidden="true">' + p.mark + '</span> ' + esc(p.name) + '</div>' +
+          '<div class="v" style="color:var(--' + p.cls.replace('sc', 'sc-') + ')">' + n + '</div>' +
+          '<div class="s">' + esc(p.desc) + '</div></div>';
+      }).join('') + '</div></div></div>' +
+
     '<div class="kb-toolbar">' +
-      '<label class="small muted">年份</label><select data-act="bank-year" style="width:auto">' +
-      '<option value="">全部</option>' + years.map(function(y){
-        return '<option value="' + y + '"' + (BANKF.year == y ? ' selected' : '') + '>' + y + ' 年</option>'; }).join('') + '</select>' +
-      '<label class="small muted">題型</label><select data-act="bank-type" style="width:auto">' +
+      '<label class="small muted" for="bkProc">理解歷程</label>' +
+      '<select id="bkProc" data-act="bank-process" style="width:auto">' +
+      '<option value="">全部</option>' + PROCESSES.map(function(p){
+        return '<option value="' + p.id + '"' + (BANKF.process === p.id ? ' selected' : '') + '>' +
+          p.mark + ' ' + esc(p.name) + '</option>'; }).join('') + '</select>' +
+      '<label class="small muted" for="bkType">題型</label>' +
+      '<select id="bkType" data-act="bank-type" style="width:auto">' +
       '<option value="">全部</option><option value="mc"' + (BANKF.type === 'mc' ? ' selected' : '') + '>選擇題</option>' +
-      '<option value="cr"' + (BANKF.type === 'cr' ? ' selected' : '') + '>非選題</option></select>' +
-      '<label class="small muted">單元</label><select data-act="bank-unit" style="width:auto">' +
+      '<option value="cr"' + (BANKF.type === 'cr' ? ' selected' : '') + '>建構反應題</option></select>' +
+      '<label class="small muted" for="bkText">文本</label>' +
+      '<select id="bkText" data-act="bank-unit" style="width:auto">' +
       '<option value="">全部</option>' + usedUnits.map(function(u){
         return '<option value="' + u + '"' + (BANKF.unit === u ? ' selected' : '') + '>' + esc(unitName(u)) + '</option>'; }).join('') + '</select>' +
       '<div class="spacer"></div><span class="muted small">顯示 ' + list.length + ' 題</span>' +
     '</div>' +
+
+    /* 文本全文 */
+    '<div class="col" style="margin-bottom:16px">' + TEXTS.filter(function(t){
+      return !BANKF.unit || BANKF.unit === t.id;
+    }).map(function(t){
+      return '<details class="card"><summary class="card-h" style="cursor:pointer">' +
+        '<h3 style="flex:1">' + esc(t.title) + '</h3>' +
+        '<span class="pill">' + esc(t.genre) + '</span>' +
+        '<span class="pill">' + esc(t.grade) + '</span>' +
+        '<span class="pill">' + ITEMS.filter(function(i){ return i.unit === t.id; }).length + ' 題</span></summary>' +
+        '<div class="card-p"><div class="passage">' +
+        t.paras.map(function(p){ return '<p class="para">' + esc(p) + '</p>'; }).join('') + '</div>' +
+        '<p class="muted small">' + esc(t.source) + '</p></div></details>';
+    }).join('') + '</div>' +
+
     '<div class="col">' + list.map(function(it){
+      const sub = subprocess(it.sub);
       return '<div class="card"><div class="card-p">' +
         '<div class="row" style="justify-content:space-between;margin-bottom:6px">' +
-        '<span class="row"><b>' + it.id + '</b><span class="pill">' + it.year + ' 年第 ' + it.no + ' 題</span>' +
-        '<span class="pill">' + (it.type === 'cr' ? '非選題' : '選擇題') + '</span>' +
-        '<span class="pill">' + esc(it.diff) + '</span></span>' +
-        '<span class="row"><label class="small muted">單元</label>' +
-        '<select data-act="set-unit" data-id="' + it.id + '" style="width:auto">' + UNITS.map(function(u){
-          return '<option value="' + u.id + '"' + (u.id === it.unit ? ' selected' : '') + '>' +
-            u.grade + ' ' + esc(u.name) + '</option>'; }).join('') + '</select></span></div>' +
+        '<span class="row"><b>' + it.id + '</b>' + itemPills(it) +
+        '<span class="pill">' + (it.type === 'cr' ? '建構反應題' : '選擇題') + '</span></span>' +
+        '<span class="row"><label class="small muted">文本</label>' +
+        '<select data-act="set-unit" data-id="' + it.id + '" style="width:auto">' + TEXTS.map(function(t){
+          return '<option value="' + t.id + '"' + (t.id === it.unit ? ' selected' : '') + '>' +
+            esc(t.title) + '</option>'; }).join('') + '</select></span></div>' +
+        (sub ? '<div class="muted small" style="margin-bottom:6px">子歷程 <b>' + sub.id + '</b>　' +
+          esc(sub.zh) + '　<span style="font-size:.85em">' + esc(sub.en) + '</span></div>' : '') +
         '<div class="stem">' + esc(it.stem) + '</div>' +
         (it.options.length ? '<div class="opts">' + it.options.map(function(o, k){
-          const mis = it.why && it.why[k] ? MISCONCEPTIONS.find(function(m){ return m.id === it.why[k]; }) : null;
-          return '<div class="opt' + (k === it.answer ? ' right' : (mis ? ' wrong' : '')) + '"><b>' +
+          const err = it.why && it.why[k] ? READING_ERRORS.find(function(m){ return m.id === it.why[k]; }) : null;
+          const isAns = k === it.answer;
+          return '<div class="opt' + (isAns ? ' right' : (err ? ' wrong' : '')) + '"><b>' +
             String.fromCharCode(65 + k) + '</b><span>' + esc(o) +
-            (k === it.answer ? '　<span class="muted small">正解</span>' : '') +
-            (mis ? '　<span class="muted small">誘答標記：' + esc(mis.name) + '</span>' : '') + '</span></div>';
+            (isAns ? '　<span class="muted small">✓ 正解</span>' : '') +
+            (err ? '　<span class="muted small">誘答標記：' + esc(err.id) + ' ' + esc(err.name) + '</span>' : '') + '</span></div>';
         }).join('') + '</div>' : '') +
-        '<p class="muted small" style="margin-top:8px">' + esc(it.note) + '</p>' +
+        (it.answerPara != null ? '<p class="muted small" style="margin-top:8px">依據位置：第 ' +
+          (it.answerPara + 1) + ' 段第 ' + (it.answerSent + 1) + ' 句（供防洩答與教師檢視，學生看不到）</p>' : '') +
+        '<p class="muted small">' + esc(it.note) + '</p>' +
         '</div></div>';
     }).join('') + '</div>' +
-    '<div class="card" style="margin-top:16px"><div class="card-h"><h3>迷思概念代碼表</h3></div>' +
+
+    '<div class="card" style="margin-top:16px"><div class="card-h"><h3>理解失誤代碼表</h3></div>' +
     '<div class="tablewrap"><table><thead><tr><th>代碼</th><th>名稱</th><th>描述</th><th class="n">相關題數</th></tr></thead><tbody>' +
-    MISCONCEPTIONS.map(function(m){
+    READING_ERRORS.map(function(m){
       const n = ITEMS.filter(function(i){ return Object.keys(i.why || {}).some(function(k){ return i.why[k] === m.id; }); }).length;
       return '<tr><td class="num">' + m.id + '</td><td>' + esc(m.name) + '</td><td class="small">' + esc(m.desc) +
         '</td><td class="n">' + n + '</td></tr>';
     }).join('') + '</tbody></table></div>' +
-    '<div class="card-p"><p class="muted small">誘答選項掛上迷思代碼，是本系統能在<strong>不依賴語言模型</strong>的情況下' +
-    '做出概念層次診斷的關鍵。命題時多花的這一步，換來的是完全可重現的分析結果。</p></div></div>';
+    '<div class="card-p"><p class="muted small">誘答選項掛上理解失誤代碼，是本系統能在<strong>不依賴語言模型</strong>的情況下' +
+    '做出歷程層次診斷的關鍵。命題時多花的這一步，換來的是完全可重現的分析結果。</p></div></div>';
 }
 
 /* --- 系統設定 --- */
@@ -5414,7 +5760,7 @@ function viewAbout(){
     ['知識建構的論述', '論述層次由連接詞、反例、證據、修正語判定，讓「討論的品質」可被觀察。'],
     ['同步、內嵌、轉化的評量', '整個系統就是這一條：評量產生問題，討論改變理解，再評量檢核遷移。']
   ];
-  return sectionHead('系統說明與研究設計', 'KIDFORUM 如何把「會考派題 × KIDMAP」、「Knowledge Forum」與「評量即學習」接成一個系統。') +
+  return sectionHead('系統說明與研究設計', 'KAIROS 如何把「會考派題 × KIDMAP」、「Knowledge Forum」與「評量即學習」接成一個系統。') +
 
   '<div class="card card-p" style="margin-bottom:16px;border-left:3px solid var(--accent)">' +
     '<div class="eyebrow">評量即學習（Assessment as Learning）</div>' +
@@ -5456,7 +5802,7 @@ function viewAbout(){
     '<p class="lead" style="margin-top:8px">兩個平台各自缺一半。<strong>派題與 KIDMAP</strong> 能精準指出「誰在哪個概念上卡住」，' +
     '但它的終點是一份給老師看的報告，學生仍然是被診斷的對象。<strong>Knowledge Forum</strong> 把知識的推進權交回學生手上，' +
     '但它沒有辦法告訴老師「今天最該討論的是哪一個問題」，起始問題往往靠教師的直覺。</p>' +
-    '<p class="lead">KIDFORUM 讓前者成為後者的問題來源，讓後者成為前者的介入手段，' +
+    '<p class="lead">KAIROS 讓前者成為後者的問題來源，讓後者成為前者的介入手段，' +
     '再用 AI 助評把兩邊的資料翻譯成教師與學生都能行動的語言。</p>' +
   '</div>' +
   '<div class="card card-p" style="margin-bottom:16px">' +
@@ -5595,7 +5941,7 @@ function viewAbout(){
     '<li>KIDMAP 四象限診斷表徵——國中教育會考成績診斷的常見呈現方式。</li>' +
     '<li>介面詞彙參考自「會考派題 · 國中數學」平台與 knowledgeforum.org 的 KF6 介面。</li>' +
     '</ul>' +
-    '<p class="muted small" style="margin-top:10px">KIDFORUM 是研究用的整合原型，與上述任何平台或機構均無隸屬關係。</p>' +
+    '<p class="muted small" style="margin-top:10px">KAIROS 是研究用的整合原型，與上述任何平台或機構均無隸屬關係。</p>' +
   '</div>';
 }
 
@@ -5635,7 +5981,7 @@ function aalLog(type, code, extra){
   const it = aalItem();
   const k = classOfStudent(AAL.me);
   const e = {t:Date.now(), rel:Date.now() - AAL.t0, sid:AAL.me, cid:k ? k.id : null,
-             cond:AAL.cond, lang:'zh', aid:AAL.aid, iid:it.id, proc:it.process || 'K',
+             cond:AAL.cond, lang:'zh', aid:AAL.aid, iid:it.id, proc:it.process || 'FR',
              type:type, code:code};
   if (extra) Object.keys(extra).forEach(function(x){ e[x] = extra[x]; });
   logEvent(e);
@@ -5653,12 +5999,14 @@ function viewAaL(aid){
 
   const it = aalItem();
   const cond = condition(AAL.cond);
-  const sents = splitSentences(it.stem);
-  const marks = AAL.marks[it.id] = AAL.marks[it.id] || [];
+  const text = getText(it.unit);
+  const sents = passageSentences(text);
+  // 標記是「對這篇文本」的，換題不會消失——學生在同一篇文章上持續累積閱讀痕跡
+  const marks = AAL.marks[it.unit] = AAL.marks[it.unit] || [];
   const turns = aalTurns(it.id);
   const used = aalStudentTurns(it.id);
   const maxT = (state.settings && state.settings.maxTurns) || MAX_TURNS;
-  const proc = processOf(it.process || 'K');
+  const proc = processOf(it.process || 'FR');
 
   return '<div class="row" style="justify-content:space-between;align-items:flex-end;margin-bottom:12px">' +
       '<div><h2>' + esc(a.title) + '</h2>' +
@@ -5671,37 +6019,41 @@ function viewAaL(aid){
     '</div>' +
 
     '<div class="aal">' +
-    /* ---- 左欄：題幹逐句標記 ＋ 計算紙 ---- */
-    '<div class="aal-text card"><div class="card-h"><h3>題目</h3>' +
-      '<span class="pill">' + it.year + ' 年 · ' + esc(it.diff) + '</span>' +
-      '<span class="pill ' + proc.cls + '">' + esc(proc.name) + '</span></div>' +
+    /* ---- 左欄：文本，逐句可標記 ---- */
+    '<div class="aal-text card"><div class="card-h"><h3 id="passageTitle">' + esc(text.title) + '</h3>' +
+      '<span class="pill">' + esc(text.genre) + '</span>' +
+      (marks.length ? '<span class="pill">已標記 ' + marks.length + ' 句</span>' : '') + '</div>' +
       '<div class="card-p">' +
-      '<p class="muted small">點一下句子，標記你正在看的條件。標記只有你看得到，不會影響分數。</p>' +
-      '<div class="sentences">' + sents.map(function(s, i){
-        return '<span class="sent' + (marks.indexOf(i) >= 0 ? ' on' : '') + '" data-act="aal-mark" data-i="' + i + '">' +
-          esc(s) + '</span>';
-      }).join('') + '</div>' +
-      '<hr class="hr">' +
-      '<div class="eyebrow">計算紙</div>' +
-      '<canvas class="pad" data-pad="aal-' + it.id + '" height="220"></canvas>' +
-      '<div class="row" style="margin-top:6px">' +
-        '<button class="btn sm" data-act="pad-undo" data-id="aal-' + it.id + '">復原</button>' +
-        '<button class="btn sm" data-act="pad-clear" data-id="aal-' + it.id + '">清空</button>' +
+      '<p class="muted small" id="passageHelp">點一下任何一句，把它標記起來。標記只有你看得到，不會影響分數，' +
+      '換題也不會消失。</p>' +
+      '<div class="passage" role="group" aria-labelledby="passageTitle" aria-describedby="passageHelp">' +
+        text.paras.map(function(_, pi){
+          return '<p class="para">' + sents.filter(function(s){ return s.para === pi; }).map(function(s){
+            const on = marks.indexOf(s.i) >= 0;
+            return '<button type="button" class="sent' + (on ? ' on' : '') + '"' +
+              ' data-act="aal-mark" data-i="' + s.i + '" aria-pressed="' + on + '">' +
+              esc(s.text) + '</button>';
+          }).join('') + '</p>';
+        }).join('') +
       '</div>' +
     '</div></div>' +
 
-    /* ---- 右欄：作答區 ＋ 對話／筆記 ---- */
+    /* ---- 右欄：題目與作答 ＋ 對話／筆記 ---- */
     '<div class="aal-side">' +
-      '<div class="card"><div class="card-h"><h3>我的作答</h3></div><div class="card-p">' +
+      '<div class="card"><div class="card-h"><h3>第 ' + (AAL.idx + 1) + ' 題</h3>' + procPill(it.process) + '</div>' +
+      '<div class="card-p">' +
+      '<div class="stem">' + esc(it.stem) + '</div>' +
       (it.type === 'mc'
-        ? '<div class="opts">' + it.options.map(function(o, k){
+        ? '<fieldset class="opts"><legend class="sr-only">' + esc(it.stem) + '</legend>' + it.options.map(function(o, k){
             return '<label class="opt' + (AAL.answers[it.id] === k ? ' chosen' : '') + '">' +
               '<input type="radio" name="aal-' + it.id + '" data-act="aal-pick" data-k="' + k + '"' +
               (AAL.answers[it.id] === k ? ' checked' : '') + '>' +
-              '<b>' + String.fromCharCode(65 + k) + '</b><span>' + esc(o) + '</span></label>';
-          }).join('') + '</div>'
-        : '<textarea data-act="aal-text" style="min-height:150px" placeholder="寫出你的解題過程與說明">' +
-          esc(AAL.texts[it.id] || '') + '</textarea>') +
+              '<b aria-hidden="true">' + String.fromCharCode(65 + k) + '</b><span>' + esc(o) + '</span></label>';
+          }).join('') + '</fieldset>'
+        : '<div class="field"><label for="crText">寫出你的答案，並說明你的理由</label>' +
+          '<textarea id="crText" data-act="aal-text" style="min-height:160px" ' +
+          'placeholder="先寫你的看法，再寫你是從文章哪一段看出來的">' +
+          esc(AAL.texts[it.id] || '') + '</textarea></div>') +
       '</div></div>' +
 
       (AAL.cond === 'control' ? aalNotePane(it) : aalDialogPane(it, cond, turns, used, maxT)) +
@@ -5750,13 +6102,26 @@ function aalNotePane(it){
     '</div></div>';
 }
 
+/* 把整篇文本攤平成可標記的句子清單：{i, para, text} */
+function passageSentences(text){
+  if (!text) return [];
+  const out = [];
+  let i = 0;
+  (text.paras || []).forEach(function(p, pi){
+    splitSentences(p).forEach(function(s){
+      out.push({i: i++, para: pi, text: s});
+    });
+  });
+  return out;
+}
+
 /* --- 互動處理 --- */
 function aalMark(i){
   const it = aalItem();
-  const m = AAL.marks[it.id] = AAL.marks[it.id] || [];
+  const m = AAL.marks[it.unit] = AAL.marks[it.unit] || [];
   const k = m.indexOf(i);
   if (k >= 0) m.splice(k, 1); else m.push(i);
-  aalLog('MARK', 'M', {sent:i, on: k < 0});
+  aalLog('MARK', 'M', {sent:i, textId:it.unit, on: k < 0});
   render();
 }
 
@@ -5806,7 +6171,7 @@ async function aalSay(){
   if (aiEngine() === 'llm'){
     try {
       const raw = await llmChat([
-        {role:'system', content: composePrompt(AAL.cond, it.process || 'K', TURN_SCHEDULE[Math.min(used, TURN_SCHEDULE.length - 1)])},
+        {role:'system', content: composePrompt(AAL.cond, it.process || 'FR', TURN_SCHEDULE[Math.min(used, TURN_SCHEDULE.length - 1)])},
         {role:'user', content:'【題目】' + it.stem + '\n【學生剛剛說】' + text}
       ], {max_tokens:200, temperature:0.7});
       const g = leakGuard(raw, it);
@@ -5975,16 +6340,16 @@ function viewResearch(){
 
 /* ---------- 對話設計 ---------- */
 function rDesign(){
-  const sel = rDesign.sel || {cond:'tutor', proc:'K', qfn:'F3'};
+  const sel = rDesign.sel || {cond:'tutor', proc:'FR', qfn:'F3'};
   rDesign.sel = sel;
-  const it = ITEMS.find(function(i){ return (i.process || 'K') === sel.proc; }) || ITEMS[0];
+  const it = ITEMS.find(function(i){ return (i.process || 'FR') === sel.proc; }) || ITEMS[0];
   const preview = agentTurn(sel.cond, it, TURN_SCHEDULE.indexOf(sel.qfn));
 
   return '<div class="card card-p" style="margin-bottom:16px">' +
     '<h3>模組化提示：8 個模組，執行時組合 3 個</h3>' +
-    '<p class="lead" style="margin-top:8px">腳本不是 3 角色 × 3 歷程各寫一份，而是拆成' +
+    '<p class="lead" style="margin-top:8px">腳本不是 3 角色 × 4 歷程各寫一份，而是拆成' +
     '<strong>系統骨幹 1 個</strong>（任務規則與防洩答）、<strong>角色 3 個</strong>（只有社會框架）、' +
-    '<strong>歷程 3 個</strong>（提問功能與子歷程提問庫）。' +
+    '<strong>歷程 4 個</strong>（提問功能與 19 項子歷程提問庫）。' +
     '這個設計讓「提問功能跨角色恆定、僅社會框架隨角色而異」成為可以逐字查核的事實，' +
     '也讓鷹架機會、資訊量與任務目標在三個條件之間保持恆定。</p></div>' +
 
@@ -6002,8 +6367,8 @@ function rDesign(){
           '<pre class="prompt">' + esc(PROMPT_ROLE[c.id]) + '</pre></div>';
       }).join('') + '</div></div>' +
 
-      '<div class="card"><div class="card-h"><h3>模組 4–6 · 認知歷程（提問功能）</h3>' +
-      '<span class="muted small">TIMSS 2019 數學認知領域</span></div>' +
+      '<div class="card"><div class="card-h"><h3>模組 4–7 · 理解歷程（提問功能）</h3>' +
+      '<span class="muted small">PIRLS 2011 四項理解歷程 × 19 子歷程</span></div>' +
       '<div class="card-p col">' + PROCESSES.map(function(p){
         return '<div class="note-full"><b class="' + p.cls + '">' + esc(p.name) + '（' + esc(p.en) + '）</b>' +
           '<p class="small muted" style="margin:4px 0 8px">' + esc(p.desc) + '</p>' +
@@ -6642,7 +7007,7 @@ function researchBundle(){
     };
   }
   return {
-    meta: {system:'KIDFORUM', exportedAt: new Date().toISOString(),
+    meta: {system:'KAIROS', exportedAt: new Date().toISOString(),
            note:'示範資料為固定種子模擬，非真實學生資料。'},
     users: state.users.map(function(u){ return {id:u.id, name:u.name, role:u.role}; }),
     classes: state.classes, units: UNITS, items: ITEMS, misconceptions: MISCONCEPTIONS,
@@ -6674,7 +7039,7 @@ function researchBundle(){
         roles: PROMPT_ROLE,
         processes: PROCESSES.reduce(function(o, p){ o[p.id] = promptProcessModule(p.id); return o; }, {})
       },
-      itemProcess: ITEM_PROCESS,
+      itemProcess: ITEMS.reduce(function(o, i){ o[i.id] = i.process; return o; }, {}),
       assignmentLog: state.assignmentLog,
       behaviorCodes: BEHAVIOR_CODES,
       enaCodes: ENA_CODES,
@@ -6905,7 +7270,7 @@ function bindEvents(){
     if (act === 'lsa-cond'){ rLSA.cond = t.value; render(); return; }
     if (act === 'st-out'){ rStats.sel = t.value; render(); return; }
     if (act === 'aal-text'){ return; }
-    if (act === 'bank-year'){ BANKF.year = t.value; render(); return; }
+    if (act === 'bank-process'){ BANKF.process = t.value; render(); return; }
     if (act === 'bank-type'){ BANKF.type = t.value; render(); return; }
     if (act === 'bank-unit'){ BANKF.unit = t.value; render(); return; }
     if (act === 'set-unit'){ const it = getItem(t.dataset.id);
@@ -6987,12 +7352,41 @@ function bindEvents(){
 
   window.addEventListener('hashchange', render);
 
+  /* --- 無障礙控制 --- */
+  $('#fsSel').addEventListener('change', function(){
+    state.settings.a11y = state.settings.a11y || {};
+    state.settings.a11y.fontScale = parseFloat(this.value) || 1;
+    save(); applyA11y();
+    toast('字級：' + Math.round(state.settings.a11y.fontScale * 100) + '%');
+  });
+  $('#contrastBtn').addEventListener('click', function(){
+    state.settings.a11y = state.settings.a11y || {};
+    state.settings.a11y.highContrast = !state.settings.a11y.highContrast;
+    save(); applyA11y();
+    toast(state.settings.a11y.highContrast ? '已開啟高對比模式' : '已關閉高對比模式');
+  });
+
   $('#themeBtn').addEventListener('click', function(){
     const cur = state.ui.theme || 'system';
     const next = cur === 'system' ? 'light' : (cur === 'light' ? 'dark' : 'system');
     state.ui.theme = next; save(); applyTheme();
     toast('外觀：' + (next === 'system' ? '跟隨系統' : next === 'light' ? '淺色' : '深色'));
   });
+}
+
+/* 字級與高對比：兩者都寫進設定並持久化，換頁不會跑掉 */
+function applyA11y(){
+  const a = (state.settings && state.settings.a11y) || {};
+  const fs = a.fontScale || 1;
+  document.documentElement.style.setProperty('--fs', String(fs));
+  if (a.highContrast) document.documentElement.setAttribute('data-contrast', 'high');
+  else document.documentElement.removeAttribute('data-contrast');
+  const sel = $('#fsSel'); if (sel) sel.value = String(fs);
+  const btn = $('#contrastBtn');
+  if (btn){
+    btn.setAttribute('aria-pressed', a.highContrast ? 'true' : 'false');
+    btn.classList.toggle('primary', !!a.highContrast);
+  }
 }
 
 function applyTheme(){
@@ -7149,6 +7543,7 @@ function boot(){
     });
   }
   applyTheme();
+  applyA11y();
   bindEvents();
   renderShell();
   if (!location.hash) location.hash = '#/teacher';

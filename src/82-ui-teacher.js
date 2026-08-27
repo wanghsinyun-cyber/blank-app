@@ -78,25 +78,21 @@ function viewTeacher(){
    ========================================================================== */
 function viewCreate(){
   if (!WIZ) WIZ = {step:1, units:{}, items:{}, title:'', desc:'', due:'', phase:'pre'};
-  const steps = ['選單元', '挑題目', '派給學生'];
+  const steps = ['選文本', '挑題目', '派給學生'];
   let body = '';
 
   if (WIZ.step === 1){
-    const books = {};
-    UNITS.forEach(function(u){ (books[u.book] = books[u.book] || []).push(u); });
-    body = '<div class="card card-p"><h3>選要考的單元</h3>' +
-      '<p class="muted small">照康軒章節勾選，之後會從對應單元的會考題目列出來給你挑。目前示範題庫聚焦在第三冊。</p>' +
-      Object.keys(books).map(function(b){
-        const list = books[b];
-        return '<div style="margin-top:14px"><div class="eyebrow">第 ' + b + ' 冊（' + list[0].grade + '）</div>' +
-          '<div class="row" style="gap:6px;margin-top:6px">' + list.map(function(u){
-            const n = ITEMS.filter(function(i){ return i.unit === u.id; }).length;
-            const on = WIZ.units[u.id];
-            return '<button class="btn sm' + (on ? ' primary' : '') + '" data-act="wiz-unit" data-id="' + u.id + '"' +
-              (n ? '' : ' disabled title="題庫中尚無此單元的題目"') + '>' + esc(u.name) +
-              ' <span class="num">' + n + '</span></button>';
-          }).join('') + '</div></div>';
-      }).join('') +
+    body = '<div class="card card-p"><h3>選要用的文本</h3>' +
+      '<p class="muted small">勾選文本，下一步會列出掛在這些文本上的題目給你挑。</p>' +
+      '<div class="col" style="margin-top:12px">' + TEXTS.map(function(t){
+        const n = ITEMS.filter(function(i){ return i.unit === t.id; }).length;
+        const on = WIZ.units[t.id];
+        return '<button class="btn' + (on ? ' primary' : '') + '" data-act="wiz-unit" data-id="' + t.id + '"' +
+          ' aria-pressed="' + (!!on) + '" style="justify-content:flex-start;text-align:left"' +
+          (n ? '' : ' disabled') + '><span aria-hidden="true">' + (on ? '☑' : '☐') + '</span>' +
+          '<b>' + esc(t.title) + '</b><span class="pill">' + esc(t.genre) + '</span>' +
+          '<span class="pill">' + n + ' 題</span></button>';
+      }).join('') + '</div>' +
       '<hr class="hr"><div class="row"><span class="muted small">已選 ' + Object.keys(WIZ.units).length + ' 個單元</span>' +
       '<div class="spacer"></div><button class="btn primary" data-act="wiz-next"' +
       (Object.keys(WIZ.units).length ? '' : ' disabled') + '>下一步：挑題目 →</button></div></div>';
@@ -105,13 +101,13 @@ function viewCreate(){
   if (WIZ.step === 2){
     const cand = ITEMS.filter(function(i){ return WIZ.units[i.unit]; });
     body = '<div class="card card-p"><h3>挑題目</h3>' +
-      '<p class="muted small">從你選的單元中挑要派的題目。非選題會進入手寫作答與評閱流程。</p>' +
+      '<p class="muted small">從你選的文本中挑要派的題目。建構反應題會進入人工評閱流程。</p>' +
       '<div class="col" style="margin-top:12px">' + cand.map(function(i){
         const on = WIZ.items[i.id];
         return '<label class="item" style="cursor:pointer;border-color:' + (on ? 'var(--accent)' : 'var(--rule)') + '">' +
           '<div class="row" style="justify-content:space-between">' +
           '<div class="row"><input type="checkbox" data-act="wiz-item" data-id="' + i.id + '"' + (on ? ' checked' : '') + '>' +
-          '<span class="pill">' + i.year + ' 年</span><span class="pill">' + esc(i.diff) + '</span>' +
+          itemPills(i) +
           '<span class="pill">' + (i.type === 'cr' ? '非選題' : '選擇題') + '</span>' +
           '<span class="muted small">' + esc(unitName(i.unit)) + '</span></div></div>' +
           '<div class="stem">' + esc(i.stem) + '</div>' +
@@ -141,7 +137,7 @@ function viewCreate(){
       '<div class="spacer"></div><button class="btn primary" data-act="wiz-submit">派出這份作業</button></div></div>';
   }
 
-  return sectionHead('建立派題', '從康軒單元開始，三個步驟完成派題。', '<a class="btn" href="#/teacher">回教師後台</a>') +
+  return sectionHead('建立派題', '從文本開始，三個步驟完成派題。', '<a class="btn" href="#/teacher">回教師後台</a>') +
     '<div class="steps">' + steps.map(function(s, i){
       return '<div class="step' + (WIZ.step === i + 1 ? ' on' : '') + '"><b>' + (i + 1) + '</b>' + s + '</div>';
     }).join('') + '</div>' + body;
@@ -156,14 +152,16 @@ function viewAssign(aid){
   const a = diag.assignment;
   const tabs = [
     ['overview', '成績總覽'],
+    ['process', '理解歷程'],
     ['kidmap', 'KIDMAP 診斷'],
     ['items', '每題四象限'],
     ['bridge', '迷思橋接'],
-    ['cr', '非選評閱'],
+    ['cr', '建構反應題評閱'],
     ['ai', 'AI 深度分析']
   ];
   let body = '';
   if (TAB === 'overview') body = tabOverview(diag);
+  else if (TAB === 'process') body = tabProcess(diag);
   else if (TAB === 'kidmap') body = tabKidmap(diag);
   else if (TAB === 'items') body = tabItems(diag);
   else if (TAB === 'bridge') body = tabBridge(diag);
@@ -213,6 +211,133 @@ function tabOverview(diag){
       '<td class="n" style="color:var(--q2)">' + p.q[2] + '</td>' +
       '<td><button class="btn sm" data-act="kidmap-one" data-id="' + p.sid + '">KIDMAP</button></td></tr>';
   }).join('') + '</tbody></table></div></div>';
+}
+
+/* ==========================================================================
+   四項理解歷程的分布（個別與整體）＋ 質性敘述
+   ========================================================================== */
+function processProfile(diag, sids){
+  const out = {};
+  PROCESSES.forEach(function(p){ out[p.id] = {right:0, n:0, q2:0}; });
+  diag.cells.forEach(function(c){
+    if (sids && sids.indexOf(c.sid) < 0) return;
+    const pid = getItem(c.iid).process;
+    const b = out[pid]; if (!b) return;
+    b.n++; if (c.correct) b.right++; if (c.q === 2) b.q2++;
+  });
+  PROCESSES.forEach(function(p){
+    const b = out[p.id];
+    b.rate = b.n ? b.right / b.n : null;
+  });
+  return out;
+}
+
+/* 由規則引擎產生的質性敘述：完全可重現，每一句都追得回數字 */
+function processNarrative(prof, label){
+  const rows = PROCESSES.map(function(p){ return {p:p, b:prof[p.id]}; })
+    .filter(function(x){ return x.b.n; });
+  if (!rows.length) return '尚無足夠作答資料。';
+  const sorted = rows.slice().sort(function(a, b){ return b.b.rate - a.b.rate; });
+  const best = sorted[0], worst = sorted[sorted.length - 1];
+  const L = [];
+  L.push(label + '在四項理解歷程上的表現，最強的是**' + best.p.name + '**（答對率 ' +
+    pct(best.b.rate) + '），最弱的是**' + worst.p.name + '**（' + pct(worst.b.rate) + '）。');
+
+  const gap = best.b.rate - worst.b.rate;
+  if (gap < 0.12){
+    L.push('四項歷程之間的落差只有 ' + Math.round(gap * 100) + ' 個百分點，剖面相當平整——' +
+      '這通常代表整體閱讀量能一致，接下來可以直接提高文本難度，而不必針對特定歷程補救。');
+  } else {
+    L.push('落差達 ' + Math.round(gap * 100) + ' 個百分點，是明顯的歷程不均。');
+    if (worst.p.order <= 2){
+      L.push('值得注意的是，弱項落在**' + worst.p.name + '**這種較基礎的歷程上。' +
+        '這通常不是理解力的問題，而是回到文本的習慣還沒建立——' +
+        '學生憑印象作答，或找到了段落卻停在錯的句子。');
+    } else {
+      L.push('弱項落在**' + worst.p.name + '**這種較高階的歷程上，而基礎歷程表現尚可。' +
+        '這代表學生找得到訊息，但還不習慣把訊息整合起來、或跳出文本評斷它。' +
+        '這一類能力很難靠多做題目長出來，比較需要在討論中被要求說出理由。');
+    }
+  }
+  const hi = rows.filter(function(x){ return x.b.q2 > 0; })
+    .sort(function(a, b){ return (b.b.q2 / b.b.n) - (a.b.q2 / a.b.n); })[0];
+  if (hi && hi.b.q2 / hi.b.n >= 0.08){
+    L.push('第二象限（能力足以答對卻答錯）最集中在**' + hi.p.name + '**，占該歷程作答的 ' +
+      pct(hi.b.q2 / hi.b.n) + '。這些是最值得帶進共構討論的題目——' +
+      '它們不是難度問題，是讀法問題。');
+  }
+  return L.join('');
+}
+
+function tabProcess(diag){
+  if (!diag.ready) return '<div class="empty"><h3>尚無足夠資料</h3><p>需要至少 ' + diag.minN + ' 位學生完成作答。</p></div>';
+  const all = processProfile(diag, null);
+  const k = currentClass();
+  const inClass = diag.done.filter(function(s){ return k.studentIds.indexOf(s) >= 0; });
+  const cls = processProfile(diag, inClass);
+
+  function bars(prof, caption){
+    const mx = 1;
+    return '<div class="col">' + PROCESSES.map(function(p){
+      const b = prof[p.id];
+      if (!b.n) return '';
+      return '<div class="rub-row">' +
+        '<span><span aria-hidden="true">' + p.mark + '</span> ' + esc(p.name) +
+        '<div class="muted" style="font-size:.8em">' + b.n + ' 題次</div></span>' +
+        '<div class="bar" role="img" aria-label="' + esc(p.name) + ' 答對率 ' + pct(b.rate) + '">' +
+        '<i style="width:' + (100 * b.rate / mx) + '%;background:var(--' + p.cls.replace('sc', 'sc-') + ')"></i></div>' +
+        '<span class="lv">' + pct(b.rate) + '</span></div>';
+    }).join('') + '</div>' +
+    '<p class="muted small" style="margin-top:8px">' + esc(caption) + '</p>';
+  }
+
+  return '<div class="grid g2" style="margin-bottom:16px">' +
+    '<div class="card"><div class="card-h"><h3>' + esc(k.name) + '</h3>' +
+      '<span class="pill ' + (condition(k.condition).cls || '') + '">' +
+      '<span aria-hidden="true">' + condition(k.condition).mark + '</span>' +
+      esc(condition(k.condition).name) + '</span></div>' +
+      '<div class="card-p">' + bars(cls, '本班 ' + inClass.length + ' 位學生的答對率') + '</div></div>' +
+    '<div class="card"><div class="card-h"><h3>全體樣本</h3>' +
+      '<span class="muted small">' + diag.done.length + ' 人 · ' + state.classes.length + ' 班</span></div>' +
+      '<div class="card-p">' + bars(all, '四個班合計，作為本班的比較基準') + '</div></div>' +
+  '</div>' +
+
+  '<div class="card" style="margin-bottom:16px"><div class="card-h"><h3>質性敘述</h3>' +
+    '<span class="pill">內建規則引擎 · 可重現</span></div>' +
+    '<div class="card-p"><div class="ai-out">' + md(processNarrative(cls, esc(k.name))) + '</div>' +
+    '<p class="muted small" style="margin-top:10px">這段敘述由規則引擎依上面的數字產生，' +
+    '每一句都追得回具體的答對率與象限比例，不含語言模型生成內容。</p></div></div>' +
+
+  '<div class="card"><div class="card-h"><h3>每位學生的歷程剖面</h3>' +
+    '<span class="muted small">依最弱歷程排序，優先看需要介入的人</span></div>' +
+    '<div class="tablewrap"><table><thead><tr><th>學生</th>' +
+    PROCESSES.map(function(p){
+      return '<th class="n"><span aria-hidden="true">' + p.mark + '</span> ' + esc(p.name) + '</th>';
+    }).join('') + '<th>剖面</th><th class="n">最弱</th></tr></thead><tbody>' +
+    inClass.map(function(sid){
+      const pr = processProfile(diag, [sid]);
+      const rows = PROCESSES.map(function(p){ return {p:p, b:pr[p.id]}; }).filter(function(x){ return x.b.n; });
+      const worst = rows.slice().sort(function(a, b){ return a.b.rate - b.b.rate; })[0];
+      return {sid:sid, pr:pr, rows:rows, worst:worst};
+    }).sort(function(a, b){ return (a.worst ? a.worst.b.rate : 1) - (b.worst ? b.worst.b.rate : 1); })
+    .map(function(x){
+      return '<tr><td>' + esc(userName(x.sid)) + '</td>' +
+        PROCESSES.map(function(p){
+          const b = x.pr[p.id];
+          return '<td class="n">' + (b.n ? pct(b.rate) : '—') + '</td>';
+        }).join('') +
+        '<td style="min-width:130px"><div class="bar" style="display:flex">' +
+        x.rows.map(function(r){
+          return '<i style="width:' + (100 / x.rows.length) + '%;background:var(--' +
+            r.p.cls.replace('sc', 'sc-') + ');opacity:' + (0.25 + 0.75 * r.b.rate).toFixed(2) + '"></i>';
+        }).join('') + '</div></td>' +
+        '<td class="n"><span class="pill ' + (x.worst ? x.worst.p.cls : '') + '">' +
+        '<span aria-hidden="true">' + (x.worst ? x.worst.p.mark : '') + '</span>' +
+        esc(x.worst ? x.worst.p.name : '—') + '</span></td></tr>';
+    }).join('') + '</tbody></table></div>' +
+    '<div class="card-p"><p class="muted small">剖面條的每一段代表一項歷程，顏色深淺代表答對率高低；' +
+    '同時附上數字與「最弱」文字標籤，不以顏色單獨傳達訊息。' +
+    '單一學生在 3–4 題上的答對率非常不穩定，這一欄用來排序與挑人談話，不適合直接當成能力估計。</p></div></div>';
 }
 
 function tabKidmap(diag){
@@ -265,7 +390,7 @@ function tabItems(diag){
     rows.map(function(pi){
       const it = pi.item;
       const m = pi.misCode ? MISCONCEPTIONS.find(function(x){ return x.id === pi.misCode; }) : null;
-      return '<tr><td><b>第 ' + it.no + ' 題</b><div class="muted small">' + it.year + ' 年 · ' + esc(it.diff) + '</div></td>' +
+      return '<tr><td><b>第 ' + it.no + ' 題</b><div class="muted small">' + esc(processName(it.process)) + ' · ' + esc(it.diff) + '</div></td>' +
         '<td class="small">' + esc(unitName(it.unit)) + '</td>' +
         '<td class="n">' + fx(pi.delta) + '</td><td class="n">' + pct(pi.pass) + '</td>' +
         '<td style="min-width:120px">' + quadBar(pi.q, pi.n) + '</td>' +
@@ -340,7 +465,7 @@ function tabCR(diag){
       return '<button class="btn sm' + (c.id === sel ? ' primary' : '') + '" data-act="cr-sel" data-id="' + c.id + '">非選第 ' + c.no + ' 題</button>';
     }).join('') + '</div>' +
     '<div class="card" style="margin-bottom:14px"><div class="card-h"><h3>題目</h3>' +
-      '<span class="pill">' + it.year + ' 年 · ' + esc(unitName(it.unit)) + '</span></div>' +
+      itemPills(it) + '</div>' +
       '<div class="card-p"><div class="stem">' + esc(it.stem) + '</div></div></div>' +
     '<div class="card" style="margin-bottom:14px"><div class="card-h"><h3>評量規準</h3>' +
       '<span class="pill">' + esc(engineLabel()) + '</span>' +

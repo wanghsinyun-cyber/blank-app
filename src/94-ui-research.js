@@ -24,16 +24,16 @@ function viewResearch(){
 
 /* ---------- 對話設計 ---------- */
 function rDesign(){
-  const sel = rDesign.sel || {cond:'tutor', proc:'K', qfn:'F3'};
+  const sel = rDesign.sel || {cond:'tutor', proc:'FR', qfn:'F3'};
   rDesign.sel = sel;
-  const it = ITEMS.find(function(i){ return (i.process || 'K') === sel.proc; }) || ITEMS[0];
+  const it = ITEMS.find(function(i){ return (i.process || 'FR') === sel.proc; }) || ITEMS[0];
   const preview = agentTurn(sel.cond, it, TURN_SCHEDULE.indexOf(sel.qfn));
 
   return '<div class="card card-p" style="margin-bottom:16px">' +
     '<h3>模組化提示：8 個模組，執行時組合 3 個</h3>' +
-    '<p class="lead" style="margin-top:8px">腳本不是 3 角色 × 3 歷程各寫一份，而是拆成' +
+    '<p class="lead" style="margin-top:8px">腳本不是 3 角色 × 4 歷程各寫一份，而是拆成' +
     '<strong>系統骨幹 1 個</strong>（任務規則與防洩答）、<strong>角色 3 個</strong>（只有社會框架）、' +
-    '<strong>歷程 3 個</strong>（提問功能與子歷程提問庫）。' +
+    '<strong>歷程 4 個</strong>（提問功能與 19 項子歷程提問庫）。' +
     '這個設計讓「提問功能跨角色恆定、僅社會框架隨角色而異」成為可以逐字查核的事實，' +
     '也讓鷹架機會、資訊量與任務目標在三個條件之間保持恆定。</p></div>' +
 
@@ -51,8 +51,8 @@ function rDesign(){
           '<pre class="prompt">' + esc(PROMPT_ROLE[c.id]) + '</pre></div>';
       }).join('') + '</div></div>' +
 
-      '<div class="card"><div class="card-h"><h3>模組 4–6 · 認知歷程（提問功能）</h3>' +
-      '<span class="muted small">TIMSS 2019 數學認知領域</span></div>' +
+      '<div class="card"><div class="card-h"><h3>模組 4–7 · 理解歷程（提問功能）</h3>' +
+      '<span class="muted small">PIRLS 2011 四項理解歷程 × 19 子歷程</span></div>' +
       '<div class="card-p col">' + PROCESSES.map(function(p){
         return '<div class="note-full"><b class="' + p.cls + '">' + esc(p.name) + '（' + esc(p.en) + '）</b>' +
           '<p class="small muted" style="margin:4px 0 8px">' + esc(p.desc) + '</p>' +

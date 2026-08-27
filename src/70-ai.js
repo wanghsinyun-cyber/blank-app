@@ -41,7 +41,7 @@ async function llmChat(messages, o){
   return txt;
 }
 
-const SYS_TEACHER = '你是資深國中數學教師與教學研究者，熟悉臺師大心測中心的 KIDMAP 診斷方法、Rasch 測量與國中教育會考。' +
+const SYS_TEACHER = '你是資深國小閱讀教學研究者，熟悉 PIRLS 四項理解歷程、KIDMAP 四象限診斷與 Rasch 測量。' +
   '請用臺灣繁體中文回答，行文像老師之間的討論，具體實用，避免空話與套語。用 Markdown 標題與清單排版，重點加粗。';
 const SYS_KB = '你是知識建構（Knowledge Building, Scardamalia & Bereiter）研究者，熟悉 Knowledge Forum 的支架與想法改進歷程，' +
   '也熟悉形成性評量。請用臺灣繁體中文回答，聚焦在「想法如何被改進」而不是「答案對不對」，具體、可操作，避免空話。';
@@ -60,7 +60,7 @@ function materialClass(diag){
   L.push('【主要迷思題】');
   diag.flagged.forEach(function(pi){
     const it = pi.item;
-    L.push('- 第 ' + it.no + ' 題（' + it.year + ' 年，' + unitName(it.unit) + '，' + it.diff + '）');
+    L.push('- 第 ' + it.no + ' 題（' + unitName(it.unit) + '，' + processName(it.process) + '，' + it.diff + '）');
     L.push('  題幹：' + it.stem);
     L.push('  選項：' + it.options.map(function(o, i){ return String.fromCharCode(65 + i) + '. ' + o; }).join('　'));
     L.push('  正解：' + String.fromCharCode(65 + it.answer) + '　難度 δ=' + fx(pi.delta) + '　全班答對率 ' + pct(pi.pass));
@@ -71,7 +71,7 @@ function materialClass(diag){
     }
     if (pi.misCode){
       const m = MISCONCEPTIONS.find(function(x){ return x.id === pi.misCode; });
-      if (m) L.push('  題庫標記的迷思類型：' + m.name + '——' + m.desc);
+      if (m) L.push('  題庫標記的理解失誤：' + m.name + '——' + m.desc);
     }
   });
   return L.join('\n');
@@ -151,13 +151,13 @@ function builtinClassReport(diag){
   L.push('#### 2. 每一題的迷思解釋');
   diag.flagged.forEach(function(pi){
     const it = pi.item;
-    L.push('**第 ' + it.no + ' 題**（' + it.year + ' 年 · ' + unitName(it.unit) + ' · δ=' + fx(pi.delta) + '）');
+    L.push('**第 ' + it.no + ' 題**（' + unitName(it.unit) + ' · ' + processName(it.process) + ' · δ=' + fx(pi.delta) + '）');
     L.push('- ' + it.stem);
     if (pi.topDistractor != null){
       L.push('- 迷思學生最常選 **' + String.fromCharCode(65 + pi.topDistractor) + '. ' + it.options[pi.topDistractor] + '**（' + pi.topDistractorN + ' 人）。');
       const m = pi.misCode ? MISCONCEPTIONS.find(function(x){ return x.id === pi.misCode; }) : null;
       if (m) L.push('- 這個選項之所以吸引人，是因為 ' + m.desc);
-      else L.push('- 這個選項沒有對應到題庫既有的迷思標記，建議人工檢視學生的計算過程。');
+      else L.push('- 這個選項沒有對應到題庫既有的迷思標記，建議人工檢視學生的作答理由。');
     }
     L.push('- 命題備註：' + it.note);
     L.push('');
@@ -166,9 +166,9 @@ function builtinClassReport(diag){
   L.push('#### 3. 具體教學策略');
   keys.forEach(function(k){
     const m = MISCONCEPTIONS.find(function(x){ return x.id === k; });
-    const acts = STRATEGY[k] || ['請學生把自己的解題過程寫出來，再與同儕互相檢查。',
-      '提供一個「看起來對但其實錯」的解法，讓學生指出問題。',
-      '要求每題都把答案代回原式檢驗。'];
+    const acts = STRATEGY[k] || ['請學生把自己的判斷依據寫出來，再與同儕互相檢查。',
+      '提供一個「答案對但理由來自常識」的作答，讓學生指出問題。',
+      '要求每題都回到文本圈出依據的那一句。'];
     L.push('**' + (m ? m.name : '其他') + '**');
     acts.forEach(function(a){ L.push('- ' + a); });
     L.push('');
@@ -205,28 +205,32 @@ function builtinClassReport(diag){
 function sumQ2(list){ return list.reduce(function(s, p){ return s + p.q[2]; }, 0); }
 function uniq(a){ const o = {}; const r = []; a.forEach(function(x){ if (!o[x]){ o[x] = 1; r.push(x); } }); return r; }
 
+/* 八種理解失誤對應的教學動作。診斷不依賴語言模型，這張表是離線引擎的知識來源。 */
 const STRATEGY = {
-  M1:['在黑板上把「解方程式 x²=a」與「化簡 √a」並排寫成兩欄，請學生分類十題，講出分類的理由。',
-      '給一個情境題（正方形邊長）與一個純數題，問學生「這兩題的負根待遇為什麼不同」。',
-      '要求所有 x²=a 的題目一律先寫 x=±√a，再依情境決定是否捨去，捨去時必須寫出理由。'],
-  M2:['請學生用 2×3=6 當反例，說明為什麼「乘積等於某數」不能直接拆。',
-      '規定解一元二次方程式的第一步一律是「移項成 ＝0」，並在解題紙上留一格專門寫這一步。',
-      '給一個「碰巧代對」的錯誤解法（如 x(x−4)=5 得 x=5），請學生找出漏掉的根。'],
-  M3:['讓學生用計算機實際比較 √16+√9 與 √25，再問「為什麼會不一樣」。',
-      '用面積模型：兩個正方形邊長相加，不等於面積相加後的正方形邊長。',
-      '整理一張「哪些運算可以逐項做、哪些不行」的對照表，由學生自己填。'],
-  M4:['要求先算 b²−4ac 並把數值寫在題目旁邊，再決定要不要往下解。',
-      '給三題只問「有幾個實根」不必解出來的題目，訓練先判別再動手。',
-      '用二次函數圖形與 x 軸交點的張數，把判別式的符號視覺化。'],
-  M5:['十字交乘後一定要回頭乘開檢驗一次項係數，把檢驗寫在算式下方。',
-      '從常數項的因數分解開始窮舉，列表比對，而不是憑感覺猜。',
-      '對照「首項係數為 1」與「不為 1」兩類題目，讓學生說出差別在哪。'],
-  M6:['所有畢氏定理題目一律先在圖上圈出直角、標出斜邊，再列式。',
-      '刻意給一題「已知斜邊求另一股」，與「已知兩股求斜邊」並排比較。',
-      '用 3-4-5 與 5-12-13 兩組數字反覆檢核，養成先判斷再套公式的習慣。'],
-  M7:['把 x²−5x+6=0 直接分解成 (x−2)(x−3)，算出兩根後再回頭驗證兩根和是 5，讓公式從結果長出來。',
-      '請學生自己造一個方程式，指定兩根，再反推係數，體會負號從哪裡來。',
-      '整理「和是 −b/a、積是 c/a」的記憶卡，並在旁邊寫一個自己驗證過的例子。']
+  E1:['規定回答任何一題之前，先在文本上把依據的那一句畫起來，畫不出來就不能作答。',
+      '把「文章說的」與「我覺得的」畫成兩欄，請學生把自己的理由分類進去。',
+      '刻意給一題答案正確但理由來自常識的作答，請全班找出問題在哪裡。'],
+  E2:['請學生說出「你是在第幾段找到的」，再全班一起回去核對那一段有沒有真的講到。',
+      '練習先看題目的關鍵詞，再用關鍵詞回文本掃描，而不是從頭讀到尾。',
+      '把四個選項各自對應到文本的哪一段標出來，讓學生看到誘答其實來自別段。'],
+  E3:['問「這一句和前一句合起來告訴我們什麼」，訓練把相鄰訊息連起來。',
+      '拿掉題目，只給兩句話，請學生說出中間隱含的因果或關係。',
+      '對照「文章直接寫的」與「要自己補上的」，讓學生知道推論是被允許的。'],
+  E4:['要求每個推論都補一句「我是從第◯段推出來的」，推不回去就是推太遠。',
+      '給一個過度推論的例子，請學生指出文本到哪裡為止是有支持的。',
+      '練習用「文章只說到……，沒有說……」的句型描述文本的邊界。'],
+  E5:['遇到代名詞就停下來，把它替換成所指的名詞再讀一次，看句子通不通。',
+      '在文本上用箭頭把代名詞連到指涉對象，全班一起核對。',
+      '刻意選一段有多個可能指涉對象的文字，討論怎麼判斷。'],
+  E6:['問「這是講某一個例子，還是講通常都會這樣」，逐句分類。',
+      '請學生找出文中真正的概括句，並說明它和例子的關係。',
+      '給一個把單一例子當通則的說法，請學生用文中另一個例子推翻它。'],
+  E7:['把「我的經驗」寫在便利貼上貼旁邊，先跟文本分開，再討論它能不能當依據。',
+      '問「如果沒有讀過這篇文章，你還會這樣回答嗎」——會的話，那就不是從文章讀出來的。',
+      '練習先回答「文章怎麼說」，再回答「我怎麼想」，兩步分開。'],
+  E8:['問「作者為什麼要寫這一段」，把注意力從內容轉到寫作用意。',
+      '找出文中帶有態度的用詞，討論作者的立場藏在哪裡。',
+      '請學生用一句話說出「作者想讓我們覺得什麼」，並指出支持的句子。']
 };
 
 /* ==========================================================================
@@ -239,7 +243,7 @@ async function aiItemStrategy(diag, pi, force){
   if (aiEngine() === 'llm'){
     const it = pi.item;
     out = await llmChat([
-      {role:'system', content:'你是資深國中數學教師。針對單題迷思提出具體教學建議。用臺灣繁體中文，動詞驅動、短句、具體，控制在 300 字內，用 Markdown 短列點。'},
+      {role:'system', content:'你是資深國小閱讀教師。針對單題的理解失誤提出具體教學建議。用臺灣繁體中文，動詞驅動、短句、具體，控制在 300 字內，用 Markdown 短列點。'},
       {role:'user', content:'題幹：' + it.stem + '\n選項：' +
         it.options.map(function(o, i){ return String.fromCharCode(65 + i) + '. ' + o; }).join('　') +
         '\n正解：' + String.fromCharCode(65 + it.answer) +
@@ -294,7 +298,7 @@ async function aiRubric(item, force){
   let out;
   if (aiEngine() === 'llm'){
     out = await llmChat([
-      {role:'system', content:'你是資深國中數學教師，熟悉臺灣國中會考非選題的閱卷標準。用臺灣繁體中文，具體可操作，避免空話。'},
+      {role:'system', content:'你是資深國小閱讀教師，熟悉 PIRLS 建構反應題的閱卷標準。用臺灣繁體中文，具體可操作，避免空話。'},
       {role:'user', content:'題目：' + item.stem + '\n單元：' + unitName(item.unit) +
         '\n\n請產出評量規準（Markdown）：開頭寫「滿分：N 分」；分成三個向度並標配分（策略/概念、執行/計算、表達/結論）；最後列出 3 個常見錯誤與扣分建議。只要規準本身，不要開場白。'}
     ], {max_tokens:900});
@@ -344,7 +348,7 @@ async function aiSimilarItems(item, force){
   let out;
   if (aiEngine() === 'llm'){
     const txt = await llmChat([
-      {role:'system', content:'你是資深國中數學命題老師，熟悉臺灣國中會考題型。請嚴格輸出 JSON，不要多任何說明。'},
+      {role:'system', content:'你是資深閱讀評量命題者，熟悉 PIRLS 題型與四項理解歷程。請嚴格輸出 JSON，不要多任何說明。'},
       {role:'user', content:'原題：' + item.stem + '\n選項：' +
         item.options.map(function(o, i){ return String.fromCharCode(65 + i) + '. ' + o; }).join('　') +
         '\n正解：' + String.fromCharCode(65 + item.answer) +
@@ -581,7 +585,7 @@ async function aiItemsFromDiscourse(view, force){
   if (aiEngine() === 'llm'){
     const mat = ns.map(function(n){ return materialNote(n); }).join('\n---\n');
     const txt = await llmChat([
-      {role:'system', content:'你是資深國中數學命題老師，同時熟悉知識建構。請嚴格輸出 JSON，不要多任何說明。'},
+      {role:'system', content:'你是資深閱讀評量命題者，同時熟悉知識建構。請嚴格輸出 JSON，不要多任何說明。'},
       {role:'user', content:'以下是一個知識建構視圖中的討論：\n' + mat +
         '\n\n請根據這些討論中形成的共同理解，命 3 道可以檢核「這個理解是否真的可遷移」的選擇題。' +
         '誘答選項要對應討論中被推翻的說法。只回傳 JSON：{"items":[{"stem":"","options":["","","",""],"answer":0,"hint":"","targets":""}]}'}

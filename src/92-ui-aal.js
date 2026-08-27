@@ -33,7 +33,7 @@ function aalLog(type, code, extra){
   const it = aalItem();
   const k = classOfStudent(AAL.me);
   const e = {t:Date.now(), rel:Date.now() - AAL.t0, sid:AAL.me, cid:k ? k.id : null,
-             cond:AAL.cond, lang:'zh', aid:AAL.aid, iid:it.id, proc:it.process || 'K',
+             cond:AAL.cond, lang:'zh', aid:AAL.aid, iid:it.id, proc:it.process || 'FR',
              type:type, code:code};
   if (extra) Object.keys(extra).forEach(function(x){ e[x] = extra[x]; });
   logEvent(e);
@@ -51,12 +51,14 @@ function viewAaL(aid){
 
   const it = aalItem();
   const cond = condition(AAL.cond);
-  const sents = splitSentences(it.stem);
-  const marks = AAL.marks[it.id] = AAL.marks[it.id] || [];
+  const text = getText(it.unit);
+  const sents = passageSentences(text);
+  // 標記是「對這篇文本」的，換題不會消失——學生在同一篇文章上持續累積閱讀痕跡
+  const marks = AAL.marks[it.unit] = AAL.marks[it.unit] || [];
   const turns = aalTurns(it.id);
   const used = aalStudentTurns(it.id);
   const maxT = (state.settings && state.settings.maxTurns) || MAX_TURNS;
-  const proc = processOf(it.process || 'K');
+  const proc = processOf(it.process || 'FR');
 
   return '<div class="row" style="justify-content:space-between;align-items:flex-end;margin-bottom:12px">' +
       '<div><h2>' + esc(a.title) + '</h2>' +
@@ -69,37 +71,41 @@ function viewAaL(aid){
     '</div>' +
 
     '<div class="aal">' +
-    /* ---- 左欄：題幹逐句標記 ＋ 計算紙 ---- */
-    '<div class="aal-text card"><div class="card-h"><h3>題目</h3>' +
-      '<span class="pill">' + it.year + ' 年 · ' + esc(it.diff) + '</span>' +
-      '<span class="pill ' + proc.cls + '">' + esc(proc.name) + '</span></div>' +
+    /* ---- 左欄：文本，逐句可標記 ---- */
+    '<div class="aal-text card"><div class="card-h"><h3 id="passageTitle">' + esc(text.title) + '</h3>' +
+      '<span class="pill">' + esc(text.genre) + '</span>' +
+      (marks.length ? '<span class="pill">已標記 ' + marks.length + ' 句</span>' : '') + '</div>' +
       '<div class="card-p">' +
-      '<p class="muted small">點一下句子，標記你正在看的條件。標記只有你看得到，不會影響分數。</p>' +
-      '<div class="sentences">' + sents.map(function(s, i){
-        return '<span class="sent' + (marks.indexOf(i) >= 0 ? ' on' : '') + '" data-act="aal-mark" data-i="' + i + '">' +
-          esc(s) + '</span>';
-      }).join('') + '</div>' +
-      '<hr class="hr">' +
-      '<div class="eyebrow">計算紙</div>' +
-      '<canvas class="pad" data-pad="aal-' + it.id + '" height="220"></canvas>' +
-      '<div class="row" style="margin-top:6px">' +
-        '<button class="btn sm" data-act="pad-undo" data-id="aal-' + it.id + '">復原</button>' +
-        '<button class="btn sm" data-act="pad-clear" data-id="aal-' + it.id + '">清空</button>' +
+      '<p class="muted small" id="passageHelp">點一下任何一句，把它標記起來。標記只有你看得到，不會影響分數，' +
+      '換題也不會消失。</p>' +
+      '<div class="passage" role="group" aria-labelledby="passageTitle" aria-describedby="passageHelp">' +
+        text.paras.map(function(_, pi){
+          return '<p class="para">' + sents.filter(function(s){ return s.para === pi; }).map(function(s){
+            const on = marks.indexOf(s.i) >= 0;
+            return '<button type="button" class="sent' + (on ? ' on' : '') + '"' +
+              ' data-act="aal-mark" data-i="' + s.i + '" aria-pressed="' + on + '">' +
+              esc(s.text) + '</button>';
+          }).join('') + '</p>';
+        }).join('') +
       '</div>' +
     '</div></div>' +
 
-    /* ---- 右欄：作答區 ＋ 對話／筆記 ---- */
+    /* ---- 右欄：題目與作答 ＋ 對話／筆記 ---- */
     '<div class="aal-side">' +
-      '<div class="card"><div class="card-h"><h3>我的作答</h3></div><div class="card-p">' +
+      '<div class="card"><div class="card-h"><h3>第 ' + (AAL.idx + 1) + ' 題</h3>' + procPill(it.process) + '</div>' +
+      '<div class="card-p">' +
+      '<div class="stem">' + esc(it.stem) + '</div>' +
       (it.type === 'mc'
-        ? '<div class="opts">' + it.options.map(function(o, k){
+        ? '<fieldset class="opts"><legend class="sr-only">' + esc(it.stem) + '</legend>' + it.options.map(function(o, k){
             return '<label class="opt' + (AAL.answers[it.id] === k ? ' chosen' : '') + '">' +
               '<input type="radio" name="aal-' + it.id + '" data-act="aal-pick" data-k="' + k + '"' +
               (AAL.answers[it.id] === k ? ' checked' : '') + '>' +
-              '<b>' + String.fromCharCode(65 + k) + '</b><span>' + esc(o) + '</span></label>';
-          }).join('') + '</div>'
-        : '<textarea data-act="aal-text" style="min-height:150px" placeholder="寫出你的解題過程與說明">' +
-          esc(AAL.texts[it.id] || '') + '</textarea>') +
+              '<b aria-hidden="true">' + String.fromCharCode(65 + k) + '</b><span>' + esc(o) + '</span></label>';
+          }).join('') + '</fieldset>'
+        : '<div class="field"><label for="crText">寫出你的答案，並說明你的理由</label>' +
+          '<textarea id="crText" data-act="aal-text" style="min-height:160px" ' +
+          'placeholder="先寫你的看法，再寫你是從文章哪一段看出來的">' +
+          esc(AAL.texts[it.id] || '') + '</textarea></div>') +
       '</div></div>' +
 
       (AAL.cond === 'control' ? aalNotePane(it) : aalDialogPane(it, cond, turns, used, maxT)) +
@@ -148,13 +154,26 @@ function aalNotePane(it){
     '</div></div>';
 }
 
+/* 把整篇文本攤平成可標記的句子清單：{i, para, text} */
+function passageSentences(text){
+  if (!text) return [];
+  const out = [];
+  let i = 0;
+  (text.paras || []).forEach(function(p, pi){
+    splitSentences(p).forEach(function(s){
+      out.push({i: i++, para: pi, text: s});
+    });
+  });
+  return out;
+}
+
 /* --- 互動處理 --- */
 function aalMark(i){
   const it = aalItem();
-  const m = AAL.marks[it.id] = AAL.marks[it.id] || [];
+  const m = AAL.marks[it.unit] = AAL.marks[it.unit] || [];
   const k = m.indexOf(i);
   if (k >= 0) m.splice(k, 1); else m.push(i);
-  aalLog('MARK', 'M', {sent:i, on: k < 0});
+  aalLog('MARK', 'M', {sent:i, textId:it.unit, on: k < 0});
   render();
 }
 
@@ -204,7 +223,7 @@ async function aalSay(){
   if (aiEngine() === 'llm'){
     try {
       const raw = await llmChat([
-        {role:'system', content: composePrompt(AAL.cond, it.process || 'K', TURN_SCHEDULE[Math.min(used, TURN_SCHEDULE.length - 1)])},
+        {role:'system', content: composePrompt(AAL.cond, it.process || 'FR', TURN_SCHEDULE[Math.min(used, TURN_SCHEDULE.length - 1)])},
         {role:'user', content:'【題目】' + it.stem + '\n【學生剛剛說】' + text}
       ], {max_tokens:200, temperature:0.7});
       const g = leakGuard(raw, it);

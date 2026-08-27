@@ -2,67 +2,103 @@
    90-ui-misc.js — 題庫與單元歸類、系統設定、系統說明與研究設計
    ========================================================================== */
 
-let BANKF = {year:'', type:'', unit:''};
+let BANKF = {process:'', type:'', unit:''};
 
 function viewBank(){
   const list = ITEMS.filter(function(i){
-    return (!BANKF.year || i.year === +BANKF.year) &&
+    return (!BANKF.process || i.process === BANKF.process) &&
            (!BANKF.type || i.type === BANKF.type) &&
            (!BANKF.unit || i.unit === BANKF.unit);
   });
-  const years = uniq(ITEMS.map(function(i){ return i.year; })).sort();
   const usedUnits = uniq(ITEMS.map(function(i){ return i.unit; }));
-  return sectionHead('題庫與單元歸類', '為每一題指定所屬康軒單元。歸類後建立作業時就能在單元選擇器中挑到這些題目。') +
+  return sectionHead('文本與題庫', '每一題都掛在一篇文本上，並標定它所測的 PIRLS 理解歷程與子歷程。' +
+      '這個標定是相對歷程編碼（RQ4）的判定基準，架構、細目與題本三者必須同版。') +
+
     '<div class="grid g4" style="margin-bottom:16px">' +
+      statCard('文本', TEXTS.length, TEXTS.map(function(t){ return t.genre; }).join(' · ')) +
       statCard('題目總數', ITEMS.length, '選擇題 ' + ITEMS.filter(function(i){ return i.type === 'mc'; }).length +
-        ' · 非選題 ' + ITEMS.filter(function(i){ return i.type === 'cr'; }).length) +
-      statCard('已分類', ITEMS.filter(function(i){ return i.unit; }).length, '對應 ' + usedUnits.length + ' 個單元') +
-      statCard('迷思標記', ITEMS.filter(function(i){ return Object.keys(i.why || {}).some(function(k){ return i.why[k]; }); }).length,
-        '有誘答選項標到迷思代碼') +
-      statCard('迷思類型', MISCONCEPTIONS.length, '離線診斷的基礎') +
+        ' · 建構反應題 ' + ITEMS.filter(function(i){ return i.type === 'cr'; }).length) +
+      statCard('誘答已標記', ITEMS.filter(function(i){ return Object.keys(i.why || {}).some(function(k){ return i.why[k]; }); }).length,
+        '誘答對應到理解失誤代碼') +
+      statCard('理解失誤類型', READING_ERRORS.length, '離線診斷的基礎') +
     '</div>' +
+
+    '<div class="card" style="margin-bottom:16px"><div class="card-h"><h3>四項理解歷程的題數分布</h3>' +
+      '<span class="muted small">形狀記號與顏色並用，不以顏色單獨傳達訊息</span></div>' +
+      '<div class="card-p"><div class="grid g4">' + PROCESSES.map(function(p){
+        const n = ITEMS.filter(function(i){ return i.process === p.id; }).length;
+        return '<div class="stat"><div class="k"><span aria-hidden="true">' + p.mark + '</span> ' + esc(p.name) + '</div>' +
+          '<div class="v" style="color:var(--' + p.cls.replace('sc', 'sc-') + ')">' + n + '</div>' +
+          '<div class="s">' + esc(p.desc) + '</div></div>';
+      }).join('') + '</div></div></div>' +
+
     '<div class="kb-toolbar">' +
-      '<label class="small muted">年份</label><select data-act="bank-year" style="width:auto">' +
-      '<option value="">全部</option>' + years.map(function(y){
-        return '<option value="' + y + '"' + (BANKF.year == y ? ' selected' : '') + '>' + y + ' 年</option>'; }).join('') + '</select>' +
-      '<label class="small muted">題型</label><select data-act="bank-type" style="width:auto">' +
+      '<label class="small muted" for="bkProc">理解歷程</label>' +
+      '<select id="bkProc" data-act="bank-process" style="width:auto">' +
+      '<option value="">全部</option>' + PROCESSES.map(function(p){
+        return '<option value="' + p.id + '"' + (BANKF.process === p.id ? ' selected' : '') + '>' +
+          p.mark + ' ' + esc(p.name) + '</option>'; }).join('') + '</select>' +
+      '<label class="small muted" for="bkType">題型</label>' +
+      '<select id="bkType" data-act="bank-type" style="width:auto">' +
       '<option value="">全部</option><option value="mc"' + (BANKF.type === 'mc' ? ' selected' : '') + '>選擇題</option>' +
-      '<option value="cr"' + (BANKF.type === 'cr' ? ' selected' : '') + '>非選題</option></select>' +
-      '<label class="small muted">單元</label><select data-act="bank-unit" style="width:auto">' +
+      '<option value="cr"' + (BANKF.type === 'cr' ? ' selected' : '') + '>建構反應題</option></select>' +
+      '<label class="small muted" for="bkText">文本</label>' +
+      '<select id="bkText" data-act="bank-unit" style="width:auto">' +
       '<option value="">全部</option>' + usedUnits.map(function(u){
         return '<option value="' + u + '"' + (BANKF.unit === u ? ' selected' : '') + '>' + esc(unitName(u)) + '</option>'; }).join('') + '</select>' +
       '<div class="spacer"></div><span class="muted small">顯示 ' + list.length + ' 題</span>' +
     '</div>' +
+
+    /* 文本全文 */
+    '<div class="col" style="margin-bottom:16px">' + TEXTS.filter(function(t){
+      return !BANKF.unit || BANKF.unit === t.id;
+    }).map(function(t){
+      return '<details class="card"><summary class="card-h" style="cursor:pointer">' +
+        '<h3 style="flex:1">' + esc(t.title) + '</h3>' +
+        '<span class="pill">' + esc(t.genre) + '</span>' +
+        '<span class="pill">' + esc(t.grade) + '</span>' +
+        '<span class="pill">' + ITEMS.filter(function(i){ return i.unit === t.id; }).length + ' 題</span></summary>' +
+        '<div class="card-p"><div class="passage">' +
+        t.paras.map(function(p){ return '<p class="para">' + esc(p) + '</p>'; }).join('') + '</div>' +
+        '<p class="muted small">' + esc(t.source) + '</p></div></details>';
+    }).join('') + '</div>' +
+
     '<div class="col">' + list.map(function(it){
+      const sub = subprocess(it.sub);
       return '<div class="card"><div class="card-p">' +
         '<div class="row" style="justify-content:space-between;margin-bottom:6px">' +
-        '<span class="row"><b>' + it.id + '</b><span class="pill">' + it.year + ' 年第 ' + it.no + ' 題</span>' +
-        '<span class="pill">' + (it.type === 'cr' ? '非選題' : '選擇題') + '</span>' +
-        '<span class="pill">' + esc(it.diff) + '</span></span>' +
-        '<span class="row"><label class="small muted">單元</label>' +
-        '<select data-act="set-unit" data-id="' + it.id + '" style="width:auto">' + UNITS.map(function(u){
-          return '<option value="' + u.id + '"' + (u.id === it.unit ? ' selected' : '') + '>' +
-            u.grade + ' ' + esc(u.name) + '</option>'; }).join('') + '</select></span></div>' +
+        '<span class="row"><b>' + it.id + '</b>' + itemPills(it) +
+        '<span class="pill">' + (it.type === 'cr' ? '建構反應題' : '選擇題') + '</span></span>' +
+        '<span class="row"><label class="small muted">文本</label>' +
+        '<select data-act="set-unit" data-id="' + it.id + '" style="width:auto">' + TEXTS.map(function(t){
+          return '<option value="' + t.id + '"' + (t.id === it.unit ? ' selected' : '') + '>' +
+            esc(t.title) + '</option>'; }).join('') + '</select></span></div>' +
+        (sub ? '<div class="muted small" style="margin-bottom:6px">子歷程 <b>' + sub.id + '</b>　' +
+          esc(sub.zh) + '　<span style="font-size:.85em">' + esc(sub.en) + '</span></div>' : '') +
         '<div class="stem">' + esc(it.stem) + '</div>' +
         (it.options.length ? '<div class="opts">' + it.options.map(function(o, k){
-          const mis = it.why && it.why[k] ? MISCONCEPTIONS.find(function(m){ return m.id === it.why[k]; }) : null;
-          return '<div class="opt' + (k === it.answer ? ' right' : (mis ? ' wrong' : '')) + '"><b>' +
+          const err = it.why && it.why[k] ? READING_ERRORS.find(function(m){ return m.id === it.why[k]; }) : null;
+          const isAns = k === it.answer;
+          return '<div class="opt' + (isAns ? ' right' : (err ? ' wrong' : '')) + '"><b>' +
             String.fromCharCode(65 + k) + '</b><span>' + esc(o) +
-            (k === it.answer ? '　<span class="muted small">正解</span>' : '') +
-            (mis ? '　<span class="muted small">誘答標記：' + esc(mis.name) + '</span>' : '') + '</span></div>';
+            (isAns ? '　<span class="muted small">✓ 正解</span>' : '') +
+            (err ? '　<span class="muted small">誘答標記：' + esc(err.id) + ' ' + esc(err.name) + '</span>' : '') + '</span></div>';
         }).join('') + '</div>' : '') +
-        '<p class="muted small" style="margin-top:8px">' + esc(it.note) + '</p>' +
+        (it.answerPara != null ? '<p class="muted small" style="margin-top:8px">依據位置：第 ' +
+          (it.answerPara + 1) + ' 段第 ' + (it.answerSent + 1) + ' 句（供防洩答與教師檢視，學生看不到）</p>' : '') +
+        '<p class="muted small">' + esc(it.note) + '</p>' +
         '</div></div>';
     }).join('') + '</div>' +
-    '<div class="card" style="margin-top:16px"><div class="card-h"><h3>迷思概念代碼表</h3></div>' +
+
+    '<div class="card" style="margin-top:16px"><div class="card-h"><h3>理解失誤代碼表</h3></div>' +
     '<div class="tablewrap"><table><thead><tr><th>代碼</th><th>名稱</th><th>描述</th><th class="n">相關題數</th></tr></thead><tbody>' +
-    MISCONCEPTIONS.map(function(m){
+    READING_ERRORS.map(function(m){
       const n = ITEMS.filter(function(i){ return Object.keys(i.why || {}).some(function(k){ return i.why[k] === m.id; }); }).length;
       return '<tr><td class="num">' + m.id + '</td><td>' + esc(m.name) + '</td><td class="small">' + esc(m.desc) +
         '</td><td class="n">' + n + '</td></tr>';
     }).join('') + '</tbody></table></div>' +
-    '<div class="card-p"><p class="muted small">誘答選項掛上迷思代碼，是本系統能在<strong>不依賴語言模型</strong>的情況下' +
-    '做出概念層次診斷的關鍵。命題時多花的這一步，換來的是完全可重現的分析結果。</p></div></div>';
+    '<div class="card-p"><p class="muted small">誘答選項掛上理解失誤代碼，是本系統能在<strong>不依賴語言模型</strong>的情況下' +
+    '做出歷程層次診斷的關鍵。命題時多花的這一步，換來的是完全可重現的分析結果。</p></div></div>';
 }
 
 /* --- 系統設定 --- */
@@ -133,7 +169,7 @@ function viewAbout(){
     ['知識建構的論述', '論述層次由連接詞、反例、證據、修正語判定，讓「討論的品質」可被觀察。'],
     ['同步、內嵌、轉化的評量', '整個系統就是這一條：評量產生問題，討論改變理解，再評量檢核遷移。']
   ];
-  return sectionHead('系統說明與研究設計', 'KIDFORUM 如何把「會考派題 × KIDMAP」、「Knowledge Forum」與「評量即學習」接成一個系統。') +
+  return sectionHead('系統說明與研究設計', 'KAIROS 如何把「會考派題 × KIDMAP」、「Knowledge Forum」與「評量即學習」接成一個系統。') +
 
   '<div class="card card-p" style="margin-bottom:16px;border-left:3px solid var(--accent)">' +
     '<div class="eyebrow">評量即學習（Assessment as Learning）</div>' +
@@ -175,7 +211,7 @@ function viewAbout(){
     '<p class="lead" style="margin-top:8px">兩個平台各自缺一半。<strong>派題與 KIDMAP</strong> 能精準指出「誰在哪個概念上卡住」，' +
     '但它的終點是一份給老師看的報告，學生仍然是被診斷的對象。<strong>Knowledge Forum</strong> 把知識的推進權交回學生手上，' +
     '但它沒有辦法告訴老師「今天最該討論的是哪一個問題」，起始問題往往靠教師的直覺。</p>' +
-    '<p class="lead">KIDFORUM 讓前者成為後者的問題來源，讓後者成為前者的介入手段，' +
+    '<p class="lead">KAIROS 讓前者成為後者的問題來源，讓後者成為前者的介入手段，' +
     '再用 AI 助評把兩邊的資料翻譯成教師與學生都能行動的語言。</p>' +
   '</div>' +
   '<div class="card card-p" style="margin-bottom:16px">' +
@@ -314,6 +350,6 @@ function viewAbout(){
     '<li>KIDMAP 四象限診斷表徵——國中教育會考成績診斷的常見呈現方式。</li>' +
     '<li>介面詞彙參考自「會考派題 · 國中數學」平台與 knowledgeforum.org 的 KF6 介面。</li>' +
     '</ul>' +
-    '<p class="muted small" style="margin-top:10px">KIDFORUM 是研究用的整合原型，與上述任何平台或機構均無隸屬關係。</p>' +
+    '<p class="muted small" style="margin-top:10px">KAIROS 是研究用的整合原型，與上述任何平台或機構均無隸屬關係。</p>' +
   '</div>';
 }
