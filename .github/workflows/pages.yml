@@ -29,7 +29,7 @@ jobs:
       - name: Verify build output
         run: |
           test -s dist/index.html
-          grep -q '<title>KIDFORUM</title>' dist/index.html
+          grep -q '<title>KAIROS</title>' dist/index.html
           echo "dist/index.html $(wc -c < dist/index.html) bytes"
 
       - name: Copy design docs alongside the app
