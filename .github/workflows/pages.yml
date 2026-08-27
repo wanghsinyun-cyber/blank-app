@@ -38,7 +38,12 @@ jobs:
           cp README.md dist/docs/ 2>/dev/null || true
           cp docs/*.md dist/docs/ 2>/dev/null || true
 
+      # enablement: true 讓這個 workflow 第一次執行時就自動把 repo 的 Pages 打開
+      # 並設定為由 GitHub Actions 建置，不必先去 Settings → Pages 手動設定
       - uses: actions/configure-pages@v5
+        with:
+          enablement: true
+
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
