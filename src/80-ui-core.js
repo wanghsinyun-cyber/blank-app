@@ -108,6 +108,8 @@ function renderShell(){
   } else if (bar){
     bar.remove();
   }
+  /* 橫幅出現／消失都會改變頂部帶的總高度，sticky 的偏移量要跟著更新 */
+  if (typeof syncTopbarHeight === 'function') syncTopbarHeight();
 
   renderRail();
 }

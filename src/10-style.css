@@ -112,8 +112,8 @@ button,input,select,textarea{font:inherit; color:inherit}
 }
 
 .rail{
-  position:sticky; top:var(--topbar-h); align-self:flex-start; flex:0 0 13.6rem; width:13.6rem;
-  min-height:calc(100vh - var(--topbar-h)); max-height:calc(100vh - var(--topbar-h)); overflow-y:auto;
+  position:sticky; top:var(--sticky-top); align-self:flex-start; flex:0 0 13.6rem; width:13.6rem;
+  min-height:calc(100vh - var(--sticky-top)); max-height:calc(100vh - var(--sticky-top)); overflow-y:auto;
   background:var(--card); border-right:1px solid var(--rule);
   padding:12px 10px 24px; display:flex; flex-direction:column; gap:2px;
 }
@@ -128,7 +128,7 @@ button,input,select,textarea{font:inherit; color:inherit}
 .rail a[aria-current="page"] .glyph{color:var(--ink)}
 .rail .badge{margin-left:auto; font-family:var(--f-mono); font-size:0.8rem; color:var(--ink-3); background:var(--shade); border:1px solid var(--rule-soft); border-radius:100px; padding:0 6px}
 
-.stage{flex:1; min-width:0; position:relative; min-height:calc(100vh - var(--topbar-h))}
+.stage{flex:1; min-width:0; position:relative; min-height:calc(100vh - var(--sticky-top))}
 .stage.measure{background:var(--cool);
   background-image:linear-gradient(var(--grid) 1px,transparent 1px),linear-gradient(90deg,var(--grid) 1px,transparent 1px);
   background-size:26px 26px}
@@ -178,6 +178,9 @@ textarea{resize:vertical; min-height:80px; line-height:1.7}
    不要再宣告 outline，否則會蓋掉全域規則並讓滑鼠點擊也出現外框。 */
 input:focus-visible,select:focus-visible,textarea:focus-visible{border-color:transparent}
 
+/* 表格裡當連結用的按鈕：外觀像連結，語意是按鈕 */
+.lk-plain{background:none; border:0; padding:0; font:inherit; color:var(--accent);
+  cursor:pointer; text-align:left; text-decoration:underline; text-underline-offset:3px}
 button.pill{font:inherit; font-size:0.8rem; cursor:pointer; border-color:var(--rule-strong)}
 .pill{display:inline-flex; align-items:center; gap:5px; border-radius:100px; padding:1px 9px; font-size:0.8rem; border:1px solid var(--rule); background:var(--shade); color:var(--ink-2); white-space:nowrap}
 .pill .dot{width:7px; height:7px; border-radius:50%; background:currentColor}
@@ -341,7 +344,7 @@ canvas.pad{border:1px solid var(--rule); border-radius:var(--r-m); background:va
 /* 頂列實際高度。頂列是 min-height + flex-wrap，視窗變窄或字級放大時會換行變高；
    syncTopbarHeight()（99-app.js）會把量到的高度寫進這個變數，
    sticky 的側欄與文本欄才不會被壓在頂列底下（2.4.11 焦點不被遮蔽）。 */
-:root{ --topbar-h:68px }
+:root{ --topbar-h:68px; --sticky-top:68px }
 
 /* 表單控制項的邊界需 3:1（1.4.11）——一般 --rule 只有 1.5:1，不足以標示可互動邊界 */
 input[type=text],input[type=email],input[type=password],input[type=number],
@@ -414,8 +417,8 @@ input[type=checkbox],input[type=radio]{ width:1.15em; height:1.15em; accent-colo
   --pane-h:15rem}
 /* 左欄文章：sticky 但要有自己的捲動區，否則文章比視窗高時後半段永遠捲不到。
    card-h（標題與「已標記 N 句」）不捲，只捲 card-p。 */
-.aal-text{position:sticky; top:calc(var(--topbar-h) + 2px);
-  max-height:calc(100vh - var(--topbar-h) - 1rem); display:flex; flex-direction:column}
+.aal-text{position:sticky; top:calc(var(--sticky-top) + 2px);
+  max-height:calc(100vh - var(--sticky-top) - 1rem); display:flex; flex-direction:column}
 .aal-text > .card-p{overflow-y:auto; min-height:0}
 .aal-side{display:flex; flex-direction:column; gap:16px; min-width:0}
 .aal-chat .card-p{display:flex; flex-direction:column}

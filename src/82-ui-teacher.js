@@ -20,9 +20,16 @@ function viewTeacher(){
     (isResearcher()
       ? '<a class="btn" href="#/research">研究控制台</a><a class="btn primary" href="#/create">建立派題</a>'
       : '<a class="btn primary" href="#/assign/a-post/replay">看這節課的作答與對話</a>')) +
+  /* 抬頭寫「本班 24 人」，統計卡卻是四班 96 人——同一畫面自相矛盾。
+     派題分析頁已經有這張範圍說明卡，教師最先落地的這一頁也要有。 */
+  '<div class="card card-p" style="margin-bottom:14px;border-left:3px solid var(--accent)">' +
+  '<p class="small" style="margin:0">下面四張卡與「派過的作業」表格涵蓋<strong>四個班級共 ' +
+  nAll + ' 人</strong>（四班共用同一次 Rasch 校準，條件之間才可比較）。' +
+  '你自己班的名單在本頁最下方的「班級名單」。</p></div>' +
   '<div class="grid g4" style="margin-bottom:18px">' +
     statCard('全體樣本', nAll + ' 人', state.classes.length + ' 班 · 四條件叢集分派') +
-    statCard('待處理迷思題', flagged, '迷思比例 ≥ ' + state.settings.misThreshold + '%', flagged ? 'crit' : '') +
+    statCard('待處理迷思題', flagged, '前測 · 全體 · 迷思比例 ≥ ' + state.settings.misThreshold + '%',
+             flagged ? 'crit' : '') +
     statCard('共構視圖', state.views.length, '其中 ' + bridged + ' 個由迷思開啟') +
     statCard('社群貼文', cs.notes, '延伸 ' + cs.buildOns + ' · 躍升 ' + cs.riseAbove) +
   '</div>' +
@@ -43,7 +50,7 @@ function viewTeacher(){
   '<div class="card" style="margin-bottom:18px"><div class="card-h"><h3>派過的作業</h3>' +
     '<span class="muted small">點開任何一份，會看到成績分佈、KIDMAP 診斷、迷思橋接與非選評閱。</span></div>' +
     '<div class="tablewrap"><table><thead><tr><th>作業標題</th><th>階段</th><th class="n">題數</th>' +
-    '<th class="n">已交</th><th class="n">迷思題</th><th>建立時間</th><th></th></tr></thead><tbody>' +
+    '<th class="n">已交（全體）</th><th class="n">迷思題</th><th>建立時間</th><th></th></tr></thead><tbody>' +
     asgs.map(function(a){
       const d = diagnose(state, a.id);
       const done = d ? d.done.length : 0;

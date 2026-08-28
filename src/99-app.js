@@ -381,7 +381,11 @@ function bindEvents(){
     if (act === 'del-note'){ if (confirm('刪除這則貼文？延伸它的貼文會失去連結，這個動作無法復原。')){
       deleteNote(id); closeModal(); EDIT = null; go('#/kb'); render(); toast('已刪除。'); } return; }
     if (act === 'add-ann'){ const ta = $('#annText');
-      if (ta && ta.value.trim()){ addAnnotation(id, ta.value); render(); toast('已加上註記。'); } return; }
+      if (ta && ta.value.trim()){
+        const ok = addAnnotation(id, ta.value);
+        render();
+        toast(ok ? '已加上註記。' : '代為檢視時不能加註記。');
+      } return; }
     if (act === 'search-clear'){ KBSEARCH.q = ''; render(); return; }
     if (act === 'synth-sel'){ viewSynth.sel = id; render(); return; }
 
@@ -479,7 +483,11 @@ function bindEvents(){
   /* change 事件 */
   document.addEventListener('change', function(e){
     const t = e.target.closest('[data-act]');
-    if (e.target.id === 'who'){ state.ui.role = e.target.value; save(); renderShell();
+    if (e.target.id === 'who'){
+      /* 用身分下拉離開代為檢視也要結束模式，否則 impersonate 旗標會留著，
+         把整站對「已經回到自己身分」的老師鎖在唯讀狀態，而且沒有任何說明。 */
+      state.ui.impersonate = null;
+      state.ui.role = e.target.value; save(); renderShell();
       go(isTeacher() ? '#/teacher' : '#/student'); render(); return; }
     if (!t) return;
     const act = t.dataset.act;
@@ -645,11 +653,19 @@ function syncNarrow(){
   document.documentElement.toggleAttribute('data-narrow', (window.innerWidth / fs) < 900);
 }
 
+/* 兩個變數，不能共用一個：
+   --topbar-h  ＝ 只有頂列的高度。代為檢視的橫幅貼在它下面。
+   --sticky-top ＝ 頂列 + 橫幅。側欄與作答頁的文章欄貼在這條線下面。
+   共用一個的話，橫幅會把自己也往下推，跟側欄疊在同一位置。 */
 function syncTopbarHeight(){
   const t = document.querySelector('.topbar');
   if (!t) return;
-  const h = Math.round(t.getBoundingClientRect().height);
-  if (h > 0) document.documentElement.style.setProperty('--topbar-h', h + 'px');
+  const th = Math.round(t.getBoundingClientRect().height);
+  const bar = document.getElementById('impBar');
+  const bh = bar ? Math.round(bar.getBoundingClientRect().height) : 0;
+  const rs = document.documentElement.style;
+  if (th > 0) rs.setProperty('--topbar-h', th + 'px');
+  rs.setProperty('--sticky-top', (th + bh) + 'px');
 }
 
 function applyTheme(){

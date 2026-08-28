@@ -75,7 +75,7 @@ function dashStudents(){
       const s = dsMap[r.sid] || {};
       const d = r.delta;
       const cls = d == null ? 'flat' : (d > 0.15 ? 'up' : (d < -0.15 ? 'down' : 'flat'));
-      return '<tr><td><a href="#" data-act="asrole" data-id="' + r.sid + '">' + esc(userName(r.sid)) + '</a></td>' +
+      return '<tr><td><button type="button" class="lk-plain" data-act="asrole" data-id="' + r.sid + '">' + esc(userName(r.sid)) + '<span class="sr-only">：以這位學生的視角唯讀檢視</span></button></td>' +
         '<td class="n">' + fx(r.thetaPre) + '</td><td class="n">' + fx(r.thetaPost) + '</td>' +
         '<td class="n delta ' + cls + '">' + (d == null ? '—' : (d > 0 ? '+' : '') + fx(d)) + '</td>' +
         '<td class="n">' + r.q2Pre + '</td><td class="n">' + r.q2Post + '</td>' +

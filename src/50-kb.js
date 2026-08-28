@@ -145,6 +145,7 @@ function createNote(o){
   state.notes.push(n); save(); return n;
 }
 function updateNote(id, patch){
+  if (isImpersonating()) return null;
   const n = getNote(id); if (!n) return null;
   Object.keys(patch).forEach(function(k){ n[k] = patch[k]; });
   n.editedAt = Date.now();
@@ -152,6 +153,7 @@ function updateNote(id, patch){
   save(); return n;
 }
 function deleteNote(id){
+  if (isImpersonating()) return;
   state.notes = state.notes.filter(function(n){ return n.id !== id; });
   state.notes.forEach(function(n){
     if (n.buildOn === id) n.buildOn = null;
@@ -169,12 +171,15 @@ function isUnread(n){
   const me = currentUser().id;
   return n.authorIds.indexOf(me) < 0 && (n.reads || []).indexOf(me) < 0;
 }
+/* 回傳是否真的寫成功——呼叫端要據此決定 toast 說什麼，
+   否則會出現「已加上註記」但註記區是空的。 */
 function addAnnotation(id, text){
-  if (isImpersonating()) return;
-  const n = getNote(id); if (!n || !text.trim()) return;
+  if (isImpersonating()) return false;
+  const n = getNote(id); if (!n || !text.trim()) return false;
   n.annotations = n.annotations || [];
   n.annotations.push({id: uid('an'), authorId: currentUser().id, text: text.trim(), at: Date.now()});
   save();
+  return true;
 }
 function createView(o){
   const v = {id: uid('v'), title: o.title, desc: o.desc || '', createdAt: Date.now(),

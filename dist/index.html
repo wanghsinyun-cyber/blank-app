@@ -120,8 +120,8 @@ button,input,select,textarea{font:inherit; color:inherit}
 }
 
 .rail{
-  position:sticky; top:var(--topbar-h); align-self:flex-start; flex:0 0 13.6rem; width:13.6rem;
-  min-height:calc(100vh - var(--topbar-h)); max-height:calc(100vh - var(--topbar-h)); overflow-y:auto;
+  position:sticky; top:var(--sticky-top); align-self:flex-start; flex:0 0 13.6rem; width:13.6rem;
+  min-height:calc(100vh - var(--sticky-top)); max-height:calc(100vh - var(--sticky-top)); overflow-y:auto;
   background:var(--card); border-right:1px solid var(--rule);
   padding:12px 10px 24px; display:flex; flex-direction:column; gap:2px;
 }
@@ -136,7 +136,7 @@ button,input,select,textarea{font:inherit; color:inherit}
 .rail a[aria-current="page"] .glyph{color:var(--ink)}
 .rail .badge{margin-left:auto; font-family:var(--f-mono); font-size:0.8rem; color:var(--ink-3); background:var(--shade); border:1px solid var(--rule-soft); border-radius:100px; padding:0 6px}
 
-.stage{flex:1; min-width:0; position:relative; min-height:calc(100vh - var(--topbar-h))}
+.stage{flex:1; min-width:0; position:relative; min-height:calc(100vh - var(--sticky-top))}
 .stage.measure{background:var(--cool);
   background-image:linear-gradient(var(--grid) 1px,transparent 1px),linear-gradient(90deg,var(--grid) 1px,transparent 1px);
   background-size:26px 26px}
@@ -186,6 +186,9 @@ textarea{resize:vertical; min-height:80px; line-height:1.7}
    不要再宣告 outline，否則會蓋掉全域規則並讓滑鼠點擊也出現外框。 */
 input:focus-visible,select:focus-visible,textarea:focus-visible{border-color:transparent}
 
+/* 表格裡當連結用的按鈕：外觀像連結，語意是按鈕 */
+.lk-plain{background:none; border:0; padding:0; font:inherit; color:var(--accent);
+  cursor:pointer; text-align:left; text-decoration:underline; text-underline-offset:3px}
 button.pill{font:inherit; font-size:0.8rem; cursor:pointer; border-color:var(--rule-strong)}
 .pill{display:inline-flex; align-items:center; gap:5px; border-radius:100px; padding:1px 9px; font-size:0.8rem; border:1px solid var(--rule); background:var(--shade); color:var(--ink-2); white-space:nowrap}
 .pill .dot{width:7px; height:7px; border-radius:50%; background:currentColor}
@@ -349,7 +352,7 @@ canvas.pad{border:1px solid var(--rule); border-radius:var(--r-m); background:va
 /* 頂列實際高度。頂列是 min-height + flex-wrap，視窗變窄或字級放大時會換行變高；
    syncTopbarHeight()（99-app.js）會把量到的高度寫進這個變數，
    sticky 的側欄與文本欄才不會被壓在頂列底下（2.4.11 焦點不被遮蔽）。 */
-:root{ --topbar-h:68px }
+:root{ --topbar-h:68px; --sticky-top:68px }
 
 /* 表單控制項的邊界需 3:1（1.4.11）——一般 --rule 只有 1.5:1，不足以標示可互動邊界 */
 input[type=text],input[type=email],input[type=password],input[type=number],
@@ -422,8 +425,8 @@ input[type=checkbox],input[type=radio]{ width:1.15em; height:1.15em; accent-colo
   --pane-h:15rem}
 /* 左欄文章：sticky 但要有自己的捲動區，否則文章比視窗高時後半段永遠捲不到。
    card-h（標題與「已標記 N 句」）不捲，只捲 card-p。 */
-.aal-text{position:sticky; top:calc(var(--topbar-h) + 2px);
-  max-height:calc(100vh - var(--topbar-h) - 1rem); display:flex; flex-direction:column}
+.aal-text{position:sticky; top:calc(var(--sticky-top) + 2px);
+  max-height:calc(100vh - var(--sticky-top) - 1rem); display:flex; flex-direction:column}
 .aal-text > .card-p{overflow-y:auto; min-height:0}
 .aal-side{display:flex; flex-direction:column; gap:16px; min-width:0}
 .aal-chat .card-p{display:flex; flex-direction:column}
@@ -2434,6 +2437,7 @@ function createNote(o){
   state.notes.push(n); save(); return n;
 }
 function updateNote(id, patch){
+  if (isImpersonating()) return null;
   const n = getNote(id); if (!n) return null;
   Object.keys(patch).forEach(function(k){ n[k] = patch[k]; });
   n.editedAt = Date.now();
@@ -2441,6 +2445,7 @@ function updateNote(id, patch){
   save(); return n;
 }
 function deleteNote(id){
+  if (isImpersonating()) return;
   state.notes = state.notes.filter(function(n){ return n.id !== id; });
   state.notes.forEach(function(n){
     if (n.buildOn === id) n.buildOn = null;
@@ -2458,12 +2463,15 @@ function isUnread(n){
   const me = currentUser().id;
   return n.authorIds.indexOf(me) < 0 && (n.reads || []).indexOf(me) < 0;
 }
+/* 回傳是否真的寫成功——呼叫端要據此決定 toast 說什麼，
+   否則會出現「已加上註記」但註記區是空的。 */
 function addAnnotation(id, text){
-  if (isImpersonating()) return;
-  const n = getNote(id); if (!n || !text.trim()) return;
+  if (isImpersonating()) return false;
+  const n = getNote(id); if (!n || !text.trim()) return false;
   n.annotations = n.annotations || [];
   n.annotations.push({id: uid('an'), authorId: currentUser().id, text: text.trim(), at: Date.now()});
   save();
+  return true;
 }
 function createView(o){
   const v = {id: uid('v'), title: o.title, desc: o.desc || '', createdAt: Date.now(),
@@ -4138,6 +4146,8 @@ function renderShell(){
   } else if (bar){
     bar.remove();
   }
+  /* 橫幅出現／消失都會改變頂部帶的總高度，sticky 的偏移量要跟著更新 */
+  if (typeof syncTopbarHeight === 'function') syncTopbarHeight();
 
   renderRail();
 }
@@ -4543,9 +4553,16 @@ function viewTeacher(){
     (isResearcher()
       ? '<a class="btn" href="#/research">研究控制台</a><a class="btn primary" href="#/create">建立派題</a>'
       : '<a class="btn primary" href="#/assign/a-post/replay">看這節課的作答與對話</a>')) +
+  /* 抬頭寫「本班 24 人」，統計卡卻是四班 96 人——同一畫面自相矛盾。
+     派題分析頁已經有這張範圍說明卡，教師最先落地的這一頁也要有。 */
+  '<div class="card card-p" style="margin-bottom:14px;border-left:3px solid var(--accent)">' +
+  '<p class="small" style="margin:0">下面四張卡與「派過的作業」表格涵蓋<strong>四個班級共 ' +
+  nAll + ' 人</strong>（四班共用同一次 Rasch 校準，條件之間才可比較）。' +
+  '你自己班的名單在本頁最下方的「班級名單」。</p></div>' +
   '<div class="grid g4" style="margin-bottom:18px">' +
     statCard('全體樣本', nAll + ' 人', state.classes.length + ' 班 · 四條件叢集分派') +
-    statCard('待處理迷思題', flagged, '迷思比例 ≥ ' + state.settings.misThreshold + '%', flagged ? 'crit' : '') +
+    statCard('待處理迷思題', flagged, '前測 · 全體 · 迷思比例 ≥ ' + state.settings.misThreshold + '%',
+             flagged ? 'crit' : '') +
     statCard('共構視圖', state.views.length, '其中 ' + bridged + ' 個由迷思開啟') +
     statCard('社群貼文', cs.notes, '延伸 ' + cs.buildOns + ' · 躍升 ' + cs.riseAbove) +
   '</div>' +
@@ -4566,7 +4583,7 @@ function viewTeacher(){
   '<div class="card" style="margin-bottom:18px"><div class="card-h"><h3>派過的作業</h3>' +
     '<span class="muted small">點開任何一份，會看到成績分佈、KIDMAP 診斷、迷思橋接與非選評閱。</span></div>' +
     '<div class="tablewrap"><table><thead><tr><th>作業標題</th><th>階段</th><th class="n">題數</th>' +
-    '<th class="n">已交</th><th class="n">迷思題</th><th>建立時間</th><th></th></tr></thead><tbody>' +
+    '<th class="n">已交（全體）</th><th class="n">迷思題</th><th>建立時間</th><th></th></tr></thead><tbody>' +
     asgs.map(function(a){
       const d = diagnose(state, a.id);
       const done = d ? d.done.length : 0;
@@ -5458,6 +5475,9 @@ function saveEditor(){
   } else {
     const n = createNote(Object.assign({viewId:EDIT.viewId, buildOn:EDIT.buildOn, kind:EDIT.kind,
       contains:EDIT.contains, x:EDIT.x, y:EDIT.y}, payload));
+    /* createNote 在代為檢視時回 null。不檢查的話會先跳「已貼上去」的成功訊息，
+       再在 n.id 丟 TypeError——使用者看到的是「大聲的假成功」。 */
+    if (!n){ closeModal(); EDIT = null; toast('代為檢視時不能替學生貼想法。'); return; }
     toast('已貼上去。想法現在屬於社群了。');
     closeModal(); EDIT = null; go('#/note/' + n.id); return;
   }
@@ -5587,7 +5607,7 @@ function dashStudents(){
       const s = dsMap[r.sid] || {};
       const d = r.delta;
       const cls = d == null ? 'flat' : (d > 0.15 ? 'up' : (d < -0.15 ? 'down' : 'flat'));
-      return '<tr><td><a href="#" data-act="asrole" data-id="' + r.sid + '">' + esc(userName(r.sid)) + '</a></td>' +
+      return '<tr><td><button type="button" class="lk-plain" data-act="asrole" data-id="' + r.sid + '">' + esc(userName(r.sid)) + '<span class="sr-only">：以這位學生的視角唯讀檢視</span></button></td>' +
         '<td class="n">' + fx(r.thetaPre) + '</td><td class="n">' + fx(r.thetaPost) + '</td>' +
         '<td class="n delta ' + cls + '">' + (d == null ? '—' : (d > 0 ? '+' : '') + fx(d)) + '</td>' +
         '<td class="n">' + r.q2Pre + '</td><td class="n">' + r.q2Post + '</td>' +
@@ -8346,7 +8366,11 @@ function bindEvents(){
     if (act === 'del-note'){ if (confirm('刪除這則貼文？延伸它的貼文會失去連結，這個動作無法復原。')){
       deleteNote(id); closeModal(); EDIT = null; go('#/kb'); render(); toast('已刪除。'); } return; }
     if (act === 'add-ann'){ const ta = $('#annText');
-      if (ta && ta.value.trim()){ addAnnotation(id, ta.value); render(); toast('已加上註記。'); } return; }
+      if (ta && ta.value.trim()){
+        const ok = addAnnotation(id, ta.value);
+        render();
+        toast(ok ? '已加上註記。' : '代為檢視時不能加註記。');
+      } return; }
     if (act === 'search-clear'){ KBSEARCH.q = ''; render(); return; }
     if (act === 'synth-sel'){ viewSynth.sel = id; render(); return; }
 
@@ -8444,7 +8468,11 @@ function bindEvents(){
   /* change 事件 */
   document.addEventListener('change', function(e){
     const t = e.target.closest('[data-act]');
-    if (e.target.id === 'who'){ state.ui.role = e.target.value; save(); renderShell();
+    if (e.target.id === 'who'){
+      /* 用身分下拉離開代為檢視也要結束模式，否則 impersonate 旗標會留著，
+         把整站對「已經回到自己身分」的老師鎖在唯讀狀態，而且沒有任何說明。 */
+      state.ui.impersonate = null;
+      state.ui.role = e.target.value; save(); renderShell();
       go(isTeacher() ? '#/teacher' : '#/student'); render(); return; }
     if (!t) return;
     const act = t.dataset.act;
@@ -8610,11 +8638,19 @@ function syncNarrow(){
   document.documentElement.toggleAttribute('data-narrow', (window.innerWidth / fs) < 900);
 }
 
+/* 兩個變數，不能共用一個：
+   --topbar-h  ＝ 只有頂列的高度。代為檢視的橫幅貼在它下面。
+   --sticky-top ＝ 頂列 + 橫幅。側欄與作答頁的文章欄貼在這條線下面。
+   共用一個的話，橫幅會把自己也往下推，跟側欄疊在同一位置。 */
 function syncTopbarHeight(){
   const t = document.querySelector('.topbar');
   if (!t) return;
-  const h = Math.round(t.getBoundingClientRect().height);
-  if (h > 0) document.documentElement.style.setProperty('--topbar-h', h + 'px');
+  const th = Math.round(t.getBoundingClientRect().height);
+  const bar = document.getElementById('impBar');
+  const bh = bar ? Math.round(bar.getBoundingClientRect().height) : 0;
+  const rs = document.documentElement.style;
+  if (th > 0) rs.setProperty('--topbar-h', th + 'px');
+  rs.setProperty('--sticky-top', (th + bh) + 'px');
 }
 
 function applyTheme(){

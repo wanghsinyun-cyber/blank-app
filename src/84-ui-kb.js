@@ -354,6 +354,9 @@ function saveEditor(){
   } else {
     const n = createNote(Object.assign({viewId:EDIT.viewId, buildOn:EDIT.buildOn, kind:EDIT.kind,
       contains:EDIT.contains, x:EDIT.x, y:EDIT.y}, payload));
+    /* createNote 在代為檢視時回 null。不檢查的話會先跳「已貼上去」的成功訊息，
+       再在 n.id 丟 TypeError——使用者看到的是「大聲的假成功」。 */
+    if (!n){ closeModal(); EDIT = null; toast('代為檢視時不能替學生貼想法。'); return; }
     toast('已貼上去。想法現在屬於社群了。');
     closeModal(); EDIT = null; go('#/note/' + n.id); return;
   }
