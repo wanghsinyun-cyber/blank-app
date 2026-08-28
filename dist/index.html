@@ -2366,10 +2366,22 @@ function save(){
     localStorage.setItem(STORE_KEY, JSON.stringify(state));
   } catch (e) { /* 無痕模式等情況：僅存在記憶體 */ }
 }
-/* 只給「進入／離開代為檢視」這一種變更用。 */
+/* 只給「進入／離開代為檢視」這一種變更用——而且只寫 ui 這一個切片。
+   舊版是把守門整個掀開再 save() 整份 state：代為檢視期間任何漏了守門的
+   寫入都會累積在記憶體裡，然後被〈結束檢視〉一次帶出去永久落地。
+   實測過一次真實傷害：老師代為檢視時按〈再走一次（示範）〉，
+   結束檢視之後那位學生的 16 筆後測作答就永久消失了。
+   改成只覆蓋 prev.ui 之後，往後任何新增的寫入點忘了守門，
+   也不可能再靠離開把破壞帶出來。 */
 function saveUiOnly(){
-  save._allowUiWrite = true;
-  try { save(); } finally { save._allowUiWrite = false; }
+  try {
+    const raw = localStorage.getItem(STORE_KEY);
+    if (!raw){ save._allowUiWrite = true; try { save(); } finally { save._allowUiWrite = false; } return; }
+    const prev = JSON.parse(raw);
+    const imp = state.ui && state.ui.impersonate;
+    prev.ui = Object.assign({}, state.ui, imp ? {role: imp.realRole, impersonate: undefined} : {});
+    localStorage.setItem(STORE_KEY, JSON.stringify(prev));
+  } catch (e) { /* 無痕模式等情況：僅存在記憶體 */ }
 }
 /* 老師正在以某位學生的視角檢視。此時一律唯讀——
    他的閱讀、貼文、註記都不可以記到學生名下（reads 是 KB 指數的原料）。 */
@@ -5379,7 +5391,7 @@ function viewKBList(){
       (v.links && v.links.length ? '<div class="small muted" style="margin-top:8px">連結視圖：' +
         v.links.map(function(l){ const t = getView(l); return t ? '<a href="#/kb/' + l + '">' + esc(t.title) + '</a>' : ''; }).join('、') + '</div>' : '') +
       '<div class="row" style="margin-top:12px"><a class="btn primary sm" href="#/kb/' + v.id + '">進入視圖</a>' +
-      '<a class="btn sm" href="#/synth/' + v.id + '">想法串綜整</a></div>' +
+      (isTeacher() ? '<a class="btn sm" href="#/synth/' + v.id + '">想法串綜整</a>' : '') + '</div>' +
       '</div></div>';
   }).join('') + '</div>';
 }
@@ -5450,7 +5462,7 @@ function viewKBCanvas(vid){
   });
 
   return sectionHead(v.title, v.desc, '<a class="btn" href="#/kb">← 所有視圖</a>' +
-      '<a class="btn" href="#/synth/' + v.id + '">想法串綜整</a>') +
+      (isTeacher() ? '<a class="btn" href="#/synth/' + v.id + '">想法串綜整</a>' : '')) +
     (it ? '<div class="card card-p" style="margin-bottom:14px;border-left:3px solid var(--q2)">' +
       '<div class="eyebrow">這個視圖從哪裡來</div>' +
       /* 學生只看到作業名稱的純文字：那條連結會直接把他帶到含 16 題正解的分析頁 */
@@ -5525,7 +5537,8 @@ function viewNote(nid){
     '<a class="btn" href="#/kb/' + n.viewId + '">← 回視圖</a>' +
     (canEdit ? '<button class="btn sm" data-act="edit-note" data-id="' + n.id + '">編輯</button>' : '')) +
   (isImpersonating() ? '<div class="card card-p" style="margin-bottom:12px">' +
-    '<p class="small" style="margin:0">代為檢視中，只能看不能改——編輯、刪除與加註記都停用了，' +
+    '<p class="small" style="margin:0">代為檢視中，只能看不能改——編輯、刪除、加註記與' +
+    '「重做這節課」都停用了，' +
     '你的操作不會記到這位學生名下。</p></div>' : '') +
   '<div class="grid" style="grid-template-columns:minmax(0,1.6fr) minmax(280px,1fr);gap:16px">' +
   '<div class="col">' +
@@ -5549,11 +5562,16 @@ function viewNote(nid){
       '帶進新資訊、挑戰現有說法、提出更好的版本，或把大家的想法綜整起來。</p></div></div>' +
   '</div>' +
   '<div class="col">' +
-    '<div class="card"><div class="card-h"><h3>AI 形成性回饋</h3>' +
-      '<button class="btn sm" data-act="ai-note" data-id="' + n.id + '">' + (fb ? '重新分析' : '分析') + '</button></div>' +
-      '<div class="card-p"><div id="out-ai-note" class="' + (fb ? 'ai-out' : 'muted small') + '">' +
-      (fb ? md(fb) : '會評這則貼文對社群知識的貢獻、想法改進落在哪一級，以及可以立刻做的下一步。不會直接給答案。') +
-      '</div></div></div>' +
+    /* 整張卡只給教師。它會給貼文作者「一個可以立刻做的下一步」——那就是
+       個人化鷹架，四個條件都拿得到、不限次數、在 MAX_TURNS 之外，
+       對照組因此會變成第四種處理。學生端唯一的 AI 通道是作答頁的夥伴。 */
+    (isTeacher()
+      ? '<div class="card"><div class="card-h"><h3>AI 形成性回饋</h3>' +
+        '<button class="btn sm" data-act="ai-note" data-id="' + n.id + '">' + (fb ? '重新分析' : '分析') + '</button></div>' +
+        '<div class="card-p"><div id="out-ai-note" class="' + (fb ? 'ai-out' : 'muted small') + '">' +
+        (fb ? md(fb) : '會評這則貼文對社群知識的貢獻、想法改進落在哪一級，以及可以立刻做的下一步。不會直接給答案。') +
+        '</div></div></div>'
+      : '') +
     '<div class="card"><div class="card-h"><h3>註記</h3><span class="muted small">' + (n.annotations || []).length + ' 則</span></div>' +
       '<div class="card-p col">' + ((n.annotations || []).map(function(a){
         return '<div style="border-left:2px solid var(--rule);padding-left:10px">' +
@@ -6106,7 +6124,7 @@ function viewStudent(){
            正式施測時 demoSeed 為 false，這顆鈕不會出現。 */
         '<div class="row">' + (done
           ? '<a class="btn" href="#/result/' + a.id + '">查看個人診斷</a>' +
-            (state.demoSeed !== false && a.aal
+            (state.demoSeed !== false && a.aal && !isImpersonating()
               ? ' <button class="btn sm" data-act="redo-demo" data-id="' + a.id +
                 '">再走一次（示範）</button>' : '')
           : '<a class="btn primary" href="#/' + (a.aal ? 'aal' : 'quiz') + '/' + a.id + '">' +
@@ -6190,10 +6208,24 @@ function viewResult(aid){
   const me = currentUser();
   const a = getAssignment(aid);
   if (!a) return '<div class="empty"><h3>找不到這份作業</h3></div>';
+  /* 沒交卷就看不到這一頁。學生交完卷本來就會被導到 #/result/<aid>，
+     所以這個網址的樣式他一定看過——沒有這道門檻，作答到一半改網址
+     就拿到整份正解。用空狀態不要用 go()：go() 會 push 歷史，
+     並與 viewAaL 的「已交卷 → 導向 result」反向導向對撞。 */
+  if (!isTeacher() && !submitted(aid, me.id)){
+    return '<div class="empty"><h3>這一份還沒交</h3>' +
+      '<p style="max-width:60ch">交出去之後，這裡會告訴你哪幾題讀得很穩、哪幾題值得回去再讀一次。</p>' +
+      '<div class="row" style="margin-top:14px">' +
+      '<a class="btn primary" href="#/' + (a.aal ? 'aal' : 'quiz') + '/' + a.id + '">' +
+      (a.aal ? '回去把這節課做完 →' : '回去作答 →') + '</a>' +
+      '<a class="btn" href="#/student">回我的作業</a></div></div>';
+  }
   /* 前測診斷在後測交卷之前不給正解——後測用的是同一份題本。
+     前半在上面那道門檻之後看似冗餘，但它是日後放寬門檻時的第二道保險，成本為零。
      四象限、星等與「可惜的題目 → 全班正在討論這題」都保留：
      它們只需要題號，不洩題，而那正是讓孩子回去重讀的動機來源。 */
-  const keyLocked = (aid === 'a-pre' && !submitted('a-post', me.id));
+  const keyLocked = !submitted(aid, me.id) ||
+                    (aid === 'a-pre' && !submitted('a-post', me.id));
   const diag = diagnose(state, aid);
   const mine = state.responses.filter(function(r){ return r.aid === aid && r.sid === me.id; });
   const mc = mine.filter(function(r){ return r.correct !== null && r.correct !== undefined; });
@@ -6269,7 +6301,12 @@ function crResultBlock(aid, sid, keyLocked){
       const r = state.responses.find(function(x){ return x.aid === aid && x.sid === sid && x.iid === it.id; });
       return '<div class="note-full"><b>非選第 ' + it.no + ' 題</b>' +
         '<div class="stem">' + esc(it.stem) + '</div>' +
-        '<div class="ai-out" style="white-space:pre-wrap">' + esc((r && r.text) || '（未作答）') + '</div>' +
+        /* 前測與後測是同兩題建構反應題。在後測交卷前把自己前測寫的整段
+           作文讀回來，等於直接抄一次——兩題的 Δ 會歸零。 */
+        (keyLocked
+          ? '<p class="muted small" style="margin-top:6px">這一節課上完之後，這裡會打開，' +
+            '讓你看到自己當時寫了什麼。</p>'
+          : '<div class="ai-out" style="white-space:pre-wrap">' + esc((r && r.text) || '（未作答）') + '</div>') +
         '<div class="row" style="margin-top:8px">' +
         (r && r.score !== null && r.score !== undefined
           ? '<span class="pill q1"><span class="dot"></span>得分 ' + r.score + ' / 6</span>'
@@ -8432,7 +8469,10 @@ const PLAIN_ROUTES = {about:1, settings:1, bank:1, survey:1};
 const RESEARCHER_ONLY = {research:1, create:1, settings:1};
 /* 教師端專屬。這些頁面會印出正解、誘答標記與全班診斷；
    學生走進去等於在前後測之間拿到答案，Δθ 就沒有意義了。 */
-const TEACHER_ONLY = {assign:1, dash:1, inspect:1, bank:1};
+/* synth（想法串綜整）在這裡，note 不在——學生必須讀得到別人的貼文才能延伸，
+   但綜整頁會印出 AI 貼文草稿、未發言點名冊、KIDMAP，以及〈產生後測題〉
+   （那顆鈕會把現役題本裡的題目連同正解印出來）。 */
+const TEACHER_ONLY = {assign:1, dash:1, inspect:1, bank:1, synth:1};
 
 /* 上一次繪製的是哪一條路由。用來判斷這次 render() 是「換頁」還是「原地重繪」：
    換頁才捲回頁首並把焦點交給主舞台；原地重繪要把捲動位置與焦點放回去，
@@ -8818,10 +8858,16 @@ function bindEvents(){
     if (act === 'cr-scope'){ tabCR.scope = id; render(); return; }
     if (act === 'gen-rubric'){ runAI('rubric', function(f){ return aiRubric(getItem(id), true); }, true); return; }
     if (act === 'ai-class'){ runAI('ai-class', function(f){ return aiClassMisconception(diagnose(state, ROUTE.args[0]), f); }); return; }
-    if (act === 'ai-note'){ runAI('ai-note', function(f){ return aiNoteFeedback(getNote(id), f); }); return; }
-    if (act === 'ai-thread'){ runAI('ai-thread', function(f){ return aiThreadSynthesis(id, f); }); return; }
-    if (act === 'ai-community'){ runAI('ai-community', function(f){ return aiCommunityReport(f); }); return; }
-    if (act === 'items-from-view'){ showViewItems(id); return; }
+    /* 路由守門是第一道，這裡是第二道。委派處理器不看 ROUTE，
+       所以光把 synth 放進 TEACHER_ONLY 擋不住直接觸發的事件。
+       學生端唯一的 AI 通道是 aalSay()，其餘一律只給教師。 */
+    if (act === 'ai-note'){ if (!isTeacher()) return;
+      runAI('ai-note', function(f){ return aiNoteFeedback(getNote(id), f); }); return; }
+    if (act === 'ai-thread'){ if (!isTeacher()) return;
+      runAI('ai-thread', function(f){ return aiThreadSynthesis(id, f); }); return; }
+    if (act === 'ai-community'){ if (!isTeacher()) return;
+      runAI('ai-community', function(f){ return aiCommunityReport(f); }); return; }
+    if (act === 'items-from-view'){ if (!isTeacher()) return; showViewItems(id); return; }
     if (act.indexOf('rerun-') === 0){
       const o = act.slice(6);
       if (o === 'ai-class') runAI(o, function(){ return aiClassMisconception(diagnose(state, ROUTE.args[0]), true); }, true);
@@ -9012,6 +9058,9 @@ function bindEvents(){
     /* 示範模式下讓自己重走一次這節課。只清掉「我自己」這一份後測作答，
        全班的前測、Rasch 校準與其他人的資料都不動。 */
     if (act === 'redo-demo'){
+      /* 代為檢視時絕對不能走這裡：它會刪掉那位學生的整份後測作答，
+         而那是依變項本身。措辭與 aalSubmit 的守門對齊。 */
+      if (isImpersonating()){ toast('代為檢視時不能替學生重做這節課。'); return; }
       const aid = t.dataset.id, me = currentUser();
       if (!confirm('這會清掉你自己在這份評量上的作答，重新走一次流程。班上其他人的資料不受影響。確定嗎？')) return;
       state.submissions = state.submissions.filter(function(s){ return !(s.aid === aid && s.sid === me.id); });
@@ -9341,8 +9390,13 @@ async function showViewItems(vid){
         }).join('') + '</div>' +
         (x.hint ? '<p class="muted small" style="margin-top:6px">' + esc(x.hint) + '</p>' : '') +
         (x.targets ? '<p class="muted small">' + esc(x.targets) + '</p>' : '') + '</div>';
-    }).join('') + '<p class="muted small">引擎：' + esc(engineLabel()) +
-      '。要正式施測，請到「建立派題」把對應單元的題目派給班級。</p>';
+    }).join('') +
+      /* 這些題目取自現有題庫，可能與正在施測的題本重疊——不標明的話，
+         老師會以為它們是全新的題目而拿去補考。「建立派題」在 RESEARCHER_ONLY，
+         教師點不進去，所以也不能叫他自己去派。 */
+      '<p class="muted small">以下題目取自現有題庫，<strong>可能與本次施測的題本重疊</strong>，' +
+      '請勿直接發給正在受試的班級。要另外派題，請研究者從「建立派題」派出。' +
+      '引擎：' + esc(engineLabel()) + '</p>';
   } catch (e) {
     box.className = 'ai-out';
     box.innerHTML = '<p><strong>命題失敗</strong></p><p>' + esc(e.message) + '</p>';

@@ -7,7 +7,10 @@ const PLAIN_ROUTES = {about:1, settings:1, bank:1, survey:1};
 const RESEARCHER_ONLY = {research:1, create:1, settings:1};
 /* 教師端專屬。這些頁面會印出正解、誘答標記與全班診斷；
    學生走進去等於在前後測之間拿到答案，Δθ 就沒有意義了。 */
-const TEACHER_ONLY = {assign:1, dash:1, inspect:1, bank:1};
+/* synth（想法串綜整）在這裡，note 不在——學生必須讀得到別人的貼文才能延伸，
+   但綜整頁會印出 AI 貼文草稿、未發言點名冊、KIDMAP，以及〈產生後測題〉
+   （那顆鈕會把現役題本裡的題目連同正解印出來）。 */
+const TEACHER_ONLY = {assign:1, dash:1, inspect:1, bank:1, synth:1};
 
 /* 上一次繪製的是哪一條路由。用來判斷這次 render() 是「換頁」還是「原地重繪」：
    換頁才捲回頁首並把焦點交給主舞台；原地重繪要把捲動位置與焦點放回去，
@@ -393,10 +396,16 @@ function bindEvents(){
     if (act === 'cr-scope'){ tabCR.scope = id; render(); return; }
     if (act === 'gen-rubric'){ runAI('rubric', function(f){ return aiRubric(getItem(id), true); }, true); return; }
     if (act === 'ai-class'){ runAI('ai-class', function(f){ return aiClassMisconception(diagnose(state, ROUTE.args[0]), f); }); return; }
-    if (act === 'ai-note'){ runAI('ai-note', function(f){ return aiNoteFeedback(getNote(id), f); }); return; }
-    if (act === 'ai-thread'){ runAI('ai-thread', function(f){ return aiThreadSynthesis(id, f); }); return; }
-    if (act === 'ai-community'){ runAI('ai-community', function(f){ return aiCommunityReport(f); }); return; }
-    if (act === 'items-from-view'){ showViewItems(id); return; }
+    /* 路由守門是第一道，這裡是第二道。委派處理器不看 ROUTE，
+       所以光把 synth 放進 TEACHER_ONLY 擋不住直接觸發的事件。
+       學生端唯一的 AI 通道是 aalSay()，其餘一律只給教師。 */
+    if (act === 'ai-note'){ if (!isTeacher()) return;
+      runAI('ai-note', function(f){ return aiNoteFeedback(getNote(id), f); }); return; }
+    if (act === 'ai-thread'){ if (!isTeacher()) return;
+      runAI('ai-thread', function(f){ return aiThreadSynthesis(id, f); }); return; }
+    if (act === 'ai-community'){ if (!isTeacher()) return;
+      runAI('ai-community', function(f){ return aiCommunityReport(f); }); return; }
+    if (act === 'items-from-view'){ if (!isTeacher()) return; showViewItems(id); return; }
     if (act.indexOf('rerun-') === 0){
       const o = act.slice(6);
       if (o === 'ai-class') runAI(o, function(){ return aiClassMisconception(diagnose(state, ROUTE.args[0]), true); }, true);
@@ -587,6 +596,9 @@ function bindEvents(){
     /* 示範模式下讓自己重走一次這節課。只清掉「我自己」這一份後測作答，
        全班的前測、Rasch 校準與其他人的資料都不動。 */
     if (act === 'redo-demo'){
+      /* 代為檢視時絕對不能走這裡：它會刪掉那位學生的整份後測作答，
+         而那是依變項本身。措辭與 aalSubmit 的守門對齊。 */
+      if (isImpersonating()){ toast('代為檢視時不能替學生重做這節課。'); return; }
       const aid = t.dataset.id, me = currentUser();
       if (!confirm('這會清掉你自己在這份評量上的作答，重新走一次流程。班上其他人的資料不受影響。確定嗎？')) return;
       state.submissions = state.submissions.filter(function(s){ return !(s.aid === aid && s.sid === me.id); });
@@ -916,8 +928,13 @@ async function showViewItems(vid){
         }).join('') + '</div>' +
         (x.hint ? '<p class="muted small" style="margin-top:6px">' + esc(x.hint) + '</p>' : '') +
         (x.targets ? '<p class="muted small">' + esc(x.targets) + '</p>' : '') + '</div>';
-    }).join('') + '<p class="muted small">引擎：' + esc(engineLabel()) +
-      '。要正式施測，請到「建立派題」把對應單元的題目派給班級。</p>';
+    }).join('') +
+      /* 這些題目取自現有題庫，可能與正在施測的題本重疊——不標明的話，
+         老師會以為它們是全新的題目而拿去補考。「建立派題」在 RESEARCHER_ONLY，
+         教師點不進去，所以也不能叫他自己去派。 */
+      '<p class="muted small">以下題目取自現有題庫，<strong>可能與本次施測的題本重疊</strong>，' +
+      '請勿直接發給正在受試的班級。要另外派題，請研究者從「建立派題」派出。' +
+      '引擎：' + esc(engineLabel()) + '</p>';
   } catch (e) {
     box.className = 'ai-out';
     box.innerHTML = '<p><strong>命題失敗</strong></p><p>' + esc(e.message) + '</p>';

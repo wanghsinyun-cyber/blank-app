@@ -30,10 +30,22 @@ function save(){
     localStorage.setItem(STORE_KEY, JSON.stringify(state));
   } catch (e) { /* 無痕模式等情況：僅存在記憶體 */ }
 }
-/* 只給「進入／離開代為檢視」這一種變更用。 */
+/* 只給「進入／離開代為檢視」這一種變更用——而且只寫 ui 這一個切片。
+   舊版是把守門整個掀開再 save() 整份 state：代為檢視期間任何漏了守門的
+   寫入都會累積在記憶體裡，然後被〈結束檢視〉一次帶出去永久落地。
+   實測過一次真實傷害：老師代為檢視時按〈再走一次（示範）〉，
+   結束檢視之後那位學生的 16 筆後測作答就永久消失了。
+   改成只覆蓋 prev.ui 之後，往後任何新增的寫入點忘了守門，
+   也不可能再靠離開把破壞帶出來。 */
 function saveUiOnly(){
-  save._allowUiWrite = true;
-  try { save(); } finally { save._allowUiWrite = false; }
+  try {
+    const raw = localStorage.getItem(STORE_KEY);
+    if (!raw){ save._allowUiWrite = true; try { save(); } finally { save._allowUiWrite = false; } return; }
+    const prev = JSON.parse(raw);
+    const imp = state.ui && state.ui.impersonate;
+    prev.ui = Object.assign({}, state.ui, imp ? {role: imp.realRole, impersonate: undefined} : {});
+    localStorage.setItem(STORE_KEY, JSON.stringify(prev));
+  } catch (e) { /* 無痕模式等情況：僅存在記憶體 */ }
 }
 /* 老師正在以某位學生的視角檢視。此時一律唯讀——
    他的閱讀、貼文、註記都不可以記到學生名下（reads 是 KB 指數的原料）。 */

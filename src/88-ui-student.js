@@ -75,7 +75,7 @@ function viewStudent(){
            正式施測時 demoSeed 為 false，這顆鈕不會出現。 */
         '<div class="row">' + (done
           ? '<a class="btn" href="#/result/' + a.id + '">查看個人診斷</a>' +
-            (state.demoSeed !== false && a.aal
+            (state.demoSeed !== false && a.aal && !isImpersonating()
               ? ' <button class="btn sm" data-act="redo-demo" data-id="' + a.id +
                 '">再走一次（示範）</button>' : '')
           : '<a class="btn primary" href="#/' + (a.aal ? 'aal' : 'quiz') + '/' + a.id + '">' +
@@ -159,10 +159,24 @@ function viewResult(aid){
   const me = currentUser();
   const a = getAssignment(aid);
   if (!a) return '<div class="empty"><h3>找不到這份作業</h3></div>';
+  /* 沒交卷就看不到這一頁。學生交完卷本來就會被導到 #/result/<aid>，
+     所以這個網址的樣式他一定看過——沒有這道門檻，作答到一半改網址
+     就拿到整份正解。用空狀態不要用 go()：go() 會 push 歷史，
+     並與 viewAaL 的「已交卷 → 導向 result」反向導向對撞。 */
+  if (!isTeacher() && !submitted(aid, me.id)){
+    return '<div class="empty"><h3>這一份還沒交</h3>' +
+      '<p style="max-width:60ch">交出去之後，這裡會告訴你哪幾題讀得很穩、哪幾題值得回去再讀一次。</p>' +
+      '<div class="row" style="margin-top:14px">' +
+      '<a class="btn primary" href="#/' + (a.aal ? 'aal' : 'quiz') + '/' + a.id + '">' +
+      (a.aal ? '回去把這節課做完 →' : '回去作答 →') + '</a>' +
+      '<a class="btn" href="#/student">回我的作業</a></div></div>';
+  }
   /* 前測診斷在後測交卷之前不給正解——後測用的是同一份題本。
+     前半在上面那道門檻之後看似冗餘，但它是日後放寬門檻時的第二道保險，成本為零。
      四象限、星等與「可惜的題目 → 全班正在討論這題」都保留：
      它們只需要題號，不洩題，而那正是讓孩子回去重讀的動機來源。 */
-  const keyLocked = (aid === 'a-pre' && !submitted('a-post', me.id));
+  const keyLocked = !submitted(aid, me.id) ||
+                    (aid === 'a-pre' && !submitted('a-post', me.id));
   const diag = diagnose(state, aid);
   const mine = state.responses.filter(function(r){ return r.aid === aid && r.sid === me.id; });
   const mc = mine.filter(function(r){ return r.correct !== null && r.correct !== undefined; });
@@ -238,7 +252,12 @@ function crResultBlock(aid, sid, keyLocked){
       const r = state.responses.find(function(x){ return x.aid === aid && x.sid === sid && x.iid === it.id; });
       return '<div class="note-full"><b>非選第 ' + it.no + ' 題</b>' +
         '<div class="stem">' + esc(it.stem) + '</div>' +
-        '<div class="ai-out" style="white-space:pre-wrap">' + esc((r && r.text) || '（未作答）') + '</div>' +
+        /* 前測與後測是同兩題建構反應題。在後測交卷前把自己前測寫的整段
+           作文讀回來，等於直接抄一次——兩題的 Δ 會歸零。 */
+        (keyLocked
+          ? '<p class="muted small" style="margin-top:6px">這一節課上完之後，這裡會打開，' +
+            '讓你看到自己當時寫了什麼。</p>'
+          : '<div class="ai-out" style="white-space:pre-wrap">' + esc((r && r.text) || '（未作答）') + '</div>') +
         '<div class="row" style="margin-top:8px">' +
         (r && r.score !== null && r.score !== undefined
           ? '<span class="pill q1"><span class="dot"></span>得分 ' + r.score + ' / 6</span>'

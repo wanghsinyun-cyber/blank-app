@@ -70,7 +70,7 @@ function viewKBList(){
       (v.links && v.links.length ? '<div class="small muted" style="margin-top:8px">連結視圖：' +
         v.links.map(function(l){ const t = getView(l); return t ? '<a href="#/kb/' + l + '">' + esc(t.title) + '</a>' : ''; }).join('、') + '</div>' : '') +
       '<div class="row" style="margin-top:12px"><a class="btn primary sm" href="#/kb/' + v.id + '">進入視圖</a>' +
-      '<a class="btn sm" href="#/synth/' + v.id + '">想法串綜整</a></div>' +
+      (isTeacher() ? '<a class="btn sm" href="#/synth/' + v.id + '">想法串綜整</a>' : '') + '</div>' +
       '</div></div>';
   }).join('') + '</div>';
 }
@@ -141,7 +141,7 @@ function viewKBCanvas(vid){
   });
 
   return sectionHead(v.title, v.desc, '<a class="btn" href="#/kb">← 所有視圖</a>' +
-      '<a class="btn" href="#/synth/' + v.id + '">想法串綜整</a>') +
+      (isTeacher() ? '<a class="btn" href="#/synth/' + v.id + '">想法串綜整</a>' : '')) +
     (it ? '<div class="card card-p" style="margin-bottom:14px;border-left:3px solid var(--q2)">' +
       '<div class="eyebrow">這個視圖從哪裡來</div>' +
       /* 學生只看到作業名稱的純文字：那條連結會直接把他帶到含 16 題正解的分析頁 */
@@ -216,7 +216,8 @@ function viewNote(nid){
     '<a class="btn" href="#/kb/' + n.viewId + '">← 回視圖</a>' +
     (canEdit ? '<button class="btn sm" data-act="edit-note" data-id="' + n.id + '">編輯</button>' : '')) +
   (isImpersonating() ? '<div class="card card-p" style="margin-bottom:12px">' +
-    '<p class="small" style="margin:0">代為檢視中，只能看不能改——編輯、刪除與加註記都停用了，' +
+    '<p class="small" style="margin:0">代為檢視中，只能看不能改——編輯、刪除、加註記與' +
+    '「重做這節課」都停用了，' +
     '你的操作不會記到這位學生名下。</p></div>' : '') +
   '<div class="grid" style="grid-template-columns:minmax(0,1.6fr) minmax(280px,1fr);gap:16px">' +
   '<div class="col">' +
@@ -240,11 +241,16 @@ function viewNote(nid){
       '帶進新資訊、挑戰現有說法、提出更好的版本，或把大家的想法綜整起來。</p></div></div>' +
   '</div>' +
   '<div class="col">' +
-    '<div class="card"><div class="card-h"><h3>AI 形成性回饋</h3>' +
-      '<button class="btn sm" data-act="ai-note" data-id="' + n.id + '">' + (fb ? '重新分析' : '分析') + '</button></div>' +
-      '<div class="card-p"><div id="out-ai-note" class="' + (fb ? 'ai-out' : 'muted small') + '">' +
-      (fb ? md(fb) : '會評這則貼文對社群知識的貢獻、想法改進落在哪一級，以及可以立刻做的下一步。不會直接給答案。') +
-      '</div></div></div>' +
+    /* 整張卡只給教師。它會給貼文作者「一個可以立刻做的下一步」——那就是
+       個人化鷹架，四個條件都拿得到、不限次數、在 MAX_TURNS 之外，
+       對照組因此會變成第四種處理。學生端唯一的 AI 通道是作答頁的夥伴。 */
+    (isTeacher()
+      ? '<div class="card"><div class="card-h"><h3>AI 形成性回饋</h3>' +
+        '<button class="btn sm" data-act="ai-note" data-id="' + n.id + '">' + (fb ? '重新分析' : '分析') + '</button></div>' +
+        '<div class="card-p"><div id="out-ai-note" class="' + (fb ? 'ai-out' : 'muted small') + '">' +
+        (fb ? md(fb) : '會評這則貼文對社群知識的貢獻、想法改進落在哪一級，以及可以立刻做的下一步。不會直接給答案。') +
+        '</div></div></div>'
+      : '') +
     '<div class="card"><div class="card-h"><h3>註記</h3><span class="muted small">' + (n.annotations || []).length + ' 則</span></div>' +
       '<div class="card-p col">' + ((n.annotations || []).map(function(a){
         return '<div style="border-left:2px solid var(--rule);padding-left:10px">' +
