@@ -162,7 +162,7 @@ function viewAssign(aid, tab){
   const a = diag.assignment;
   /* 每個分頁補一句副標，老師點進去之前就知道那是什麼 */
   const tabs = [
-    ['overview', '成績總覽', '全班答對率與分佈'],
+    ['overview', '成績總覽', '全體答對率與分佈（四班）'],
     ['process', '理解歷程', '四種讀法各答對幾成'],
     ['kidmap', 'KIDMAP 診斷', '個別學生的四象限圖'],
     ['items', '每題四象限', '哪一題最多人卡住'],
@@ -203,9 +203,11 @@ function viewAssign(aid, tab){
 function tabOverview(diag){
   const scores = diag.perStudent.map(function(p){ return p.right; });
   const nItems = diag.items.length;
+  /* 實際有作答的人數，不要寫死。四格數的是「人 × 題」的格子。 */
+  const nAll = diag.perStudent.length;
   if (!diag.done.length) return '<div class="empty"><h3>還沒有學生作答</h3><p>把班級加入代碼發給學生，作答後這裡會顯示。</p></div>';
   return '<div class="grid g4" style="margin-bottom:16px">' +
-    statCard('全體平均', fx(mean(scores) / nItems * 100, 1) + '<span style="font-size:15px">%</span>', '答對 ' + fx(mean(scores), 1) + ' / ' + nItems + ' 題') +
+    statCard('全體平均', fx(mean(scores) / nItems * 100, 1) + '<span style="font-size:0.75em">%</span>', '答對 ' + fx(mean(scores), 1) + ' / ' + nItems + ' 題') +
     statCard('已交作答', diag.done.length, '未完成 ' + (diag.roster.length - diag.done.length) + ' 人') +
     statCard('迷思題次', diag.totals[2], '占全部作答 ' + pct(diag.totals[2] / Math.max(1, diag.cells.length)), diag.totals[2] ? 'crit' : '') +
     statCard('優勢題次', diag.totals[1], '超越預期答對', 'good') +
@@ -213,15 +215,20 @@ function tabOverview(diag){
   '<div class="grid g2">' +
     '<div class="card"><div class="card-h"><h3>成績分佈</h3></div><div class="card-p">' +
       histSVG(scores, Math.min(10, nItems), '答對題數（滿分 ' + nItems + '）') + '</div></div>' +
-    '<div class="card"><div class="card-h"><h3>全體四象限分佈（96 人）</h3>' +
+    /* 四格填的是「人 × 題」的格子數，不是人數。原本標題寫死「96 人」，
+       於是會出現「II 迷思概念 213」掛在「96 人」底下，而同一畫面上方的
+       統計卡對同一組數字用的是正確單位「迷思題次」。 */
+    '<div class="card"><div class="card-h"><h3>全體每題四象限分佈（四班 ' + nAll + ' 人 × ' +
+      nItems + ' 題，共 ' + (nAll * nItems) + ' 題次）</h3>' +
       '<span class="muted small">排列方式與 KIDMAP 圖一致</span></div><div class="card-p">' +
       // 依 KIDMAP 圖上的位置排列：左上 III、右上 I、左下 II、右下 IV
       '<div class="grid" style="grid-template-columns:repeat(2,minmax(0,1fr))">' + [3,1,2,4].map(function(q){
         return '<div class="stat"><div class="k">' + QUAD[q].roman + ' ' + QUAD[q].name + '</div>' +
-          '<div class="v" style="color:var(--' + QUAD[q].key + ')">' + diag.totals[q] + '</div>' +
+          '<div class="v" style="color:var(--' + QUAD[q].key + ')">' + diag.totals[q] +
+          '<span class="s" style="font-size:.6em"> 題次</span></div>' +
           '<div class="s">' + esc(QUAD[q].desc) + '</div></div>';
       }).join('') + '</div>' +
-      '<p class="muted small" style="margin-top:12px">用簡化 Rasch 模式從全班作答估出每題難度 δ 與每位學生能力 θ，' +
+      '<p class="muted small" style="margin-top:12px">用簡化 Rasch 模式從全體（四班合計）作答估出每題難度 δ 與每位學生能力 θ，' +
       '再把每一個「人 × 題」的結果分成四象限。<strong>迷思概念（II）</strong>指能力足以答對卻答錯，是最需要老師介入的格子。</p>' +
     '</div></div>' +
   '</div>' +
@@ -413,7 +420,7 @@ function tabKidmap(diag){
 function tabItems(diag){
   if (!diag.ready) return '<div class="empty"><h3>尚無足夠資料</h3><p>等更多學生作答後才能顯示每題分析。</p></div>';
   const rows = diag.perItem.slice().sort(function(a, b){ return b.misRate - a.misRate; });
-  return '<div class="card"><div class="card-h"><h3>全班每題四象限分佈</h3>' +
+  return '<div class="card"><div class="card-h"><h3>全體每題四象限分佈（四班合計）</h3>' +
     '<span class="muted small">依迷思(II)比例由高至低排序</span>' + '</div>' +
     '<div class="tablewrap"><table><thead><tr><th>題號</th><th>單元</th><th class="n">δ</th><th class="n">答對率</th>' +
     '<th>四象限</th><th class="n">迷思</th><th>迷思誘答</th><th class="n">Outfit</th><th></th></tr></thead><tbody>' +
@@ -428,7 +435,7 @@ function tabItems(diag){
           pi.q[2] + '（' + pct(pi.misRate) + '）</td>' +
         '<td class="small">' + (pi.topDistractor != null
           ? String.fromCharCode(65 + pi.topDistractor) + '. ' + esc(pi.item.options[pi.topDistractor]) +
-            (m ? '<div class="muted" style="font-size:11.5px">' + esc(m.name) + '</div>' : '')
+            (m ? '<div class="muted" style="font-size:0.58rem">' + esc(m.name) + '</div>' : '')
           : '<span class="muted">—</span>') + '</td>' +
         '<td class="n">' + fx(pi.outfit) + '</td>' +
         '<td><div class="row" style="gap:6px">' +
@@ -484,7 +491,7 @@ function tabBridge(diag){
         '<div class="ai-out" style="margin-top:6px">' + nl2br(buildInquiryPrompt(pi, diag)) + '</div>' +
         '</div></div>';
     }).join('') : '<div class="empty"><h3>目前沒有明顯的迷思題</h3>' +
-      '<p>全班沒有出現迷思比例超過 ' + state.settings.misThreshold + '% 的題目。</p></div>');
+      '<p>全體（四班合計）沒有出現迷思比例超過 ' + state.settings.misThreshold + '% 的題目。</p></div>');
 }
 
 /* --- 非選題評閱 --- */
@@ -496,7 +503,20 @@ function tabCR(diag){
   const it = getItem(sel);
   const rubricKey = 'rubric:' + it.id + ':' + aiEngine();
   const rubric = state.aiCache[rubricKey];
-  const answers = state.responses.filter(function(r){ return r.aid === diag.assignment.id && r.iid === it.id; });
+  /* 這一頁原本一次列出四班 96 人的作文，沒有班級欄也沒有篩選。示範資料的
+     四班姓名是隨機組合，撞名機率高，老師會在別班孩子的欄位裡打分數——
+     而別班是別的實驗條件，一位老師的評分標準跨條件飄移，直接落在依變項上。
+     預設只顯示自己的班，範圍是顯性選擇而不是靜默縮小分母。 */
+  const all = state.responses.filter(function(r){ return r.aid === diag.assignment.id && r.iid === it.id; });
+  const mine = currentClass();
+  const scopeAll = (tabCR.scope === 'all');
+  const answers = (scopeAll ? all : all.filter(function(r){
+    const k = classOfStudent(r.sid); return k && k.id === mine.id;
+  })).slice().sort(function(a, b){
+    const ka = (classOfStudent(a.sid) || {}).id || '', kb = (classOfStudent(b.sid) || {}).id || '';
+    if (ka !== kb) return ka === mine.id ? -1 : (kb === mine.id ? 1 : (ka < kb ? -1 : 1));
+    return userName(a.sid) < userName(b.sid) ? -1 : 1;
+  });
 
   return '<div class="row" style="margin-bottom:12px">' + crs.map(function(c){
       return '<button class="btn sm' + (c.id === sel ? ' primary' : '') + '" data-act="cr-sel" data-id="' + c.id + '">非選第 ' + c.no + ' 題</button>';
@@ -509,15 +529,29 @@ function tabCR(diag){
       '<button class="btn sm" data-act="gen-rubric" data-id="' + it.id + '">' + (rubric ? '重新產生規準' : '產生規準') + '</button></div>' +
       '<div class="card-p"><div id="out-rubric" class="' + (rubric ? 'ai-out' : 'muted small') + '">' +
       (rubric ? md(rubric) : '尚未撰寫評量規準。點右上〈產生規準〉開始，之後仍可自行修改。') + '</div></div></div>' +
-    '<div class="card"><div class="card-h"><h3>逐生評閱</h3><span class="muted small">分數與評語會即時儲存</span></div>' +
+    '<div class="card card-p" style="margin-bottom:14px;border-left:3px solid var(--accent)">' +
+    '<p class="small" style="margin:0 0 8px">這份派題涵蓋<strong>四個班級共 ' + all.length +
+    ' 份作答</strong>。給分是即時儲存、沒有復原，所以預設只列出你自己班的。' +
+    'Rasch 校準與四象限仍是四班全樣本，這裡的篩選只影響顯示。</p>' +
+    '<div class="row" style="gap:6px">' +
+    '<button class="btn sm' + (scopeAll ? '' : ' primary') + '" data-act="cr-scope" data-id="mine">' +
+      esc(mine.name) + '（' + all.filter(function(r){ const k = classOfStudent(r.sid); return k && k.id === mine.id; }).length + ' 人）</button>' +
+    '<button class="btn sm' + (scopeAll ? ' primary' : '') + '" data-act="cr-scope" data-id="all">' +
+      '全部（' + all.length + ' 人）</button></div></div>' +
+    '<div class="card"><div class="card-h"><h3>逐生評閱</h3>' +
+    '<span class="muted small">分數與評語會即時儲存，改動立即生效、沒有復原</span></div>' +
     '<div class="card-p col">' + answers.map(function(r){
-      return '<div class="note-full"><div class="row" style="justify-content:space-between;margin-bottom:8px">' +
-        '<b>' + esc(userName(r.sid)) + '</b>' +
-        '<span class="row"><label class="small muted">給分</label>' +
+      const k = classOfStudent(r.sid);
+      const isMine = k && k.id === mine.id;
+      return '<div class="note-full"' + (isMine ? ' style="border-left:3px solid var(--accent)"' : '') + '>' +
+        '<div class="row" style="justify-content:space-between;margin-bottom:8px">' +
+        '<span class="row"><b>' + esc(userName(r.sid)) + '</b>' +
+        '<span class="pill">' + esc((k || {}).name || '—') + '</span></span>' +
+        '<span class="row"><label class="small muted">給分（滿分 6）</label>' +
         '<input type="number" min="0" max="6" step="1" style="width:72px" value="' + (r.score === null ? '' : r.score) +
         '" data-act="cr-score" data-sid="' + r.sid + '" data-iid="' + it.id + '" data-aid="' + diag.assignment.id + '">' +
-        '<span class="muted small">/ 6</span></span></div>' +
-        '<div class="ai-out" style="white-space:pre-wrap;font-family:var(--f-mono);font-size:12.5px">' + esc(r.text || '（未作答）') + '</div>' +
+        '</span></div>' +
+        '<div class="ai-out" style="white-space:pre-wrap;font-family:var(--f-mono);font-size:0.78rem">' + esc(r.text || '（未作答）') + '</div>' +
         '<div class="field" style="margin-top:8px"><label>給學生的評語</label>' +
         '<textarea style="min-height:56px" data-act="cr-comment" data-sid="' + r.sid + '" data-iid="' + it.id +
         '" data-aid="' + diag.assignment.id + '" placeholder="可留空">' + esc(r.comment || '') + '</textarea></div>' +
@@ -532,7 +566,7 @@ function tabAI(diag){
     '<span class="pill">' + esc(engineLabel()) + '</span>' +
     '<button class="btn primary sm" data-act="ai-class">' + (cached ? '重新分析' : '開始分析') + '</button></div>' +
     '<div class="card-p"><div id="out-ai-class" class="' + (cached ? 'ai-out' : 'muted small') + '">' +
-    (cached ? md(cached) : '會分析全班共同迷思、逐題誘答成因、具體教學策略，並把最值得討論的迷思寫成可直接貼進知識建構空間的問題敘述。') +
+    (cached ? md(cached) : '會分析全體（四班合計）的共同迷思、逐題誘答成因、具體教學策略，並把最值得討論的迷思寫成可直接貼進知識建構空間的問題敘述。') +
     '</div></div></div>' +
     '<div class="card card-p"><h4>兩套引擎的差別</h4>' +
     '<p class="small" style="margin-top:6px"><strong>內建規則引擎</strong>直接讀 Rasch 估計值與題庫的誘答標記，' +
@@ -547,7 +581,9 @@ function tabReplay(diag){
   const a = diag.assignment;
   const dial = allDialog().filter(function(d){ return d.aid === a.id; });
   const logs = allLogs().filter(function(e){ return e.aid === a.id; });
-  const rows = diag.roster.map(function(sid){
+  /* 順序與 #/inspect 的「上一位／下一位」共用同一支 inspectRoster()，
+     否則老師按下一位跳到的人跟他剛看到的名單對不上。 */
+  const rows = inspectRoster(a.id).map(function(sid){
     const cond = condition(conditionOfStudent(sid));
     const said = dial.filter(function(d){ return d.sid === sid && d.speaker === 'student'; }).length;
     const marks = logs.filter(function(e){ return e.sid === sid && e.code === 'M'; }).length;
@@ -579,7 +615,7 @@ function tabReplay(diag){
     '<div class="tablewrap"><table><thead><tr>' +
     '<th>學生</th><th>條件</th><th>作答</th><th>標記句數</th><th>發話次數</th><th>狀態</th><th></th>' +
     '</tr></thead><tbody>' +
-    rows.sort(function(x, y){ return y.said - x.said; }).map(function(r){
+    rows.map(function(r){   /* inspectRoster() 已排序 */
       return '<tr><td><b>' + esc(userName(r.sid)) + '</b></td>' +
         '<td><span class="pill"><span aria-hidden="true">' + esc(r.cond.mark || '') + '</span>' +
         esc(r.cond.name) + '</span></td>' +

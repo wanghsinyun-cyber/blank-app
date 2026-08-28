@@ -3,10 +3,12 @@
    視圖、貼文、支架、延伸貼文、躍升貼文、引用、註記、搜尋、閱讀狀態
    ========================================================================== */
 
-let KBSEL = false;              // 躍升選取模式
-let KBPICK = {};                // 被選取的貼文
-let KBSEARCH = {field:'content', q:''};
-let EDIT = null;                // 編輯中的貼文草稿
+/* 模組層級的 UI 狀態。每一個都要說清楚生命週期，否則就會像躍升選取模式
+   那樣跨視圖殘留，讓學生在別的視圖點貼文打不開，還能建出跨視圖的假躍升。 */
+let KBSEL = null;               // 躍升選取模式：存「哪一個視圖」，換視圖或離開 #/kb 即清
+let KBPICK = {};                // 被選取的貼文，與 KBSEL 同生命週期
+let KBSEARCH = {field:'content', q:''};   // 離開 #/kb 時清（換視圖保留，同一次找東西）
+let EDIT = null;                // 編輯中的貼文草稿，closeModal() 時清
 
 /* 測驗還沒交完的學生看到的門檻畫面。四個 KB 入口都先過這一關。 */
 /* 測驗還沒交完的學生看到的門檻畫面。四個 KB 入口都先過這一關。
@@ -55,7 +57,10 @@ function viewKBList(){
       (un ? '<span class="pill" style="border-color:var(--accent);color:var(--accent)">未讀 ' + un + '</span>' : '') + '</div>' +
       '<div class="card-p">' +
       '<p class="small muted">' + esc(v.desc) + '</p>' +
-      (it ? '<div class="pill q2" style="margin-bottom:8px"><span class="dot"></span>源自迷思題：第 ' + it.no + ' 題</div>' : '') +
+      /* 同上：學生版用中性色與中性語彙，不用紅色的迷思 pill。 */
+      (it ? '<div class="pill ' + (isTeacher() ? 'q2' : '') + '" style="margin-bottom:8px">' +
+            '<span class="dot"></span>' +
+            (isTeacher() ? '源自迷思題：第 ' : '大家在討論：第 ') + it.no + ' 題</div>' : '') +
       '<div class="row small muted" style="gap:14px">' +
         '<span>' + ns.length + ' 則貼文</span>' +
         '<span>' + ns.filter(function(n){ return n.buildOn; }).length + ' 則延伸</span>' +
@@ -83,6 +88,9 @@ function viewKBCanvas(vid){
   const gate = kbGate(); if (gate) return gate;
   const v = getView(vid);
   if (!v) return '<div class="empty"><h3>找不到這個視圖</h3><a class="btn" href="#/kb">回知識建構空間</a></div>';
+  /* 先清再組。選取模式綁在視圖上，換視圖就結束——否則工具列會寫著
+     「選取中（2）」而畫布上沒有任何貼文帶外框，點貼文也打不開詳頁。 */
+  if (KBSEL && KBSEL !== vid){ KBSEL = null; KBPICK = {}; }
   const ns = notesOfView(vid);
   const it = v.origin ? getItem(v.origin.iid) : null;
 
@@ -129,15 +137,20 @@ function viewKBCanvas(vid){
       /* 學生只看到作業名稱的純文字：那條連結會直接把他帶到含 16 題正解的分析頁 */
       '<p class="small" style="margin-top:6px">來自 ' + (isTeacher() ? '<a href="#/assign/' + v.origin.aid + '">' : '<span>') +
       esc((getAssignment(v.origin.aid) || {}).title || '') + (isTeacher() ? '</a>' : '</span>') +
-      ' 第 ' + it.no + ' 題的 KIDMAP 迷思象限。</p>' +
+      /* 「迷思」是教師與研究端的術語，不放在學生每天要進來的社群空間裡。
+         在這裡把一張視圖標成「源自迷思題」，等於當著全班的面宣告這是
+         「大家答錯的那題」——與知識建構論「真實想法、真實問題」的預設相反。 */
+      (isTeacher() ? ' 第 ' + it.no + ' 題的 KIDMAP 迷思象限。</p>'
+                   : ' 第 ' + it.no + ' 題。這一題有不少同學讀法不一樣，所以拿出來一起想。</p>') +
       '<div class="item"><div class="stem">' + esc(it.stem) + '</div>' +
       '<div class="muted small">' + it.options.map(function(o, k){ return String.fromCharCode(65 + k) + '. ' + esc(o); }).join('　') + '</div></div>' +
       '</div>' : '') +
     '<div class="kb-toolbar">' +
       '<button class="btn primary sm" data-act="new-note" data-id="' + v.id + '">貼一則新想法</button>' +
-      '<button class="btn sm' + (KBSEL ? ' primary' : '') + '" data-act="toggle-sel">' +
-        (KBSEL ? '選取中（' + Object.keys(KBPICK).length + '）' : '選取貼文做躍升') + '</button>' +
-      (KBSEL && Object.keys(KBPICK).length >= 2 ?
+      '<button class="btn sm' + (KBSEL === v.id ? ' primary' : '') +
+        '" data-act="toggle-sel" data-id="' + v.id + '">' +
+        (KBSEL === v.id ? '選取中（' + Object.keys(KBPICK).length + '）' : '選取貼文做躍升') + '</button>' +
+      (KBSEL === v.id && Object.keys(KBPICK).length >= 2 ?
         '<button class="btn sm" data-act="make-rise" data-id="' + v.id + '">建立躍升貼文</button>' : '') +
       '<div class="spacer"></div>' +
       '<span class="legend small">' +
@@ -185,11 +198,16 @@ function viewNote(nid){
   const seq = threadOf(root.id);
   const fb = cacheGet('note', n.id);
   const me = currentUser();
-  const canEdit = n.authorIds.indexOf(me.id) >= 0 || isTeacher();
+  /* 畫面要反映守門。按鈕留著、按下去被擋，使用者收到的是假成功；
+     按鈕直接消失又會讓老師找不到平常有的那顆鈕，所以要說一句。 */
+  const canEdit = !isImpersonating() && (n.authorIds.indexOf(me.id) >= 0 || isTeacher());
 
   return sectionHead(n.title, (v ? v.title + '　·　' : '') + noteAuthors(n) + '　·　' + fmtDateTime(n.createdAt),
     '<a class="btn" href="#/kb/' + n.viewId + '">← 回視圖</a>' +
     (canEdit ? '<button class="btn sm" data-act="edit-note" data-id="' + n.id + '">編輯</button>' : '')) +
+  (isImpersonating() ? '<div class="card card-p" style="margin-bottom:12px">' +
+    '<p class="small" style="margin:0">代為檢視中，只能看不能改——編輯、刪除與加註記都停用了，' +
+    '你的操作不會記到這位學生名下。</p></div>' : '') +
   '<div class="grid" style="grid-template-columns:minmax(0,1.6fr) minmax(280px,1fr);gap:16px">' +
   '<div class="col">' +
     noteFullHTML(n, true) +
@@ -349,8 +367,8 @@ function saveEditor(){
   const payload = {title:EDIT.title.trim(), segs:EDIT.segs.filter(function(g){ return g.text.trim(); }),
                    keywords:kws, authorIds:EDIT.authorIds, refs:EDIT.refs};
   if (EDIT.id){
-    updateNote(EDIT.id, payload);
-    toast('已更新。');
+    const n2 = updateNote(EDIT.id, payload);
+    toast(n2 ? '已更新。' : '代為檢視時不能替學生改貼文。');
   } else {
     const n = createNote(Object.assign({viewId:EDIT.viewId, buildOn:EDIT.buildOn, kind:EDIT.kind,
       contains:EDIT.contains, x:EDIT.x, y:EDIT.y}, payload));

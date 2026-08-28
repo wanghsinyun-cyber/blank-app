@@ -151,7 +151,7 @@ function rAssign(){
       return '<div class="card"><div class="card-p">' +
         '<div class="row" style="justify-content:space-between">' +
         '<span class="pill ' + (c.cls || '') + '"><span class="dot"></span>' + esc(c.name) + '</span>' +
-        '<span class="num" style="font-size:20px;font-weight:600">' + n + ' 人</span></div>' +
+        '<span class="num" style="font-size:1rem;font-weight:600">' + n + ' 人</span></div>' +
         '<p class="small muted" style="margin-top:8px">' + esc(c.note) + '</p>' +
         (c.frame ? '<div class="ai-out small" style="margin-top:8px">' + esc(c.frame) + '</div>' : '') +
         '<div class="muted small" style="margin-top:8px">班級：' +

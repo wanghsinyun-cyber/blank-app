@@ -134,11 +134,20 @@ function renderRail(){
   /* 雙軌儀表板永遠只涵蓋知識建構示範班，班級選單在那一頁不作用。
      假的控制項比沒有控制項更傷。放在 renderRail 而不是 renderShell，
      因為只有前者每次換頁都會跑。 */
+  /* 白名單，不是黑名單：currentClass() 的消費者只有教師後台與派題分析的
+     「理解歷程」分頁，其他頁面都是四班全樣本（共用同一次 Rasch 校準）。
+     把下拉修活之後若不限定範圍，它會從一個假控制項變成一個會靜默縮小
+     分母的真控制項——那更糟。 */
   const csel = $('#classSel');
   if (csel){
-    const dead = (ROUTE.name === 'dash');
-    csel.disabled = dead;
-    csel.title = dead ? '這一頁只涵蓋知識建構示範班，班級選單在這裡不作用' : '';
+    const live = (ROUTE.name === 'teacher') ||
+                 (ROUTE.name === 'assign' && ROUTE.args[1] === 'process');
+    csel.disabled = !live;
+    const nAll = state.classes.reduce(function(a, c){ return a + c.studentIds.length; }, 0);
+    csel.title = live ? ''
+      : (ROUTE.name === 'dash'
+          ? '這一頁只涵蓋知識建構示範班，班級選單在這裡不作用'
+          : '這一頁涵蓋四個班共 ' + nAll + ' 人，班級選單在這裡不作用');
   }
 
   /* 三種導覽：研究者（super user，看得到全部）、教師（只看教學會用到的四項）、學生。

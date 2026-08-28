@@ -54,7 +54,7 @@ function materialClass(diag){
   L.push('作業：' + diag.assignment.title);
   L.push('完成人數：' + diag.done.length + ' / ' + diag.roster.length);
   L.push('平均能力估計值 θ：' + fx(diag.meanTheta) + ' logit；平均試題難度 δ：' + fx(diag.meanDelta) + ' logit');
-  L.push('全班四象限總題次：優勢(I) ' + diag.totals[1] + '、迷思(II) ' + diag.totals[2] +
+  L.push('全體（四班合計）四象限總題次：優勢(I) ' + diag.totals[1] + '、迷思(II) ' + diag.totals[2] +
          '、合理答錯(III) ' + diag.totals[3] + '、合理答對(IV) ' + diag.totals[4]);
   L.push('');
   L.push('【主要迷思題】');
@@ -63,7 +63,7 @@ function materialClass(diag){
     L.push('- 第 ' + it.no + ' 題（' + unitName(it.unit) + '，' + processName(it.process) + '，' + it.diff + '）');
     L.push('  題幹：' + it.stem);
     L.push('  選項：' + it.options.map(function(o, i){ return String.fromCharCode(65 + i) + '. ' + o; }).join('　'));
-    L.push('  正解：' + String.fromCharCode(65 + it.answer) + '　難度 δ=' + fx(pi.delta) + '　全班答對率 ' + pct(pi.pass));
+    L.push('  正解：' + String.fromCharCode(65 + it.answer) + '　難度 δ=' + fx(pi.delta) + '　全體（四班合計）答對率 ' + pct(pi.pass));
     L.push('  迷思(II) ' + pi.q[2] + ' 人（占作答 ' + pct(pi.misRate) + '）；優勢(I) ' + pi.q[1] + ' 人');
     if (pi.topDistractor != null){
       L.push('  迷思學生最常選：' + String.fromCharCode(65 + pi.topDistractor) + '. ' +
@@ -100,7 +100,7 @@ function materialThread(rootId){
 }
 
 /* ==========================================================================
-   1. 全班迷思深度分析
+   1. 全體（四班合計）迷思深度分析
    ========================================================================== */
 async function aiClassMisconception(diag, force){
   const id = diag.assignment.id;
@@ -113,7 +113,7 @@ async function aiClassMisconception(diag, force){
         '1.【共同迷思診斷】把主要迷思題聚合起來看，找出學生共同卡住的概念。\n' +
         '2.【每一題的迷思解釋】說明為何學生會選那個誘答選項。\n' +
         '3.【具體教學策略】每個共同迷思給 2–3 個可執行的教學動作。\n' +
-        '4.【轉為共構問題】針對其中最值得全班討論的 1–2 個迷思，寫出可以直接貼到知識建構空間的問題敘述。\n' +
+        '4.【轉為共構問題】針對其中最值得全體討論的 1–2 個迷思，寫出可以直接貼到知識建構空間的問題敘述。\n' +
         '5.【下一步派題建議】接下來派哪個單元或題型能繼續診斷或補救。'}
     ]);
   } else {
@@ -135,7 +135,7 @@ function builtinClassReport(diag){
     return sumQ2(byMis[b]) - sumQ2(byMis[a]);
   });
   if (!keys.length){
-    L.push('目前沒有任何題目的迷思(II)比例超過門檻 ' + state.settings.misThreshold + '%。全班的錯誤大多落在「合理答錯」，代表是難度問題而非概念問題，可以直接進入練習與精熟。');
+    L.push('目前沒有任何題目的迷思(II)比例超過門檻 ' + state.settings.misThreshold + '%。全體（四班合計）的錯誤大多落在「合理答錯」，代表是難度問題而非概念問題，可以直接進入練習與精熟。');
   }
   keys.forEach(function(k){
     const g = byMis[k];
@@ -195,7 +195,7 @@ function builtinClassReport(diag){
     L.push('- 建議在共構討論結束後，用相同題組施測一次（本系統的「共構後測」），並比較每位學生的 θ 變化與論述參與，看討論是否真的轉成理解。');
   }
   const weakest = diag.perItem.slice().sort(function(a, b){ return a.pass - b.pass; })[0];
-  if (weakest) L.push('- 全班答對率最低的是第 ' + weakest.item.no + ' 題（' + pct(weakest.pass) + '），若其迷思比例不高，代表是難度而非概念問題，可先做鷹架式練習。');
+  if (weakest) L.push('- 全體（四班合計）答對率最低的是第 ' + weakest.item.no + ' 題（' + pct(weakest.pass) + '），若其迷思比例不高，代表是難度而非概念問題，可先做鷹架式練習。');
   L.push('');
   L.push('---');
   L.push('*本報告由內建規則引擎產生：所有數字直接來自 Rasch 估計與誘答選項標記，不含語言模型生成內容，可重現。*');

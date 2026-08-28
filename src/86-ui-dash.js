@@ -45,7 +45,7 @@ function dashDual(){
       return '<div class="card"><div class="card-p">' +
         '<div class="row" style="justify-content:space-between;margin-bottom:6px">' +
         '<span class="pill ' + Z.cls + '"><span class="dot"></span>' + z + '　' + Z.name + '</span>' +
-        '<span class="num" style="font-size:20px;font-weight:600">' + counts[z] + '</span></div>' +
+        '<span class="num" style="font-size:1rem;font-weight:600">' + counts[z] + '</span></div>' +
         '<p class="small muted">' + esc(Z.desc) + '</p>' +
         '<div class="row" style="gap:5px;margin-top:6px">' + rows.map(function(r){
           return '<button type="button" class="pill" data-act="asrole" data-id="' + r.sid + '">' +

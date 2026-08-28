@@ -182,15 +182,17 @@ function moveNote(id, x, y){
   const n = getNote(id); if (!n) return false;
   n.x = x; n.y = y; save(); return true;
 }
+/* 回傳成功與否。呼叫端要依它決定 toast，否則會出現
+   「確認框說無法復原、toast 說已刪除、貼文還在」這種三方矛盾。 */
 function deleteNote(id){
-  if (isImpersonating()) return;
+  if (isImpersonating()) return false;
   state.notes = state.notes.filter(function(n){ return n.id !== id; });
   state.notes.forEach(function(n){
     if (n.buildOn === id) n.buildOn = null;
     n.contains = (n.contains || []).filter(function(c){ return c !== id; });
     n.refs = (n.refs || []).filter(function(r){ return r.noteId !== id; });
   });
-  save();
+  save(); return true;
 }
 function markRead(id){
   if (isImpersonating()) return;   // 代為檢視：不寫進學生的閱讀紀錄

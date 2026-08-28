@@ -181,16 +181,19 @@ function viewAboutStudent(){
     /* 這一段以前對四個條件都說「你旁邊的夥伴」——對照組整節課不會遇到任何
        夥伴，卻被告知他有一位。卡片結構（標題＋一段 lead）四個條件相同，
        只有內容依自己這一班實際會看到的東西寫。 */
+    /* 三個 AI 組印自己那位夥伴的開場白（32-aal.js 的 frame，三句約略等長），
+       不是 tutor 的台詞。課後問卷的操弄檢核問的正是「剛剛陪我讀的那位夥伴
+       比較像…」，這一頁先寫給他們看等於在課前給了角色提示。 */
     (aboutCondition() === 'control'
       ? '<div class="card card-p">' +
-          '<h3>你自己讀的時候</h3>' +
-          '<p class="lead" style="margin-top:8px">畫面右邊有一塊「我的筆記」。' +
-          '想到什麼、卡在哪裡，就寫下來——寫給自己看的。</p>' +
+          '<h3>你自己的筆記</h3>' +
+          '<p class="lead" style="margin-top:8px">這節課你自己讀、自己想。' +
+          '畫面右邊是「我的筆記」，把你想到的、卡住的地方寫下來。</p>' +
         '</div>'
       : '<div class="card card-p">' +
           '<h3>你旁邊的夥伴</h3>' +
-          '<p class="lead" style="margin-top:8px">它不會告訴你答案，也不會說你對或錯。' +
-          '它只會一直問你「你是從哪裡看出來的」。</p>' +
+          '<p class="lead" style="margin-top:8px">' +
+          esc(condition(aboutCondition()).frame) + '</p>' +
         '</div>') +
     '<div class="card card-p">' +
       '<h3>你寫的東西會怎麼被用</h3>' +

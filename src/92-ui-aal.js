@@ -271,7 +271,10 @@ function aalNotePane(it){
       '<button class="btn sm" data-act="aal-note-clear">清空</button>' +
       '<span class="muted small" style="flex:1">這一題一份，換題會換成新的一頁。</span>' +
     '</div>' +
-    '<p class="muted small pane-foot" style="margin-top:8px">把你想到的、還沒想通的，寫在這裡。' +
+    /* 三句，與 AI 面板的 pane-foot 逐句對位（字數落差 10% 以內）。
+       第一句不要與 textarea 的 placeholder 逐字重複。 */
+    '<p class="muted small pane-foot" style="margin-top:8px">這一頁只有你自己看得到，不是要交出去的答案。' +
+    '沒有寫得對不對的問題，想到什麼就寫什麼。' +
     '你寫的字老師之後看得到，不會拿來打分數。</p>' +
     '</div></div>';
 }
@@ -588,7 +591,6 @@ function surveyGate(phase){
    段落標題刻意不印構念名：「自我效能（自我效能）」既重複又等於告訴受試者
    這一段在量什麼，會啟動作答傾向。構念名留在 data 屬性與教師端。 */
 const SURVEY_DRAFT_KEY = 'kairos-survey-draft';
-const SURVEY_SECTION_SUB = ['關於你怎麼讀', '關於這節課的感覺', '關於你自己'];
 
 /* 把一份問卷攤成「段落」清單。每一段 = 一個構念（或操弄檢核／使用感受）。
    題號跨段連續，與抬頭的「共 N 題」對得上。 */
@@ -666,8 +668,12 @@ function viewSurvey(phase, page){
 
   function block(s){
     return '<div class="card" style="margin-bottom:14px" data-construct="' + esc(s.construct) + '">' +
-      '<div class="card-h"><h3>第 ' + SURVEY.page + ' 段　·　' +
-      esc(SURVEY_SECTION_SUB[(SURVEY.page - 1) % SURVEY_SECTION_SUB.length]) + '</h3>' +
+      /* 副標拿掉了。原本是三句裝飾字用 %3 循環，第 10 段問學習焦慮卻標
+         「關於你怎麼讀」；更嚴重的是它依條件位移——對照組少一段操弄檢核，
+         於是同一批 SUS 題目在對照組掛「關於這節課的感覺」、在實驗組掛
+         「關於你自己」。標題會給題目定框，而 SUS 正是要拿來做四條件比較的。
+         也不能改成印構念名：告訴受試者這一段在量什麼會直接啟動作答傾向。 */
+      '<div class="card-h"><h3>第 ' + SURVEY.page + ' 段，共 ' + secs.length + ' 段</h3>' +
       '<span class="muted small">選 1 到 ' + s.scale.n + '</span></div><div class="card-p col">' +
       s.items.map(function(txt, i){
         const key = s.key + '_' + i;
@@ -709,7 +715,13 @@ function viewSurvey(phase, page){
       : '') +
     (scaleChanged
       ? '<div class="card card-p" style="margin-bottom:14px;border-left:3px solid var(--accent)">' +
-        '<p class="small" style="margin:0">接下來的題目改成問「符不符合你」，' +
+        /* 方向由 sec.scale 決定，不能寫死。原本永遠寫「改成問符不符合你」，
+           但第 7 段是 6→5（符不符合）、第 10 段是 5→6（同不同意）——
+           後者畫面上明明是「非常不同意…非常同意」，卡片卻叫孩子改用
+           「符不符合」的角度作答。那是對受試者的錯誤作答指導，
+           而且落在 anx 這個中介路徑最敏感的依變項上。 */
+        '<p class="small" style="margin:0">接下來的題目改成問「' +
+        esc(sec.scale.labels[0]) + '」到「' + esc(sec.scale.labels[sec.scale.n - 1]) + '」，' +
         '選項也從 ' + prevScale.n + ' 格變成 ' + sec.scale.n + ' 格，看清楚再選。</p></div>'
       : '') +
 
@@ -803,15 +815,31 @@ function inspectMarks(sid, aid, textId){
   return foldToggleLog(mine, 'M', 'sent').map(Number);
 }
 
+/* 唯讀重播的學生順序。教師端名單（tabReplay）與這一頁的「上一位／下一位」
+   必須用同一份順序，否則他按下一位跳到的人跟他剛看到的名單對不上。
+   依發話次數排序，同數再依姓名，讓順序在同一次工作階段中穩定。 */
+function inspectRoster(aid){
+  const a = getAssignment(aid);
+  if (!a) return [];
+  const dial = allDialog().filter(function(d){ return d.aid === aid && d.speaker === 'student'; });
+  const said = {};
+  dial.forEach(function(d){ said[d.sid] = (said[d.sid] || 0) + 1; });
+  return assignmentRoster(a).slice().sort(function(x, y){
+    const dx = (said[y] || 0) - (said[x] || 0);
+    return dx || (userName(x) < userName(y) ? -1 : 1);
+  });
+}
+
 function viewInspect(aid, sid){
   if (!isTeacher()) return '<div class="empty"><h3>這一頁只有教師與研究者看得到</h3></div>';
   const a = getAssignment(aid);
   if (!a) return '<div class="empty"><h3>找不到這份派題</h3><a class="btn" href="#/teacher">回教師後台</a></div>';
-  const roster = assignmentRoster(a);
+  const roster = inspectRoster(aid);
   if (!sid || roster.indexOf(sid) < 0) sid = roster[0];
   if (!sid) return '<div class="empty"><h3>這份派題還沒有學生</h3></div>';
   if (!INSPECT || INSPECT.aid !== aid || INSPECT.sid !== sid) inspectInit(aid, sid);
 
+  const ri = roster.indexOf(sid);
   const k = classOfStudent(sid);
   const cond = condition(conditionOfStudent(sid));
   const it = INSPECT.items[INSPECT.idx];
@@ -840,15 +868,24 @@ function viewInspect(aid, sid){
 
   return sectionHead('作答與 AI 互動檢視',
       esc(a.title) + '　·　與學生當時看到的版面相同，此處為唯讀重播。',
-      '<a class="btn" href="#/assign/' + aid + '">← 回派題分析</a>') +
+      '<a class="btn" href="#/assign/' + aid + '/replay">← 回唯讀重播</a>') +
 
     '<div class="card card-p" style="margin-bottom:14px">' +
       '<div class="row" style="gap:14px;flex-wrap:wrap;align-items:center">' +
         '<label class="small muted" for="inspectWho">學生</label>' + picker +
+        /* 名單有 96 列。沒有這兩顆鈕，老師逐位檢查等於做 96 次
+           「回名單 → 捲到剛才的位置 → 點下一位」。 */
+        '<button class="btn sm" data-act="inspect-who-prev" data-id="' + roster[Math.max(0, ri - 1)] +
+          '"' + (ri <= 0 ? ' disabled' : '') + '>← 上一位</button>' +
+        '<span class="muted small">第 ' + (ri + 1) + ' / ' + roster.length + ' 位</span>' +
+        '<button class="btn sm" data-act="inspect-who-next" data-id="' +
+          roster[Math.min(roster.length - 1, ri + 1)] + '"' +
+          (ri >= roster.length - 1 ? ' disabled' : '') + '>下一位 →</button>' +
         '<span class="pill">' + esc((k || {}).name || '') + '</span>' +
         '<span class="pill"><span aria-hidden="true">' + esc(cond.mark || '') + '</span>' + esc(cond.name) + '</span>' +
         '<span class="pill">' + (done ? '已交卷' : '未交卷') + '</span>' +
         '<div class="spacer"></div>' +
+        /* 這一組是「換題」，上面那一組是「換人」——兩個軸向要分開講 */
         '<span class="pill">第 ' + (INSPECT.idx + 1) + ' / ' + INSPECT.items.length + ' 題</span>' +
         '<button class="btn sm" data-act="inspect-prev"' + (INSPECT.idx ? '' : ' disabled') + '>← 上一題</button>' +
         '<button class="btn sm" data-act="inspect-next"' +

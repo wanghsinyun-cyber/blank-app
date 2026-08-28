@@ -25,10 +25,20 @@ function render(){
      這些是研究工具（分派條件、命題、改系統設定），不是教學工具。 */
   if (RESEARCHER_ONLY[ROUTE.name] && !isResearcher()){
     stage.className = 'stage';
-    $('#view').innerHTML = '<div class="empty"><h3>這一頁只有研究者看得到</h3>' +
-      '<p style="max-width:60ch">條件分派、建立派題與系統設定屬於研究端的操作。' +
-      '教學上需要的資料在「教師後台」「派題分析」「知識建構中心」與「雙軌評量儀表板」。</p>' +
-      '<a class="btn" href="#/teacher">回教師後台</a></div>';
+    /* 這一段在 TEACHER_ONLY 之前，所以學生打研究者網址也會走到這裡——
+       不能整段講給老師聽。依身分分岔。 */
+    $('#view').innerHTML = isTeacher()
+      ? '<div class="empty"><h3>這一頁只有研究者看得到</h3>' +
+        '<p style="max-width:60ch">條件分派、建立派題與系統設定屬於研究端的操作。' +
+        '教學上需要的資料在' +
+        '<a href="#/teacher">教師後台</a>、' +
+        '<a href="#/assign/a-post/replay">派題分析</a>、' +
+        '<a href="#/kb">知識建構空間</a>與' +
+        '<a href="#/dash">雙軌評量儀表板</a>。</p>' +
+        '<a class="btn" href="#/teacher">回教師後台</a></div>'
+      : '<div class="empty"><h3>這一頁不是給你看的</h3>' +
+        '<p style="max-width:60ch">你的作業、討論與學習軌跡都在左邊的選單裡。</p>' +
+        '<a class="btn" href="#/student">回我的作業</a></div>';
     renderRail();
     return;
   }
@@ -66,6 +76,10 @@ function render(){
      在同一頁內都唯一。 */
   const key = ROUTE.name + '/' + a.join('/');
   const samePage = (key === LAST_ROUTE_KEY);
+  /* 離開知識建構空間就把選取模式與搜尋清掉。進 #/note、#/synth 再回來時
+     殘留的狀態會與畫面脫節。 */
+  if (ROUTE.name !== 'kb' && KBSEL){ KBSEL = null; KBPICK = {}; }
+  if (ROUTE.name !== 'kb' && ROUTE.name !== 'note' && ROUTE.name !== 'synth') KBSEARCH.q = '';
   const prevY = window.scrollY;
   const ae = document.activeElement;
   let fk = null;
@@ -339,6 +353,7 @@ function bindEvents(){
     if (act === 'item-strategy'){ openItemStrategy(id); return; }
     if (act === 'bridge'){ doBridge(id); return; }
     if (act === 'cr-sel'){ tabCR.sel = id; render(); return; }
+    if (act === 'cr-scope'){ tabCR.scope = id; render(); return; }
     if (act === 'gen-rubric'){ runAI('rubric', function(f){ return aiRubric(getItem(id), true); }, true); return; }
     if (act === 'ai-class'){ runAI('ai-class', function(f){ return aiClassMisconception(diagnose(state, ROUTE.args[0]), f); }); return; }
     if (act === 'ai-note'){ runAI('ai-note', function(f){ return aiNoteFeedback(getNote(id), f); }); return; }
@@ -369,9 +384,15 @@ function bindEvents(){
     if (act === 'edit-note'){ const n = getNote(id);
       openNoteEditor({id:n.id, viewId:n.viewId, title:n.title, segs:n.segs, keywords:n.keywords,
         authorIds:n.authorIds, buildOn:n.buildOn, contains:n.contains, refs:n.refs, kind:n.kind}); return; }
-    if (act === 'toggle-sel'){ KBSEL = !KBSEL; if (!KBSEL) KBPICK = {}; render(); return; }
+    /* 選取模式綁在視圖上：KBSEL 存的是視圖 id，不是布林。 */
+    if (act === 'toggle-sel'){ KBSEL = KBSEL ? null : id; if (!KBSEL) KBPICK = {}; render(); return; }
     if (act === 'make-rise'){
-      const picks = Object.keys(KBPICK);
+      /* 送出前用目前視圖的貼文過濾一次。躍升的結構是知識建構分析的核心，
+         跨視圖的假 contains 會直接扭曲 SNA 與 KB 指數。 */
+      const inView = {};
+      notesOfView(id).forEach(function(n){ inView[n.id] = 1; });
+      const picks = Object.keys(KBPICK).filter(function(nid){ return inView[nid]; });
+      if (picks.length < 2){ toast('要先選兩則以上、而且都在同一個視圖裡的貼文。'); return; }
       openNoteEditor({viewId:id, kind:'rise', contains:picks,
         title:'【躍升】', segs:[{s:'s6', text:''}], x:900, y:520});
       return; }
@@ -379,7 +400,8 @@ function bindEvents(){
     if (act === 'seg-del'){ collectEditor(); EDIT.segs.splice(+t.dataset.i, 1); renderEditor(); return; }
     if (act === 'save-note'){ saveEditor(); return; }
     if (act === 'del-note'){ if (confirm('刪除這則貼文？延伸它的貼文會失去連結，這個動作無法復原。')){
-      deleteNote(id); closeModal(); EDIT = null; go('#/kb'); render(); toast('已刪除。'); } return; }
+      if (!deleteNote(id)){ toast('代為檢視時不能替學生刪貼文。'); return; }
+      closeModal(); EDIT = null; go('#/kb'); render(); toast('已刪除。'); } return; }
     if (act === 'add-ann'){ const ta = $('#annText');
       if (ta && ta.value.trim()){
         const ok = addAnnotation(id, ta.value);
@@ -446,6 +468,7 @@ function bindEvents(){
       return; }
 
     /* 教師／研究者的唯讀檢視：換題不寫任何日誌 */
+    if (act === 'inspect-who-prev' || act === 'inspect-who-next'){ go('#/inspect/' + INSPECT.aid + '/' + id); return; }
     if (act === 'inspect-prev'){ INSPECT.idx = Math.max(0, INSPECT.idx - 1); render(); return; }
     if (act === 'inspect-next'){ INSPECT.idx = Math.min(INSPECT.items.length - 1, INSPECT.idx + 1); render(); return; }
     if (act === 'aal-submit'){ aalSubmit(); return; }
@@ -469,8 +492,15 @@ function bindEvents(){
 
     /* 問卷 */
     if (act === 'sv-page'){
+      /* 先更新頁碼再存草稿。原本 surveyDraftSave() 在 go() 之前跑，而
+         SURVEY.page 要到 go 觸發 render → viewSurvey 才更新，於是草稿裡
+         永遠是上一段——「換段但沒作答」之後回來就被退回前一段。
+         先夾範圍也是必要的：越界值會被畫面夾回來，草稿卻已經存進去了。 */
+      const secs = surveySections(SURVEY.phase, conditionOfStudent(currentUser().id));
+      const p = Math.max(1, Math.min(secs.length, +t.dataset.v));
+      SURVEY.page = p;
       surveyDraftSave();
-      go('#/survey/' + SURVEY.phase + '/' + t.dataset.v);
+      go('#/survey/' + SURVEY.phase + '/' + p);
       return; }
     if (act === 'sv-submit'){ surveySubmit(id); return; }
 
@@ -526,10 +556,13 @@ function bindEvents(){
       go(isTeacher() ? '#/teacher' : '#/student'); render(); return; }
     if (!t) return;
     const act = t.dataset.act;
+    /* 班級下拉。原本這一段寫在 if (!t) return 之後才判 e.target.id，而 #classSel
+       身上沒有 data-act，t 必為 null——這個控制項從開站起就沒有作用過，
+       教師端所有「本班」永遠是 c-1。改走 data-act 就不會再犯。 */
+    if (act === 'class-sel'){ state.ui.classId = t.value; save(); render(); return; }
     if (act === 'wiz-item'){ const id = t.dataset.id;
       if (WIZ.items[id]) delete WIZ.items[id]; else WIZ.items[id] = 1; render(); return; }
     if (act === 'seg-sc'){ collectEditor(); EDIT.segs[+t.dataset.i].s = t.value; renderEditor(); return; }
-    if (e.target.id === 'classSel'){ state.ui.classId = e.target.value; save(); render(); return; }
     /* 量尺現在是原生 radio，走 change 而不是 click——方向鍵移動也會觸發。
        只更新這一列與抬頭的計數，不重繪整段。 */
     if (act === 'sv-pick'){
@@ -587,7 +620,17 @@ function bindEvents(){
       return; }
     if (act === 'cr-score'){
       const r = state.responses.find(function(x){ return x.aid === t.dataset.aid && x.sid === t.dataset.sid && x.iid === t.dataset.iid; });
-      if (r){ r.score = t.value === '' ? null : Math.max(0, Math.min(6, +t.value)); save(); toast('已儲存分數。'); }
+      /* 靜默夾值是最糟的組合：老師習慣百分制打 85，系統存成 6、
+         畫面仍顯示 85、還說「已儲存分數」——三個訊號互相矛盾，
+         而唯一正確的那個是他看不到的。夾了就要說，並把欄位改成實際存的值。 */
+      if (r){
+        const raw = t.value === '' ? null : +t.value;
+        const v = raw === null ? null : Math.max(0, Math.min(6, raw));
+        r.score = v;
+        t.value = (v === null ? '' : v);
+        save();
+        toast(raw !== null && raw !== v ? '這一題滿分 6 分，已存成 ' + v + '。' : '已儲存分數。');
+      }
       return; }
     if (act === 'cr-comment'){
       const r = state.responses.find(function(x){ return x.aid === t.dataset.aid && x.sid === t.dataset.sid && x.iid === t.dataset.iid; });
@@ -865,7 +908,11 @@ function boot(){
   window.addEventListener('resize', function(){ syncNarrow(); syncTopbarHeight(); });
   state = loadState();
   if (!state.ui) state.ui = {role:'u-t1', classId:'c-1'};
-  if (!state.ui.classId) state.ui.classId = 'c-1';
+  /* 預設對齊登入教師實際帶的班，不要靜默停在 c-1。 */
+  if (!state.ui.classId){
+    const mine = state.classes.find(function(c){ return c.teacherId === state.ui.role; });
+    state.ui.classId = mine ? mine.id : 'c-1';
+  }
   state.logs = state.logs || [];
   state.dialog = state.dialog || [];
   applyItemProcesses();                 // 掛上逐題的官方歷程標定
