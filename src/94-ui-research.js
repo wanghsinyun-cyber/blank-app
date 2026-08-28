@@ -59,7 +59,7 @@ function rDesign(){
           '<div class="tablewrap"><table><thead><tr><th>編號</th><th>子歷程</th><th>代表性提問句（角色中性）</th></tr></thead><tbody>' +
           subprocessesOf(p.id).map(function(s){
             return '<tr><td class="num">' + s.id + '</td><td class="small">' + esc(s.zh) +
-              '<div class="muted" style="font-size:11px">' + esc(s.en) + '</div></td>' +
+              '<div class="muted" style="font-size:0.55rem">' + esc(s.en) + '</div></td>' +
               '<td class="small">' + esc(s.q) + '</td></tr>';
           }).join('') + '</tbody></table></div></div>';
       }).join('') + '</div></div>' +
@@ -219,7 +219,7 @@ function rLSA(){
     '<div class="tablewrap"><table><thead><tr><th>z</th>' +
     r.codes.map(function(c){ return '<th class="n">' + esc(c) + '</th>'; }).join('') + '</tr></thead><tbody>' +
     r.codes.map(function(c, i){
-      return '<tr><th style="position:static">' + esc(c) + '<div class="muted" style="font-size:10px;font-weight:400">' +
+      return '<tr><th style="position:static">' + esc(c) + '<div class="muted" style="font-size:0.5rem;font-weight:400">' +
         esc(behaviorName(c)) + '</div></th>' +
         r.codes.map(function(_, j){
           const z = r.Z[i][j];
@@ -238,7 +238,7 @@ function rLSA(){
       '<div class="tablewrap"><table><thead><tr><th>轉移</th><th class="n">次數</th><th class="n">條件機率</th><th class="n">z</th></tr></thead><tbody>' +
       r.sig.slice(0, 14).map(function(s){
         return '<tr><td><b>' + esc(s.from) + ' → ' + esc(s.to) + '</b>' +
-          '<div class="muted" style="font-size:11px">' + esc(behaviorName(s.from)) + ' → ' + esc(behaviorName(s.to)) + '</div></td>' +
+          '<div class="muted" style="font-size:0.55rem">' + esc(behaviorName(s.from)) + ' → ' + esc(behaviorName(s.to)) + '</div></td>' +
           '<td class="n">' + s.f + '</td><td class="n">' + pct(s.p) + '</td>' +
           '<td class="n" style="color:' + (s.z > 0 ? 'var(--q1)' : 'var(--q2)') + ';font-weight:600">' +
           s.z.toFixed(2) + '</td></tr>';
@@ -411,7 +411,7 @@ function rSent(){
         cm.map(function(x){ return Math.abs(x.m || 0); }).concat([0.05])) * 1.3);
       return cm.map(function(x){
         const w = x.m == null ? 50 : (x.m + span) / (2 * span) * 100;
-        return '<div class="rub-row"><span>' + esc(x.k.name) + '<div class="muted" style="font-size:11px">' +
+        return '<div class="rub-row"><span>' + esc(x.k.name) + '<div class="muted" style="font-size:0.55rem">' +
           esc(condition(x.k.condition).name) + '</div></span>' +
           '<div class="bar"><i style="width:' + w.toFixed(1) + '%;background:' +
           ((x.m || 0) >= 0 ? 'var(--q1)' : 'var(--q2)') + '"></i></div>' +

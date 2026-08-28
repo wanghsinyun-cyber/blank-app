@@ -79,6 +79,11 @@ function renderShell(){
 }
 function roleName(r){ return r === 'admin' ? '管理員' : r === 'teacher' ? '老師' : '學生'; }
 
+/* 深層頁面對應到側欄的哪一個項目。沒有這張表，學生在作答頁時
+   側欄不會有任何一項被標成「目前位置」。 */
+const RAIL_PARENT = {quiz:'student', result:'student', aal:'student',
+  note:'kb', synth:'kb', inspect:'assign', create:'teacher'};
+
 function renderRail(){
   const unread = state.notes.filter(isUnread).length;
   const me = currentUser();
@@ -120,12 +125,20 @@ function renderRail(){
   $('#rail').innerHTML = nav.map(function(n){
     if (n.g) return '<div class="rail-group">' + esc(n.g) + '</div>';
     const parts = n.h.replace(/^#\//, '').split('/');
-    // 有第二段且不是「同一路由的不同對象」時（例如 survey/pre 與 survey/post），要比對到第二段
-    const same = ROUTE.name === parts[0] &&
-      (parts.length < 2 || parts[0] === 'assign' || ROUTE.args[0] === parts[1]);
+    /* 深層頁面（作答、結果、單篇貼文、唯讀重播…）在側欄沒有自己的項目，
+       要點亮它的來源項目，否則使用者永遠不知道自己在哪一區。 */
+    const base = RAIL_PARENT[ROUTE.name] || ROUTE.name;
+    const same = base === parts[0] &&
+      (parts.length < 2 || parts[0] === 'assign' || base !== ROUTE.name || ROUTE.args[0] === parts[1]);
     const cur = same ? ' aria-current="page"' : '';
+    /* 徽章在窄版會被 CSS 隱藏，所以另外給一份只有報讀器聽得到的文字，
+       否則「待填」「測驗後開放」這些狀態在手機上等於消失。 */
+    const badge = n.b
+      ? '<span class="badge" aria-hidden="true">' + esc(String(n.b)) + '</span>' +
+        '<span class="sr-only">（' + esc(String(n.b)) + '）</span>'
+      : '';
     return '<a href="' + n.h + '"' + cur + '><span class="glyph">' + n.g2 + '</span>' + esc(n.t) +
-      (n.b ? '<span class="badge">' + n.b + '</span>' : '') + '</a>';
+      badge + '</a>';
   }).join('');
 }
 

@@ -120,7 +120,7 @@ button,input,select,textarea{font:inherit; color:inherit}
 }
 
 .rail{
-  position:sticky; top:var(--topbar-h); align-self:flex-start; flex:0 0 272px; width:272px;
+  position:sticky; top:var(--topbar-h); align-self:flex-start; flex:0 0 13.6rem; width:13.6rem;
   min-height:calc(100vh - var(--topbar-h)); max-height:calc(100vh - var(--topbar-h)); overflow-y:auto;
   background:var(--card); border-right:1px solid var(--rule);
   padding:12px 10px 24px; display:flex; flex-direction:column; gap:2px;
@@ -250,7 +250,9 @@ td.n,th.n{text-align:right; font-family:var(--f-mono); font-variant-numeric:tabu
 .opt b{font-family:var(--f-mono); color:var(--ink-3)}
 .opt.right{border-color:var(--q1-line); background:var(--q1-bg)}
 .opt.wrong{border-color:var(--q2-line); background:var(--q2-bg)}
-.opt.chosen{outline:2px solid var(--focus); outline-offset:-2px}
+/* 「我選了哪」與「我停在哪」要用不同的視覺語彙：
+   outline 這個語彙完整讓給 :focus-visible，選中態改用底色與左側粗邊條。 */
+.opt.chosen{background:var(--q4-bg); box-shadow:inset 3px 0 0 var(--accent)}
 
 /* ---------- KIDMAP ---------- */
 .kidmap{width:100%; height:auto; display:block; overflow:visible}
@@ -411,7 +413,7 @@ input[type=checkbox],input[type=radio]{ width:1.15em; height:1.15em; accent-colo
    使外在認知負荷、捲動深度與畫面留白在條件之間保持一致。 */
 /* 四條件共用同一份版面幾何。--pane-h 讓對話區與筆記區等高——
    對照組矮一截的話，介面差異會以條件為單位打進外在認知負荷這個依變項。 */
-.aal{display:grid; grid-template-columns:minmax(0,1.05fr) minmax(330px,.95fr); gap:16px; align-items:start;
+.aal{display:grid; grid-template-columns:minmax(0,1.05fr) minmax(16.5rem,.95fr); gap:16px; align-items:start;
   --pane-h:15rem}
 /* 左欄文章：sticky 但要有自己的捲動區，否則文章比視窗高時後半段永遠捲不到。
    card-h（標題與「已標記 N 句」）不捲，只捲 card-p。 */
@@ -441,13 +443,24 @@ input[type=checkbox],input[type=radio]{ width:1.15em; height:1.15em; accent-colo
 .likert{padding:10px 0; border-bottom:1px solid var(--rule-soft)}
 .likert:last-child{border-bottom:0}
 .likert .q{font-size:0.95rem; margin-bottom:7px; line-height:1.6}
+/* 量尺。每一格都是 <label> 包一顆視覺隱藏的 radio：
+   拿回原生語意（radiogroup + 方向鍵），Tab 停留點是「一題」而非「一格」。
+   每一格都印出文字——原本只放在 title 裡，平板沒有 hover，等於不存在。
+   尺寸用 rem，字級放大時六格才不會擠爆。 */
 .scale{display:flex; gap:6px; flex-wrap:wrap}
-.lk{width:38px; height:34px; border:1px solid var(--rule); background:var(--card); border-radius:var(--r-m);
-    cursor:pointer; font-family:var(--f-mono); font-size:0.85rem; color:var(--ink-3)}
+.lk{min-width:3.4rem; flex:1 1 3.4rem; min-height:2.6rem; border:1px solid var(--rule-strong);
+    background:var(--card); border-radius:var(--r-m); cursor:pointer; color:var(--ink-2);
+    display:inline-flex; flex-direction:column; align-items:center; justify-content:center;
+    gap:1px; padding:4px 2px; text-align:center}
+.lk-n{font-family:var(--f-mono); font-size:0.85rem; line-height:1.1}
+.lk-t{font-size:0.6rem; line-height:1.15; color:var(--ink-3)}
 .lk:hover{background:var(--shade)}
 .lk.on{background:var(--accent); border-color:var(--accent); color:var(--accent-ink); font-weight:600}
+.lk.on .lk-t{color:var(--accent-ink)}
+.lk:focus-within{outline:3px solid var(--focus); outline-offset:2px}
+.unread-dot{color:var(--accent); margin-right:.25rem}
 .likert.missing{outline:3px solid var(--crit); outline-offset:6px; border-radius:var(--r-m)}
-.scale-lab{display:flex; justify-content:space-between; font-size:0.8rem; color:var(--ink-4); margin-top:4px; max-width:270px}
+.scale-lab{display:flex; justify-content:space-between; font-size:0.8rem; color:var(--ink-4); margin-top:4px; max-width:13.5rem}
 
 pre.prompt{
   font-family:var(--f-mono); font-size:0.8rem; line-height:1.65; white-space:pre-wrap; word-break:break-word;
@@ -459,19 +472,35 @@ pre.prompt{
 .principle .no{font-family:var(--f-mono); font-size:0.8rem; color:var(--ink-4); padding-top:3px}
 .principle b{display:block; margin-bottom:2px}
 
+/* 窄版樣式有兩個入口，內容必須一模一樣，改一邊就要改另一邊：
+   (1) @media (max-width:900px) —— 視窗真的窄。
+   (2) :root[data-narrow] —— 由 syncNarrow()（99-app.js）依「視窗寬 ÷ 字級倍率」
+       判定。媒體查詢看不到 :root 的 font-size，所以平台自己提供的 175% 字級
+       一開，右欄會被壓到十個中文字寬卻不觸發斷點。 */
 @media (max-width:900px){
   .main{flex-direction:column; align-items:stretch}
   .rail{position:static; width:auto; flex:0 0 auto; max-height:none; min-height:0;
         flex-direction:row; overflow-x:auto; border-right:0; border-bottom:1px solid var(--rule); padding:8px 10px; gap:6px}
   .stage{min-height:0}
-  .rail-group{display:none}
+  .rail-group{display:inline-flex; align-items:center; padding:0 8px; font-size:0.7rem; opacity:.6}
   .rail a{white-space:nowrap}
   .rail .badge{display:none}
   .wrap{padding:16px 14px 60px}
   .brand span{display:none}
   .aal{grid-template-columns:1fr}
-  .aal-text{position:static}
+  .aal-text{position:static; max-height:none}
 }
+:root[data-narrow] .main{flex-direction:column; align-items:stretch}
+:root[data-narrow] .rail{position:static; width:auto; flex:0 0 auto; max-height:none; min-height:0;
+      flex-direction:row; overflow-x:auto; border-right:0; border-bottom:1px solid var(--rule); padding:8px 10px; gap:6px}
+:root[data-narrow] .stage{min-height:0}
+:root[data-narrow] .rail-group{display:inline-flex; align-items:center; padding:0 8px; font-size:0.7rem; opacity:.6}
+:root[data-narrow] .rail a{white-space:nowrap}
+:root[data-narrow] .rail .badge{display:none}
+:root[data-narrow] .wrap{padding:16px 14px 60px}
+:root[data-narrow] .brand span{display:none}
+:root[data-narrow] .aal{grid-template-columns:1fr}
+:root[data-narrow] .aal-text{position:static; max-height:none}
 @media (prefers-reduced-motion:reduce){*{animation:none!important; transition:none!important}}
 @media print{.rail,.topbar,.kb-toolbar{display:none} .app,.main{display:block} .stage{min-height:0}}
 </style>
@@ -4052,6 +4081,11 @@ function renderShell(){
 }
 function roleName(r){ return r === 'admin' ? '管理員' : r === 'teacher' ? '老師' : '學生'; }
 
+/* 深層頁面對應到側欄的哪一個項目。沒有這張表，學生在作答頁時
+   側欄不會有任何一項被標成「目前位置」。 */
+const RAIL_PARENT = {quiz:'student', result:'student', aal:'student',
+  note:'kb', synth:'kb', inspect:'assign', create:'teacher'};
+
 function renderRail(){
   const unread = state.notes.filter(isUnread).length;
   const me = currentUser();
@@ -4093,12 +4127,20 @@ function renderRail(){
   $('#rail').innerHTML = nav.map(function(n){
     if (n.g) return '<div class="rail-group">' + esc(n.g) + '</div>';
     const parts = n.h.replace(/^#\//, '').split('/');
-    // 有第二段且不是「同一路由的不同對象」時（例如 survey/pre 與 survey/post），要比對到第二段
-    const same = ROUTE.name === parts[0] &&
-      (parts.length < 2 || parts[0] === 'assign' || ROUTE.args[0] === parts[1]);
+    /* 深層頁面（作答、結果、單篇貼文、唯讀重播…）在側欄沒有自己的項目，
+       要點亮它的來源項目，否則使用者永遠不知道自己在哪一區。 */
+    const base = RAIL_PARENT[ROUTE.name] || ROUTE.name;
+    const same = base === parts[0] &&
+      (parts.length < 2 || parts[0] === 'assign' || base !== ROUTE.name || ROUTE.args[0] === parts[1]);
     const cur = same ? ' aria-current="page"' : '';
+    /* 徽章在窄版會被 CSS 隱藏，所以另外給一份只有報讀器聽得到的文字，
+       否則「待填」「測驗後開放」這些狀態在手機上等於消失。 */
+    const badge = n.b
+      ? '<span class="badge" aria-hidden="true">' + esc(String(n.b)) + '</span>' +
+        '<span class="sr-only">（' + esc(String(n.b)) + '）</span>'
+      : '';
     return '<a href="' + n.h + '"' + cur + '><span class="glyph">' + n.g2 + '</span>' + esc(n.t) +
-      (n.b ? '<span class="badge">' + n.b + '</span>' : '') + '</a>';
+      badge + '</a>';
   }).join('');
 }
 
@@ -5034,13 +5076,21 @@ function viewKBCanvas(vid){
     const cls = ['note', n.kind === 'problem' ? 'problem' : '', n.kind === 'rise' ? 'rise' : '',
                  isUnread(n) ? 'unread' : '', KBPICK[n.id] ? 'sel' : ''].filter(Boolean).join(' ');
     const scls = scaf ? (scaffold(scaf.s) || {}).cls : '';
+    /* aria-label 會吞掉整張卡的內容（支架標籤、摘要、作者、回應數），
+       改用 labelledby + describedby 指向卡內真正的節點。 */
     return '<div class="' + cls + ' ' + (scls || '') + '" style="left:' + n.x + 'px;top:' + n.y + 'px"' +
-      ' data-note="' + n.id + '" tabindex="0" role="button" aria-label="貼文 ' + esc(n.title) + '">' +
-      '<div class="nt">' + esc(n.title) + '</div>' +
+      ' data-note="' + n.id + '" tabindex="0" role="button"' +
+      ' aria-labelledby="nt-' + n.id + '" aria-describedby="nb-' + n.id + '">' +
+      '<div class="nt" id="nt-' + n.id + '">' + esc(n.title) + '</div>' +
       (scaf ? '<div class="small" style="color:var(--' + ((scaffold(scaf.s) || {}).cls || '').replace('sc', 'sc-') +
-        ');font-size:11px;font-weight:600;margin-bottom:2px">' + esc(scaffoldLabel(scaf.s)) + '</div>' : '') +
-      '<div class="nb">' + esc((scaf ? scaf.text : '').slice(0, 90)) + '</div>' +
-      '<div class="nf"><span>' + esc(noteAuthors(n)) + '</span>' +
+        ');font-size:0.55rem;font-weight:600;margin-bottom:2px">' + esc(scaffoldLabel(scaf.s)) + '</div>' : '') +
+      '<div class="nb" id="nb-' + n.id + '">' + esc((scaf ? scaf.text : '').slice(0, 90)) + '</div>' +
+      /* 未讀原本只用一條顏色細線傳達（1.4.1），補一個記號與報讀器文字。
+         放在 .nf 那一列，不要放標題前——卡片只有 13.2rem 寬，會提早折行。 */
+      '<div class="nf">' +
+        (isUnread(n) ? '<span class="sr-only">未讀。</span>' +
+                       '<span class="unread-dot" aria-hidden="true">●</span>' : '') +
+        '<span>' + esc(noteAuthors(n)) + '</span>' +
         (childrenOf(n.id).length ? '<span>↳' + childrenOf(n.id).length + '</span>' : '') +
         ((n.reads || []).length ? '<span>👁' + n.reads.length + '</span>' : '') +
         ((n.annotations || []).length ? '<span>✎' + n.annotations.length + '</span>' : '') +
@@ -5651,6 +5701,11 @@ function viewStudent(){
     (needPre ? '<div class="card card-p" style="margin-bottom:16px;border-left:3px solid var(--warn)">' +
       '<div class="row" style="justify-content:space-between"><span class="small">還沒填課前問卷。</span>' +
       '<a class="btn sm primary" href="#/survey/pre">去填課前問卷</a></div></div>' : '') +
+    /* 側欄徽章在窄版看不見，這裡補一張結構相同的提醒卡。四條件都會出現。 */
+    (submitted('a-post', me.id) && !surveyOf(me.id, 'post')
+      ? '<div class="card card-p" style="margin-bottom:16px;border-left:3px solid var(--warn)">' +
+        '<div class="row" style="justify-content:space-between"><span class="small">這節課的問卷還沒填完。</span>' +
+        '<a class="btn sm primary" href="#/survey/post">去填課後問卷</a></div></div>' : '') +
     /* 知識建構空間鎖著的時候，首頁不要用橘色卡片催他去一個進不去的地方。
        卡片數維持四張，只換內容與樣式。 */
     '<div class="grid g4" style="margin-bottom:16px">' +
@@ -5828,7 +5883,7 @@ function crResultBlock(aid, sid){
       const r = state.responses.find(function(x){ return x.aid === aid && x.sid === sid && x.iid === it.id; });
       return '<div class="note-full"><b>非選第 ' + it.no + ' 題</b>' +
         '<div class="stem">' + esc(it.stem) + '</div>' +
-        '<div class="ai-out" style="white-space:pre-wrap;font-size:13px">' + esc((r && r.text) || '（未作答）') + '</div>' +
+        '<div class="ai-out" style="white-space:pre-wrap">' + esc((r && r.text) || '（未作答）') + '</div>' +
         '<div class="row" style="margin-top:8px">' +
         (r && r.score !== null && r.score !== undefined
           ? '<span class="pill q1"><span class="dot"></span>得分 ' + r.score + ' / 6</span>'
@@ -6461,11 +6516,15 @@ function viewAaL(aid){
       '<div class="stem">' + esc(it.stem) + '</div>' +
       (it.type === 'mc'
         ? '<fieldset class="opts"><legend class="sr-only">' + esc(it.stem) + '</legend>' + it.options.map(function(o, k){
-            return '<label class="opt' + (AAL.answers[it.id] === k ? ' chosen' : '') + '">' +
+            const on = AAL.answers[it.id] === k;
+            /* 選中態除了底色，字母後面加一個 ✓：不以顏色單獨傳達訊息（1.4.1） */
+            return '<label class="opt' + (on ? ' chosen' : '') + '">' +
               '<input type="radio" name="aal-' + it.id + '" data-act="aal-pick" data-k="' + k + '"' +
-              (AAL.answers[it.id] === k ? ' checked' : '') + '>' +
-              '<b aria-hidden="true">' + String.fromCharCode(65 + k) + '</b><span>' + esc(o) + '</span></label>';
-          }).join('') + '</fieldset>'
+              (on ? ' checked' : '') + '>' +
+              '<b aria-hidden="true">' + String.fromCharCode(65 + k) + (on ? '✓' : '') +
+              '</b><span>' + esc(o) + '</span></label>';
+          }).join('') + '</fieldset>' +
+          '<p class="sr-only">用上下方向鍵聽過每個選項，停在你要的答案上就算選好。</p>'
         : '<div class="field"><label for="crText">寫出你的答案，並說明你的理由</label>' +
           '<textarea id="crText" data-act="aal-text" style="min-height:160px" ' +
           'placeholder="先寫你的看法，再寫你是從文章哪一段看出來的">' +
@@ -6490,9 +6549,12 @@ function aalDialogPane(it, cond, turns, used, maxT){
   const left = maxT - used;
   return '<div class="card aal-chat"><div class="card-h">' +
     '<h3>我的夥伴：' + esc(cond.name) + '</h3>' +
-    '<span class="pill">還可以說 ' + Math.max(0, left) + ' 次</span></div>' +
+    '<span class="pill">還可以說 <span id="turnLeft">' + Math.max(0, left) + '</span> 次</span></div>' +
     '<div class="card-p">' +
-    '<div class="chat" id="aalChat">' +
+    /* role="log" + aria-live：AI 的回覆是非同步送達的，
+       沒有這兩個屬性，報讀器使用者永遠不知道夥伴回話了。 */
+    '<div class="chat" id="aalChat" role="log" aria-live="polite" aria-relevant="additions"' +
+    ' aria-label="我和夥伴的對話">' +
       '<div class="msg agent"><b>' + esc(cond.name) + '</b>' + esc(cond.frame) + '</div>' +
       turns.map(function(t){
         return '<div class="msg ' + (t.speaker === 'student' ? 'me' : 'agent') + '">' +
@@ -6500,6 +6562,7 @@ function aalDialogPane(it, cond, turns, used, maxT){
       }).join('') +
       (left <= 0 ? '<div class="msg sys">這一題的對話次數用完了。換下一題會重新計算。</div>' : '') +
     '</div>' +
+    '<label class="sr-only" for="aalSay">對夥伴說一句話</label>' +
     '<div class="row pane-bar" style="margin-top:10px;gap:6px">' +
       '<input type="text" id="aalSay" placeholder="' + (left > 0 ? '說說你現在的想法…' : '這一題已經聊完了') +
       '"' + (left > 0 ? '' : ' disabled') + ' style="flex:1">' +
@@ -6521,7 +6584,8 @@ function aalNotePane(it){
     '<h3>我的筆記　·　第 ' + (AAL.idx + 1) + ' 題</h3>' +
     '<span class="pill">已寫 ' + txt.length + ' 字</span></div>' +
     '<div class="card-p">' +
-    '<textarea data-act="aal-note" style="height:var(--pane-h)" ' +
+    '<label class="sr-only" for="aalNote">我的筆記</label>' +
+    '<textarea id="aalNote" data-act="aal-note" style="height:var(--pane-h)" ' +
     'placeholder="把你想到的、還沒想通的，寫在這裡">' + esc(txt) + '</textarea>' +
     '<div class="row pane-bar" style="margin-top:10px;gap:6px">' +
       '<button class="btn sm" data-act="aal-note-clear">清空</button>' +
@@ -6566,19 +6630,32 @@ function aalMark(i){
   if (pill){ if (m.length) pill.removeAttribute('hidden'); else pill.setAttribute('hidden', ''); }
 }
 
+/* 用方向鍵在四個選項間移動時，原生 radio 每移動一格就觸發一次 change。
+   若每一次都寫日誌，掃過 A B C 停在 D 會產生三筆「改過答案」的假事件。
+   停留超過這個時間才算真的作答。序列分析用到毫秒級間隔時要註記這個延遲。 */
+const OPTION_DEBOUNCE_MS = 350;
+
 function aalPick(k){
   const it = aalItem();
-  const first = AAL.answers[it.id] === undefined;
   AAL.answers[it.id] = k;
-  if (first) AAL.drafts[it.id] = {first: k, final: k};
-  else AAL.drafts[it.id].final = k;
-  aalLog('OPTION', 'O', {choice:k, changed: !first});
-  aalSave();
 
+  /* 畫面立刻回應（不等去抖），使用者才知道焦點停在哪 */
   const fs = document.querySelector('.aal-side fieldset.opts');
   if (fs) Array.prototype.forEach.call(fs.querySelectorAll('label.opt'), function(lb, idx){
     lb.classList.toggle('chosen', idx === k);
+    const mark = lb.querySelector('b');
+    if (mark) mark.textContent = String.fromCharCode(65 + idx) + (idx === k ? '✓' : '');
   });
+
+  clearTimeout(aalPick._t);
+  aalPick._t = setTimeout(function(){
+    if (AAL.answers[it.id] !== k) return;     // 期間又改了，這一次不算
+    const first = !AAL.drafts[it.id];
+    if (first) AAL.drafts[it.id] = {first: k, final: k};
+    else AAL.drafts[it.id].final = k;
+    aalLog('OPTION', 'O', {choice:k, changed: !first});
+    aalSave();
+  }, OPTION_DEBOUNCE_MS);
 }
 
 function aalTypeTelemetry(iid, value){
@@ -6610,8 +6687,20 @@ async function aalSay(){
   state.dialog.push({t:e.t, sid:AAL.me, cond:AAL.cond, aid:AAL.aid, iid:it.id,
     proc:it.process, turn:used + 1, speaker:'student', text:text, rel:rel,
     ucode:codeUtteranceProcess(text), sent:sm.score});
+  /* 不重繪整頁：輸入框從頭到尾不被摧毀，焦點就不會掉，
+     #aalChat 是 role="log" aria-live="polite"，新訊息會自動被報讀器唸出來。 */
+  const chat = document.getElementById('aalChat');
+  const sendBtn = document.querySelector('[data-act="aal-say"]');
+  if (chat) chat.insertAdjacentHTML('beforeend', '<div class="msg me">' + esc(text) + '</div>');
   box.value = '';
-  render();
+  box.disabled = true;
+  if (sendBtn) sendBtn.disabled = true;
+  if (chat){
+    chat.insertAdjacentHTML('beforeend',
+      '<div class="msg agent" id="aalThinking">' + esc(condition(AAL.cond).name) + '正在想…</div>');
+    chat.scrollTop = chat.scrollHeight;
+  }
+  aalSave();
 
   let reply;
   if (aiEngine() === 'llm'){
@@ -6638,9 +6727,29 @@ async function aalSay(){
     proc:it.process, turn:used + 1, speaker:'agent', text:reply.text,
     qfn:reply.qfn, sub:reply.sub, ucode:reply.process || it.process, sent:0});
   save();
-  render();
-  const c = document.getElementById('aalChat');
-  if (c) c.scrollTop = c.scrollHeight;
+  aalSave();
+
+  /* 拿掉「正在想…」、append 回覆、把輸入框交還給學生 */
+  const think = document.getElementById('aalThinking');
+  if (think) think.remove();
+  if (chat){
+    chat.insertAdjacentHTML('beforeend', '<div class="msg agent"><b>' +
+      esc(condition(AAL.cond).name) + '</b>' + esc(reply.text) + '</div>');
+    chat.scrollTop = chat.scrollHeight;
+  }
+  const left = maxT - aalStudentTurns(it.id);
+  const pill = document.getElementById('turnLeft');
+  if (pill) pill.textContent = Math.max(0, left);
+  if (left > 0){
+    box.disabled = false;
+    if (sendBtn) sendBtn.disabled = false;
+    box.focus();
+  } else {
+    box.placeholder = '這一題已經聊完了';
+    if (chat) chat.insertAdjacentHTML('beforeend',
+      '<div class="msg sys">這一題的對話次數用完了。換下一題會重新計算。</div>');
+    toast('這一題的對話次數用完了，可以按下一題。');
+  }
 }
 
 function aalSubmit(){
@@ -6734,56 +6843,146 @@ function surveyGate(phase){
     '<a class="btn" href="#/student">回我的作業</a></div></div>';
 }
 
-function viewSurvey(phase){
+/* 問卷分段。一題都不刪——正式施測要換成 MSLQ／Leppink／Fredricks 的
+   已驗證量表，刪題就不是那個構念了。改成一段一頁，並保存進度。
+
+   段落標題刻意不印構念名：「自我效能（自我效能）」既重複又等於告訴受試者
+   這一段在量什麼，會啟動作答傾向。構念名留在 data 屬性與教師端。 */
+const SURVEY_DRAFT_KEY = 'kairos-survey-draft';
+const SURVEY_SECTION_SUB = ['關於你怎麼讀', '關於這節課的感覺', '關於你自己'];
+
+/* 把一份問卷攤成「段落」清單。每一段 = 一個構念（或操弄檢核／使用感受）。
+   題號跨段連續，與抬頭的「共 N 題」對得上。 */
+function surveySections(phase, cond){
+  const secs = [];
+  let n = 0;
+  constructsFor(phase).forEach(function(c){
+    secs.push({key:c.id, construct:c.id, dim:c.dim, scale:c.scale, cls:c.cls,
+               items:c.items, from:n});
+    n += c.items.length;
+  });
+  if (phase === 'post'){
+    if (cond !== 'control'){
+      secs.push({key:'mc_x', construct:'manip', dim:'角色知覺', scale:SCALE6, cls:'',
+                 items:MANIP_CHECK.map(function(m){ return m.text; }), from:n});
+      n += MANIP_CHECK.length;
+    }
+    secs.push({key:'sys_x', construct:'sus', dim:'使用感受', scale:SCALE6, cls:'',
+               items:SUS_ITEMS.map(function(s){ return s.text; }), from:n});
+    n += SUS_ITEMS.length;
+  }
+  return secs;
+}
+
+function surveyDraftSave(){
+  if (!SURVEY) return;
+  try {
+    const all = JSON.parse(localStorage.getItem(SURVEY_DRAFT_KEY) || '{}');
+    all[SURVEY.sid + '|' + SURVEY.phase] = {resp:SURVEY.resp, page:SURVEY.page, savedAt:Date.now()};
+    localStorage.setItem(SURVEY_DRAFT_KEY, JSON.stringify(all));
+  } catch (e) { toast('這一段沒能存起來，先不要關掉分頁。'); }
+}
+function surveyDraftLoad(sid, phase){
+  try {
+    const all = JSON.parse(localStorage.getItem(SURVEY_DRAFT_KEY) || '{}');
+    return all[sid + '|' + phase] || null;
+  } catch (e) { return null; }
+}
+function surveyDraftDrop(sid, phase){
+  try {
+    const all = JSON.parse(localStorage.getItem(SURVEY_DRAFT_KEY) || '{}');
+    delete all[sid + '|' + phase];
+    localStorage.setItem(SURVEY_DRAFT_KEY, JSON.stringify(all));
+  } catch (e) {}
+}
+
+function viewSurvey(phase, page){
   const me = currentUser();
   if (me.role !== 'student') return '<div class="empty"><h3>請切換成學生身分</h3>' +
     '<p>問卷是學生端的畫面。</p></div>';
   const gate = surveyGate(phase); if (gate) return gate;
-  const done = surveyOf(me.id, phase);
-  if (!SURVEY || SURVEY.phase !== phase || SURVEY.sid !== me.id){
-    SURVEY = {phase:phase, sid:me.id, resp: done ? Object.assign({}, done.resp) : {}};
-  }
-  const cs = constructsFor(phase);
+
   const cond = conditionOfStudent(me.id);
+  const secs = surveySections(phase, cond);
+  const done = surveyOf(me.id, phase);
+
+  if (!SURVEY || SURVEY.phase !== phase || SURVEY.sid !== me.id){
+    const d = surveyDraftLoad(me.id, phase);
+    SURVEY = {phase:phase, sid:me.id,
+              resp: d ? d.resp : (done ? Object.assign({}, done.resp) : {}),
+              page: d ? d.page : 1};
+  }
+  SURVEY.page = Math.max(1, Math.min(page || SURVEY.page || 1, secs.length));
+
   const keys = surveyKeys(phase, cond);
   const total = keys.length;
   const answered = keys.filter(function(k){ return SURVEY.resp[k]; }).length;
+  const sec = secs[SURVEY.page - 1];
+  const last = SURVEY.page === secs.length;
 
-  function block(title, items, scale, prefix, cls){
-    return '<div class="card" style="margin-bottom:14px"><div class="card-h">' +
-      '<h3 class="' + (cls || '') + '">' + esc(title) + '</h3>' +
-      '<span class="muted small">' + scale.n + ' 點量尺</span></div><div class="card-p col">' +
-      items.map(function(txt, i){
-        const key = prefix + '_' + i;
-        return '<div class="likert"><div class="q">' + (i + 1) + '. ' + esc(txt) + '</div>' +
-          '<div class="scale">' + new Array(scale.n).fill(0).map(function(_, v){
+  /* 量尺從六點換成五點時要說一聲，否則學生會以為自己看錯 */
+  const prevScale = SURVEY.page > 1 ? secs[SURVEY.page - 2].scale : null;
+  const scaleChanged = prevScale && prevScale.n !== sec.scale.n;
+
+  function block(s){
+    return '<div class="card" style="margin-bottom:14px" data-construct="' + esc(s.construct) + '">' +
+      '<div class="card-h"><h3>第 ' + SURVEY.page + ' 段　·　' +
+      esc(SURVEY_SECTION_SUB[(SURVEY.page - 1) % SURVEY_SECTION_SUB.length]) + '</h3>' +
+      '<span class="muted small">選 1 到 ' + s.scale.n + '</span></div><div class="card-p col">' +
+      s.items.map(function(txt, i){
+        const key = s.key + '_' + i;
+        const no = s.from + i + 1;
+        return '<div class="likert"><div class="q" id="q_' + key + '">' + no + '. ' + esc(txt) + '</div>' +
+          /* 原生 radio：拿回語意與方向鍵行為，Tab 停留點是「一題」而不是「一格」 */
+          '<div class="scale" role="radiogroup" aria-labelledby="q_' + key + '">' +
+          new Array(s.scale.n).fill(0).map(function(_, v){
             const val = v + 1;
-            return '<button class="lk' + (SURVEY.resp[key] === val ? ' on' : '') + '"' +
-              ' data-act="sv-pick" data-k="' + key + '" data-v="' + val + '"' +
-              ' title="' + esc(scale.labels[v]) + '">' + val + '</button>';
-          }).join('') + '</div>' +
-          '<div class="scale-lab"><span>' + esc(scale.labels[0]) + '</span>' +
-          '<span>' + esc(scale.labels[scale.n - 1]) + '</span></div></div>';
+            const on = SURVEY.resp[key] === val;
+            return '<label class="lk' + (on ? ' on' : '') + '">' +
+              '<input type="radio" class="sr-only" name="' + key + '" data-act="sv-pick"' +
+              ' data-k="' + key + '" data-v="' + val + '"' + (on ? ' checked' : '') + '>' +
+              '<span class="lk-n" aria-hidden="true">' + val + '</span>' +
+              '<span class="lk-t">' + esc(s.scale.labels[v]) + '</span></label>';
+          }).join('') + '</div></div>';
       }).join('') + '</div></div>';
   }
 
-  /* 進度數字要能就地更新，所以不能走 sectionHead 的 sub（那一段會被 esc() 轉義），
-     改放在右側動作列裡，用 role="status" 讓報讀器也聽得到進度變化。 */
   return sectionHead(phase === 'pre' ? '課前問卷' : '課後問卷',
       '沒有標準答案，照你真正的感覺選就好。',
       '<span class="pill" role="status" aria-live="polite">已完成 <span id="svDone">' + answered +
-      '</span> / 共 ' + total + ' 題</span>' +
-      '<button class="btn primary" data-act="sv-submit" data-id="' + phase + '">送出問卷</button>') +
-    '<div class="card card-p" style="margin-bottom:14px;border-left:3px solid var(--warn)">' +
-    '<p class="small" style="margin:0">本平台內建的題項是<strong>依構念自撰的示範題</strong>，' +
-    '用來讓施測與計分流程完整可跑。正式研究請改用已完成中譯與信效度驗證的公開量表，' +
-    '並經專家審查與學童認知訪談。</p></div>' +
-    cs.map(function(c){ return block(c.name + '（' + c.dim + '）', c.items, c.scale, c.id, c.cls); }).join('') +
-    (phase === 'post' && cond !== 'control'
-      ? block('角色知覺（操弄檢核）', MANIP_CHECK.map(function(m){ return m.text; }), SCALE6, 'mc_x', '') : '') +
-    (phase === 'post' ? block('系統使用感受', SUS_ITEMS.map(function(s){ return s.text; }), SCALE6, 'sys_x', '') : '') +
-    '<div class="row" style="justify-content:flex-end;margin-top:16px">' +
-    '<button class="btn primary" data-act="sv-submit" data-id="' + phase + '">送出問卷</button></div>';
+      '</span> / 共 ' + total + ' 題</span>') +
+
+    '<div class="card card-p" style="margin-bottom:14px">' +
+      '<div class="row" style="justify-content:space-between">' +
+      '<b>第 ' + SURVEY.page + ' 段，共 ' + secs.length + ' 段</b>' +
+      '<span class="muted small">中間可以休息，填到哪裡會自動記住</span></div>' +
+      '<div class="bar" style="margin-top:8px"><i style="width:' +
+      Math.round(100 * SURVEY.page / secs.length) + '%"></i></div>' +
+    '</div>' +
+
+    (SURVEY.page === 1
+      ? '<div class="card card-p" style="margin-bottom:14px">' +
+        '<h4>填之前先看這裡</h4>' +
+        '<p class="small" style="margin-top:6px">這些題目沒有對錯，也不會算成績。' +
+        '照你真正的感覺選就好。看不懂的題目可以舉手問老師。' +
+        '這份問卷分成 ' + secs.length + ' 段，中間可以休息。</p></div>'
+      : '') +
+    (scaleChanged
+      ? '<div class="card card-p" style="margin-bottom:14px;border-left:3px solid var(--accent)">' +
+        '<p class="small" style="margin:0">接下來的題目改成問「符不符合你」，' +
+        '選項也從 ' + prevScale.n + ' 格變成 ' + sec.scale.n + ' 格，看清楚再選。</p></div>'
+      : '') +
+
+    block(sec) +
+
+    '<div class="row" style="justify-content:space-between;margin-top:16px">' +
+      (SURVEY.page > 1
+        ? '<button class="btn" data-act="sv-page" data-v="' + (SURVEY.page - 1) + '">← 上一段</button>'
+        : '<span></span>') +
+      (last
+        ? '<button class="btn primary" data-act="sv-submit" data-id="' + phase + '">送出問卷</button>'
+        : '<button class="btn primary" data-act="sv-page" data-v="' + (SURVEY.page + 1) + '">下一段 →</button>') +
+    '</div>';
 }
 
 function surveySubmit(phase){
@@ -6794,16 +6993,26 @@ function surveySubmit(phase){
   const keys = surveyKeys(phase, cond);
   const miss = keys.filter(function(k){ return !SURVEY.resp[k]; });
   if (miss.length){
-    /* 先把人帶到第一題沒答的地方，再問——不然他不知道漏在哪 */
-    const el = document.querySelector('[data-k="' + miss[0] + '"]');
-    if (el){
-      const row = el.closest('.likert');
-      if (row) row.classList.add('missing');
-      el.scrollIntoView({block:'center'});
-      el.focus();
+    /* 直接帶他去缺答的那一段並標紅——只跳一個 confirm，他不知道漏在哪 */
+    const secs = surveySections(phase, cond);
+    const pre = miss[0].replace(/_\d+$/, '');
+    const pg = Math.max(1, secs.findIndex(function(s){ return s.key === pre; }) + 1);
+    if (!confirm('還有 ' + miss.length + ' 題沒作答。\n\n' +
+                 '按「確定」直接送出，按「取消」回去把它填完。')){
+      SURVEY.page = pg;
+      surveyDraftSave();
+      go('#/survey/' + phase + '/' + pg);
+      setTimeout(function(){
+        const el = document.querySelector('[data-k="' + miss[0] + '"]');
+        if (el){
+          const row = el.closest('.likert');
+          if (row) row.classList.add('missing');
+          el.focus();
+          el.scrollIntoView({block:'center'});
+        }
+      }, 0);
+      return;
     }
-    if (!confirm('還有 ' + miss.length + ' 題沒作答（「角色知覺」和「系統使用感受」那兩段也要看一下）。\n\n' +
-                 '按「確定」直接送出，按「取消」回去把它填完。')) return;
   }
 
   // 操弄檢核與使用感受用固定鍵存回原本的 id。
@@ -6821,6 +7030,7 @@ function surveySubmit(phase){
     return !(s.sid === me.id && s.phase === phase); });
   state.surveys.push({sid:me.id, phase:phase, at:Date.now(), resp:resp});
   save();
+  surveyDraftDrop(me.id, phase);
   SURVEY = null;
   toast('問卷已送出，謝謝你。');
   go('#/student');
@@ -7092,7 +7302,7 @@ function rDesign(){
           '<div class="tablewrap"><table><thead><tr><th>編號</th><th>子歷程</th><th>代表性提問句（角色中性）</th></tr></thead><tbody>' +
           subprocessesOf(p.id).map(function(s){
             return '<tr><td class="num">' + s.id + '</td><td class="small">' + esc(s.zh) +
-              '<div class="muted" style="font-size:11px">' + esc(s.en) + '</div></td>' +
+              '<div class="muted" style="font-size:0.55rem">' + esc(s.en) + '</div></td>' +
               '<td class="small">' + esc(s.q) + '</td></tr>';
           }).join('') + '</tbody></table></div></div>';
       }).join('') + '</div></div>' +
@@ -7252,7 +7462,7 @@ function rLSA(){
     '<div class="tablewrap"><table><thead><tr><th>z</th>' +
     r.codes.map(function(c){ return '<th class="n">' + esc(c) + '</th>'; }).join('') + '</tr></thead><tbody>' +
     r.codes.map(function(c, i){
-      return '<tr><th style="position:static">' + esc(c) + '<div class="muted" style="font-size:10px;font-weight:400">' +
+      return '<tr><th style="position:static">' + esc(c) + '<div class="muted" style="font-size:0.5rem;font-weight:400">' +
         esc(behaviorName(c)) + '</div></th>' +
         r.codes.map(function(_, j){
           const z = r.Z[i][j];
@@ -7271,7 +7481,7 @@ function rLSA(){
       '<div class="tablewrap"><table><thead><tr><th>轉移</th><th class="n">次數</th><th class="n">條件機率</th><th class="n">z</th></tr></thead><tbody>' +
       r.sig.slice(0, 14).map(function(s){
         return '<tr><td><b>' + esc(s.from) + ' → ' + esc(s.to) + '</b>' +
-          '<div class="muted" style="font-size:11px">' + esc(behaviorName(s.from)) + ' → ' + esc(behaviorName(s.to)) + '</div></td>' +
+          '<div class="muted" style="font-size:0.55rem">' + esc(behaviorName(s.from)) + ' → ' + esc(behaviorName(s.to)) + '</div></td>' +
           '<td class="n">' + s.f + '</td><td class="n">' + pct(s.p) + '</td>' +
           '<td class="n" style="color:' + (s.z > 0 ? 'var(--q1)' : 'var(--q2)') + ';font-weight:600">' +
           s.z.toFixed(2) + '</td></tr>';
@@ -7444,7 +7654,7 @@ function rSent(){
         cm.map(function(x){ return Math.abs(x.m || 0); }).concat([0.05])) * 1.3);
       return cm.map(function(x){
         const w = x.m == null ? 50 : (x.m + span) / (2 * span) * 100;
-        return '<div class="rub-row"><span>' + esc(x.k.name) + '<div class="muted" style="font-size:11px">' +
+        return '<div class="rub-row"><span>' + esc(x.k.name) + '<div class="muted" style="font-size:0.55rem">' +
           esc(condition(x.k.condition).name) + '</div></span>' +
           '<div class="bar"><i style="width:' + w.toFixed(1) + '%;background:' +
           ((x.m || 0) >= 0 ? 'var(--q1)' : 'var(--q2)') + '"></i></div>' +
@@ -7673,7 +7883,7 @@ function render(){
     case 'research':  html = viewResearch(); break;
     case 'aal':       html = viewAaL(a[0]); break;
     case 'inspect':   html = viewInspect(a[0], a[1]); break;
-    case 'survey':    html = viewSurvey(a[0] === 'pre' ? 'pre' : 'post'); break;
+    case 'survey':    html = viewSurvey(a[0] === 'pre' ? 'pre' : 'post', +a[1] || 0); break;
     case 'student':   html = viewStudent(); break;
     case 'quiz':      html = viewQuiz(a[0]); break;
     case 'result':    html = viewResult(a[0]); break;
@@ -7702,8 +7912,6 @@ function render(){
   if (ROUTE.name === 'aal'){
     const c = document.getElementById('aalChat');
     if (c) c.scrollTop = c.scrollHeight;
-    const s = document.getElementById('aalSay');
-    if (s && render._focusSay){ s.focus(); render._focusSay = false; }
   }
 
   if (!samePage){
@@ -7904,6 +8112,16 @@ function bindEvents(){
     if (AAL && Object.keys(AAL.answers).length){ e.preventDefault(); e.returnValue = ''; }
   });
 
+  /* 對話輸入框按 Enter 送出。
+     e.isComposing 這一行不可省——全中文的國小學童用注音選字時按 Enter
+     是「確認選字」，不該把半成品送出去。 */
+  document.addEventListener('keydown', function(e){
+    if (e.key !== 'Enter' || e.isComposing) return;
+    if (!e.target || e.target.id !== 'aalSay') return;
+    e.preventDefault();
+    aalSay();
+  });
+
   /* 略過導覽：不動 hash，直接把焦點送進主舞台（#stage 有 tabindex="-1"）。 */
   const sk = document.getElementById('skipLink');
   if (sk) sk.addEventListener('click', function(){
@@ -8005,7 +8223,7 @@ function bindEvents(){
     /* 評量即學習事件 */
     if (act === 'aal-mark'){ aalMark(+t.dataset.i); return; }
     if (act === 'aal-pick'){ aalPick(+t.dataset.k); return; }
-    if (act === 'aal-say'){ render._focusSay = true; aalSay(); return; }
+    if (act === 'aal-say'){ aalSay(); return; }
     /* 換題可能同時換掉左欄的文章（T1 十題、T2 六題）。
        文章無聲換掉會讓學生以為自己的標記不見了，所以要說一聲並把焦點帶過去。 */
     if (act === 'aal-prev' || act === 'aal-next'){
@@ -8054,20 +8272,9 @@ function bindEvents(){
       return; }   // 原生 checkbox，畫面不需要重繪
 
     /* 問卷 */
-    if (act === 'sv-pick'){
-      SURVEY.resp[t.dataset.k] = +t.dataset.v;
-      /* 只更新這一列的量尺與抬頭的計數，不重繪整份 47 題 */
-      const scale = t.parentElement;
-      if (scale) Array.prototype.forEach.call(scale.querySelectorAll('.lk'), function(b){
-        const on = b.dataset.v === t.dataset.v;
-        b.classList.toggle('on', on);
-        b.setAttribute('aria-pressed', String(on));
-      });
-      const row = t.closest('.likert');
-      if (row) row.classList.remove('missing');
-      const d = document.getElementById('svDone');
-      if (d) d.textContent = surveyKeys(SURVEY.phase, conditionOfStudent(currentUser().id))
-        .filter(function(k2){ return SURVEY.resp[k2]; }).length;
+    if (act === 'sv-page'){
+      surveyDraftSave();
+      go('#/survey/' + SURVEY.phase + '/' + t.dataset.v);
       return; }
     if (act === 'sv-submit'){ surveySubmit(id); return; }
 
@@ -8095,6 +8302,22 @@ function bindEvents(){
       if (WIZ.items[id]) delete WIZ.items[id]; else WIZ.items[id] = 1; render(); return; }
     if (act === 'seg-sc'){ collectEditor(); EDIT.segs[+t.dataset.i].s = t.value; renderEditor(); return; }
     if (e.target.id === 'classSel'){ state.ui.classId = e.target.value; save(); render(); return; }
+    /* 量尺現在是原生 radio，走 change 而不是 click——方向鍵移動也會觸發。
+       只更新這一列與抬頭的計數，不重繪整段。 */
+    if (act === 'sv-pick'){
+      SURVEY.resp[t.dataset.k] = +t.dataset.v;
+      const scale = t.closest('.scale');
+      if (scale) Array.prototype.forEach.call(scale.querySelectorAll('.lk'), function(lb){
+        const input = lb.querySelector('input');
+        lb.classList.toggle('on', !!(input && input.checked));
+      });
+      const row = t.closest('.likert');
+      if (row) row.classList.remove('missing');
+      const d = document.getElementById('svDone');
+      if (d) d.textContent = surveyKeys(SURVEY.phase, conditionOfStudent(currentUser().id))
+        .filter(function(k2){ return SURVEY.resp[k2]; }).length;
+      surveyDraftSave();
+      return; }
     if (act === 'search-field'){ KBSEARCH.field = t.value; render(); return; }
     if (act === 'inspect-who'){ go('#/inspect/' + INSPECT.aid + '/' + t.value); return; }
     if (act === 'dg-cond'){ rDesign.sel.cond = t.value; render(); return; }
@@ -8222,12 +8445,21 @@ function applyA11y(){
     btn.setAttribute('aria-pressed', a.highContrast ? 'true' : 'false');
     btn.classList.toggle('primary', !!a.highContrast);
   }
+  syncNarrow();
   syncTopbarHeight();   // 字級變大時頂列會變高，sticky 的偏移量要跟著更新
 }
 
 /* 把頂列的實際高度寫進 --topbar-h。頂列是 min-height + flex-wrap，
    視窗變窄或字級放大時會換行變高；不更新的話 sticky 的側欄與文本欄
    會被壓在頂列底下（WCAG 2.4.11 焦點不被遮蔽）。 */
+/* 有效寬度 = 視窗寬 ÷ 字級倍率。媒體查詢看不到 :root 的 font-size，
+   所以平台自己提供的 175% 字級一開，右欄會被壓到十個中文字寬卻不觸發斷點。
+   這個屬性讓 CSS 的 :root[data-narrow] 區塊接手。 */
+function syncNarrow(){
+  const fs = ((state && state.settings && state.settings.a11y) || {}).fontScale || 1;
+  document.documentElement.toggleAttribute('data-narrow', (window.innerWidth / fs) < 900);
+}
+
 function syncTopbarHeight(){
   const t = document.querySelector('.topbar');
   if (!t) return;
@@ -8378,8 +8610,9 @@ function boot(){
   /* 產物是 HTML 片段（沒有自己的 <html> 標籤，這樣才能同時給 GitHub Pages
      與 Artifact 檢視器使用），所以語言宣告只能在這裡補（WCAG 3.1.1）。 */
   document.documentElement.lang = 'zh-Hant';
+  syncNarrow();
   syncTopbarHeight();
-  window.addEventListener('resize', syncTopbarHeight);
+  window.addEventListener('resize', function(){ syncNarrow(); syncTopbarHeight(); });
   state = loadState();
   if (!state.ui) state.ui = {role:'u-t1', classId:'c-1'};
   if (!state.ui.classId) state.ui.classId = 'c-1';

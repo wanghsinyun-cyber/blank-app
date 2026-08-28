@@ -35,6 +35,11 @@ function viewStudent(){
     (needPre ? '<div class="card card-p" style="margin-bottom:16px;border-left:3px solid var(--warn)">' +
       '<div class="row" style="justify-content:space-between"><span class="small">還沒填課前問卷。</span>' +
       '<a class="btn sm primary" href="#/survey/pre">去填課前問卷</a></div></div>' : '') +
+    /* 側欄徽章在窄版看不見，這裡補一張結構相同的提醒卡。四條件都會出現。 */
+    (submitted('a-post', me.id) && !surveyOf(me.id, 'post')
+      ? '<div class="card card-p" style="margin-bottom:16px;border-left:3px solid var(--warn)">' +
+        '<div class="row" style="justify-content:space-between"><span class="small">這節課的問卷還沒填完。</span>' +
+        '<a class="btn sm primary" href="#/survey/post">去填課後問卷</a></div></div>' : '') +
     /* 知識建構空間鎖著的時候，首頁不要用橘色卡片催他去一個進不去的地方。
        卡片數維持四張，只換內容與樣式。 */
     '<div class="grid g4" style="margin-bottom:16px">' +
@@ -212,7 +217,7 @@ function crResultBlock(aid, sid){
       const r = state.responses.find(function(x){ return x.aid === aid && x.sid === sid && x.iid === it.id; });
       return '<div class="note-full"><b>非選第 ' + it.no + ' 題</b>' +
         '<div class="stem">' + esc(it.stem) + '</div>' +
-        '<div class="ai-out" style="white-space:pre-wrap;font-size:13px">' + esc((r && r.text) || '（未作答）') + '</div>' +
+        '<div class="ai-out" style="white-space:pre-wrap">' + esc((r && r.text) || '（未作答）') + '</div>' +
         '<div class="row" style="margin-top:8px">' +
         (r && r.score !== null && r.score !== undefined
           ? '<span class="pill q1"><span class="dot"></span>得分 ' + r.score + ' / 6</span>'

@@ -54,7 +54,7 @@ function render(){
     case 'research':  html = viewResearch(); break;
     case 'aal':       html = viewAaL(a[0]); break;
     case 'inspect':   html = viewInspect(a[0], a[1]); break;
-    case 'survey':    html = viewSurvey(a[0] === 'pre' ? 'pre' : 'post'); break;
+    case 'survey':    html = viewSurvey(a[0] === 'pre' ? 'pre' : 'post', +a[1] || 0); break;
     case 'student':   html = viewStudent(); break;
     case 'quiz':      html = viewQuiz(a[0]); break;
     case 'result':    html = viewResult(a[0]); break;
@@ -83,8 +83,6 @@ function render(){
   if (ROUTE.name === 'aal'){
     const c = document.getElementById('aalChat');
     if (c) c.scrollTop = c.scrollHeight;
-    const s = document.getElementById('aalSay');
-    if (s && render._focusSay){ s.focus(); render._focusSay = false; }
   }
 
   if (!samePage){
@@ -285,6 +283,16 @@ function bindEvents(){
     if (AAL && Object.keys(AAL.answers).length){ e.preventDefault(); e.returnValue = ''; }
   });
 
+  /* 對話輸入框按 Enter 送出。
+     e.isComposing 這一行不可省——全中文的國小學童用注音選字時按 Enter
+     是「確認選字」，不該把半成品送出去。 */
+  document.addEventListener('keydown', function(e){
+    if (e.key !== 'Enter' || e.isComposing) return;
+    if (!e.target || e.target.id !== 'aalSay') return;
+    e.preventDefault();
+    aalSay();
+  });
+
   /* 略過導覽：不動 hash，直接把焦點送進主舞台（#stage 有 tabindex="-1"）。 */
   const sk = document.getElementById('skipLink');
   if (sk) sk.addEventListener('click', function(){
@@ -386,7 +394,7 @@ function bindEvents(){
     /* 評量即學習事件 */
     if (act === 'aal-mark'){ aalMark(+t.dataset.i); return; }
     if (act === 'aal-pick'){ aalPick(+t.dataset.k); return; }
-    if (act === 'aal-say'){ render._focusSay = true; aalSay(); return; }
+    if (act === 'aal-say'){ aalSay(); return; }
     /* 換題可能同時換掉左欄的文章（T1 十題、T2 六題）。
        文章無聲換掉會讓學生以為自己的標記不見了，所以要說一聲並把焦點帶過去。 */
     if (act === 'aal-prev' || act === 'aal-next'){
@@ -435,20 +443,9 @@ function bindEvents(){
       return; }   // 原生 checkbox，畫面不需要重繪
 
     /* 問卷 */
-    if (act === 'sv-pick'){
-      SURVEY.resp[t.dataset.k] = +t.dataset.v;
-      /* 只更新這一列的量尺與抬頭的計數，不重繪整份 47 題 */
-      const scale = t.parentElement;
-      if (scale) Array.prototype.forEach.call(scale.querySelectorAll('.lk'), function(b){
-        const on = b.dataset.v === t.dataset.v;
-        b.classList.toggle('on', on);
-        b.setAttribute('aria-pressed', String(on));
-      });
-      const row = t.closest('.likert');
-      if (row) row.classList.remove('missing');
-      const d = document.getElementById('svDone');
-      if (d) d.textContent = surveyKeys(SURVEY.phase, conditionOfStudent(currentUser().id))
-        .filter(function(k2){ return SURVEY.resp[k2]; }).length;
+    if (act === 'sv-page'){
+      surveyDraftSave();
+      go('#/survey/' + SURVEY.phase + '/' + t.dataset.v);
       return; }
     if (act === 'sv-submit'){ surveySubmit(id); return; }
 
@@ -476,6 +473,22 @@ function bindEvents(){
       if (WIZ.items[id]) delete WIZ.items[id]; else WIZ.items[id] = 1; render(); return; }
     if (act === 'seg-sc'){ collectEditor(); EDIT.segs[+t.dataset.i].s = t.value; renderEditor(); return; }
     if (e.target.id === 'classSel'){ state.ui.classId = e.target.value; save(); render(); return; }
+    /* 量尺現在是原生 radio，走 change 而不是 click——方向鍵移動也會觸發。
+       只更新這一列與抬頭的計數，不重繪整段。 */
+    if (act === 'sv-pick'){
+      SURVEY.resp[t.dataset.k] = +t.dataset.v;
+      const scale = t.closest('.scale');
+      if (scale) Array.prototype.forEach.call(scale.querySelectorAll('.lk'), function(lb){
+        const input = lb.querySelector('input');
+        lb.classList.toggle('on', !!(input && input.checked));
+      });
+      const row = t.closest('.likert');
+      if (row) row.classList.remove('missing');
+      const d = document.getElementById('svDone');
+      if (d) d.textContent = surveyKeys(SURVEY.phase, conditionOfStudent(currentUser().id))
+        .filter(function(k2){ return SURVEY.resp[k2]; }).length;
+      surveyDraftSave();
+      return; }
     if (act === 'search-field'){ KBSEARCH.field = t.value; render(); return; }
     if (act === 'inspect-who'){ go('#/inspect/' + INSPECT.aid + '/' + t.value); return; }
     if (act === 'dg-cond'){ rDesign.sel.cond = t.value; render(); return; }
@@ -603,12 +616,21 @@ function applyA11y(){
     btn.setAttribute('aria-pressed', a.highContrast ? 'true' : 'false');
     btn.classList.toggle('primary', !!a.highContrast);
   }
+  syncNarrow();
   syncTopbarHeight();   // 字級變大時頂列會變高，sticky 的偏移量要跟著更新
 }
 
 /* 把頂列的實際高度寫進 --topbar-h。頂列是 min-height + flex-wrap，
    視窗變窄或字級放大時會換行變高；不更新的話 sticky 的側欄與文本欄
    會被壓在頂列底下（WCAG 2.4.11 焦點不被遮蔽）。 */
+/* 有效寬度 = 視窗寬 ÷ 字級倍率。媒體查詢看不到 :root 的 font-size，
+   所以平台自己提供的 175% 字級一開，右欄會被壓到十個中文字寬卻不觸發斷點。
+   這個屬性讓 CSS 的 :root[data-narrow] 區塊接手。 */
+function syncNarrow(){
+  const fs = ((state && state.settings && state.settings.a11y) || {}).fontScale || 1;
+  document.documentElement.toggleAttribute('data-narrow', (window.innerWidth / fs) < 900);
+}
+
 function syncTopbarHeight(){
   const t = document.querySelector('.topbar');
   if (!t) return;
@@ -759,8 +781,9 @@ function boot(){
   /* 產物是 HTML 片段（沒有自己的 <html> 標籤，這樣才能同時給 GitHub Pages
      與 Artifact 檢視器使用），所以語言宣告只能在這裡補（WCAG 3.1.1）。 */
   document.documentElement.lang = 'zh-Hant';
+  syncNarrow();
   syncTopbarHeight();
-  window.addEventListener('resize', syncTopbarHeight);
+  window.addEventListener('resize', function(){ syncNarrow(); syncTopbarHeight(); });
   state = loadState();
   if (!state.ui) state.ui = {role:'u-t1', classId:'c-1'};
   if (!state.ui.classId) state.ui.classId = 'c-1';

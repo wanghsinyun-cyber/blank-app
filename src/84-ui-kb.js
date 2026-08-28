@@ -91,13 +91,21 @@ function viewKBCanvas(vid){
     const cls = ['note', n.kind === 'problem' ? 'problem' : '', n.kind === 'rise' ? 'rise' : '',
                  isUnread(n) ? 'unread' : '', KBPICK[n.id] ? 'sel' : ''].filter(Boolean).join(' ');
     const scls = scaf ? (scaffold(scaf.s) || {}).cls : '';
+    /* aria-label 會吞掉整張卡的內容（支架標籤、摘要、作者、回應數），
+       改用 labelledby + describedby 指向卡內真正的節點。 */
     return '<div class="' + cls + ' ' + (scls || '') + '" style="left:' + n.x + 'px;top:' + n.y + 'px"' +
-      ' data-note="' + n.id + '" tabindex="0" role="button" aria-label="貼文 ' + esc(n.title) + '">' +
-      '<div class="nt">' + esc(n.title) + '</div>' +
+      ' data-note="' + n.id + '" tabindex="0" role="button"' +
+      ' aria-labelledby="nt-' + n.id + '" aria-describedby="nb-' + n.id + '">' +
+      '<div class="nt" id="nt-' + n.id + '">' + esc(n.title) + '</div>' +
       (scaf ? '<div class="small" style="color:var(--' + ((scaffold(scaf.s) || {}).cls || '').replace('sc', 'sc-') +
-        ');font-size:11px;font-weight:600;margin-bottom:2px">' + esc(scaffoldLabel(scaf.s)) + '</div>' : '') +
-      '<div class="nb">' + esc((scaf ? scaf.text : '').slice(0, 90)) + '</div>' +
-      '<div class="nf"><span>' + esc(noteAuthors(n)) + '</span>' +
+        ');font-size:0.55rem;font-weight:600;margin-bottom:2px">' + esc(scaffoldLabel(scaf.s)) + '</div>' : '') +
+      '<div class="nb" id="nb-' + n.id + '">' + esc((scaf ? scaf.text : '').slice(0, 90)) + '</div>' +
+      /* 未讀原本只用一條顏色細線傳達（1.4.1），補一個記號與報讀器文字。
+         放在 .nf 那一列，不要放標題前——卡片只有 13.2rem 寬，會提早折行。 */
+      '<div class="nf">' +
+        (isUnread(n) ? '<span class="sr-only">未讀。</span>' +
+                       '<span class="unread-dot" aria-hidden="true">●</span>' : '') +
+        '<span>' + esc(noteAuthors(n)) + '</span>' +
         (childrenOf(n.id).length ? '<span>↳' + childrenOf(n.id).length + '</span>' : '') +
         ((n.reads || []).length ? '<span>👁' + n.reads.length + '</span>' : '') +
         ((n.annotations || []).length ? '<span>✎' + n.annotations.length + '</span>' : '') +
