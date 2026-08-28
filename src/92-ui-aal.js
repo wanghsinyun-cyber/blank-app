@@ -761,12 +761,14 @@ function viewInspect(aid, sid){
       '<span class="pill">他標記了 ' + marks.length + ' 句</span></div>' +
       '<div class="card-p">' +
       '<p class="muted small" id="passageHelp">底色與「▍」記號是這位學生自己標起來的句子，由事件日誌還原。</p>' +
-      '<div class="passage" role="group" aria-labelledby="passageTitle" aria-describedby="passageHelp">' +
+      /* 唯讀重播用文字語意，不用控制項語意：
+         38 顆 disabled button 會讓報讀器唸 38 次「按鈕　未按下　無法使用」。 */
+      '<div class="passage" role="region" tabindex="0" aria-labelledby="passageTitle" aria-describedby="passageHelp">' +
         text.paras.map(function(_, pi){
           return '<p class="para">' + sents.filter(function(s){ return s.para === pi; }).map(function(s){
             const on = marks.indexOf(s.i) >= 0;
-            return '<button type="button" class="sent' + (on ? ' on' : '') + '" disabled' +
-              ' aria-pressed="' + on + '">' + esc(s.text) + '</button>';
+            return '<span class="sent' + (on ? ' on' : '') + '">' +
+              (on ? '<span class="sr-only">學生標記：</span>' : '') + esc(s.text) + '</span>';
           }).join('') + '</p>';
         }).join('') +
       '</div>' +

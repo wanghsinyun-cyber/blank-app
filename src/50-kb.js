@@ -7,8 +7,22 @@ const STORE_KEY = 'kidforum.state.v1';
 let state = null;
 
 function save(){
-  try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch (e) { /* 無痕模式等情況：僅存在記憶體 */ }
+  try {
+    /* 代為檢視是一個「模式」，不是身分變更：不能落地。
+       否則老師關掉分頁、隔天開機還是學生身分，而且不知道怎麼回來。 */
+    const imp = state.ui && state.ui.impersonate;
+    if (imp){
+      const clone = Object.assign({}, state, {ui: Object.assign({}, state.ui, {
+        role: imp.realRole, impersonate: undefined})});
+      localStorage.setItem(STORE_KEY, JSON.stringify(clone));
+      return;
+    }
+    localStorage.setItem(STORE_KEY, JSON.stringify(state));
+  } catch (e) { /* 無痕模式等情況：僅存在記憶體 */ }
 }
+/* 老師正在以某位學生的視角檢視。此時一律唯讀——
+   他的閱讀、貼文、註記都不可以記到學生名下（reads 是 KB 指數的原料）。 */
+function isImpersonating(){ return !!(state.ui && state.ui.impersonate); }
 function loadState(){
   try {
     const raw = localStorage.getItem(STORE_KEY);
@@ -118,6 +132,7 @@ function threadOf(rootId){
 
 /* --- 寫入操作 --- */
 function createNote(o){
+  if (isImpersonating()) return null;
   const n = {
     id: uid('n'), viewId: o.viewId, title: o.title || '（未命名）',
     segs: o.segs || [], authorIds: o.authorIds || [currentUser().id],
@@ -146,6 +161,7 @@ function deleteNote(id){
   save();
 }
 function markRead(id){
+  if (isImpersonating()) return;   // 代為檢視：不寫進學生的閱讀紀錄
   const n = getNote(id); const me = currentUser().id;
   if (n && n.authorIds.indexOf(me) < 0 && (n.reads || []).indexOf(me) < 0){ n.reads.push(me); save(); }
 }
@@ -154,6 +170,7 @@ function isUnread(n){
   return n.authorIds.indexOf(me) < 0 && (n.reads || []).indexOf(me) < 0;
 }
 function addAnnotation(id, text){
+  if (isImpersonating()) return;
   const n = getNote(id); if (!n || !text.trim()) return;
   n.annotations = n.annotations || [];
   n.annotations.push({id: uid('an'), authorId: currentUser().id, text: text.trim(), at: Date.now()});

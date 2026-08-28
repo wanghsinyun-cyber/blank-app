@@ -15,8 +15,17 @@ function viewDash(){
   else if (DTAB === 'sna') body = dashSNA();
   else if (DTAB === 'discourse') body = dashDiscourse();
   else body = dashReport();
-  return sectionHead('雙軌評量儀表板', '把 KIDMAP 的能力估計與知識建構的論述指標放在同一張圖上。',
+  const kc = kbClass();
+  return sectionHead('雙軌評量儀表板',
+      '知識建構示範班：' + kc.name + '（' + condition(kc.condition).name + '，' +
+      kc.studentIds.length + ' 人）　·　把能力估計與論述指標放在同一張圖上。',
       '<button class="btn sm" data-act="export-json">匯出研究資料</button>') +
+    /* 這一頁永遠只有示範班的 24 人，但頂列還掛著一顆班級選單——
+       不說清楚，老師會以為自己看的是全部 96 人。 */
+    '<div class="card card-p" style="margin-bottom:12px;border-left:3px solid var(--warn)">' +
+    '<p class="small" style="margin:0">這一頁只涵蓋<strong>有討論紀錄的示範班（' + esc(kc.name) +
+    '）</strong>。其他班級還沒有知識建構資料，因此不在這張圖上；' +
+    '頂列的班級選單在這一頁不作用。</p></div>' +
     '<div class="tabs">' + tabs.map(function(t){
       return '<button data-act="dtab" data-id="' + t[0] + '" aria-selected="' + (DTAB === t[0]) + '">' + t[1] + '</button>';
     }).join('') + '</div>' + body;
@@ -28,7 +37,7 @@ function dashDual(){
   const counts = {}; zones.forEach(function(z){ counts[z] = dt.rows.filter(function(r){ return r.zone === z; }).length; });
   return '<div class="grid" style="grid-template-columns:minmax(0,1.15fr) minmax(300px,.85fr);gap:16px">' +
     '<div class="card"><div class="card-h"><h3>能力變化 × 論述參與</h3>' +
-      '<span class="muted small">分界線為班級中位數</span></div>' +
+      '<span class="muted small">分界線為 ' + esc(kbClass().name) + ' 的中位數</span></div>' +
       '<div class="card-p">' + dualSVG(dt) + '</div></div>' +
     '<div class="col">' + zones.map(function(z){
       const Z = DUAL_ZONE[z];
@@ -39,8 +48,8 @@ function dashDual(){
         '<span class="num" style="font-size:20px;font-weight:600">' + counts[z] + '</span></div>' +
         '<p class="small muted">' + esc(Z.desc) + '</p>' +
         '<div class="row" style="gap:5px;margin-top:6px">' + rows.map(function(r){
-          return '<span class="pill" data-act="asrole" data-id="' + r.sid + '" style="cursor:pointer" title="切換為此學生檢視">' +
-            esc(userName(r.sid)) + '</span>'; }).join('') + '</div>' +
+          return '<button type="button" class="pill" data-act="asrole" data-id="' + r.sid + '">' +
+            esc(userName(r.sid)) + '</button>'; }).join('') + '</div>' +
         '</div></div>';
     }).join('') + '</div></div>' +
     '<div class="card" style="margin-top:16px"><div class="card-p">' +

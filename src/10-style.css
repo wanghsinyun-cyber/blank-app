@@ -178,6 +178,7 @@ textarea{resize:vertical; min-height:80px; line-height:1.7}
    不要再宣告 outline，否則會蓋掉全域規則並讓滑鼠點擊也出現外框。 */
 input:focus-visible,select:focus-visible,textarea:focus-visible{border-color:transparent}
 
+button.pill{font:inherit; font-size:0.8rem; cursor:pointer; border-color:var(--rule-strong)}
 .pill{display:inline-flex; align-items:center; gap:5px; border-radius:100px; padding:1px 9px; font-size:0.8rem; border:1px solid var(--rule); background:var(--shade); color:var(--ink-2); white-space:nowrap}
 .pill .dot{width:7px; height:7px; border-radius:50%; background:currentColor}
 .q1{color:var(--q1); background:var(--q1-bg); border-color:var(--q1-line)}
@@ -204,11 +205,15 @@ td.n,th.n{text-align:right; font-family:var(--f-mono); font-variant-numeric:tabu
 .bar i{display:block; height:100%; background:var(--accent)}
 
 .tabs{display:flex; gap:2px; border-bottom:1px solid var(--rule); margin-bottom:18px; overflow-x:auto}
-.tabs button{
+/* 分頁是連結（狀態進網址，可以複製、可以上一頁），不是 button。
+   用 aria-current 而不是 aria-selected——後者掛在連結上不會被讀出來。 */
+.tabs button, .tabs a{
   border:0; background:transparent; padding:9px 13px; cursor:pointer; color:var(--ink-3);
   border-bottom:2px solid transparent; font-size:0.9rem; white-space:nowrap;
+  text-decoration:none; display:inline-block;
 }
-.tabs button[aria-selected="true"]{color:var(--ink); border-bottom-color:var(--accent); font-weight:600}
+.tabs button[aria-selected="true"], .tabs a[aria-current="true"]{
+  color:var(--ink); border-bottom-color:var(--accent); font-weight:600}
 
 .steps{display:flex; gap:8px; align-items:center; margin-bottom:18px; flex-wrap:wrap}
 .step{display:flex; align-items:center; gap:7px; padding:5px 12px; border:1px solid var(--rule); border-radius:100px; font-size:0.85rem; color:var(--ink-3); background:var(--card)}
@@ -450,6 +455,12 @@ input[type=checkbox],input[type=radio]{ width:1.15em; height:1.15em; accent-colo
 .lk.on{background:var(--accent); border-color:var(--accent); color:var(--accent-ink); font-weight:600}
 .lk.on .lk-t{color:var(--accent-ink)}
 .lk:focus-within{outline:3px solid var(--focus); outline-offset:2px}
+/* 代為檢視的橫幅。貼在頂列下方，學生本人看不到，
+   所以不影響四條件的版面幾何。 */
+.imp-bar{position:sticky; top:var(--topbar-h); z-index:19; display:flex; align-items:center;
+  gap:12px; padding:8px 16px; background:var(--q2-bg); border-bottom:1px solid var(--q2-line);
+  font-size:0.85rem; color:var(--ink)}
+.imp-bar span{flex:1}
 .unread-dot{color:var(--accent); margin-right:.25rem}
 .likert.missing{outline:3px solid var(--crit); outline-offset:6px; border-radius:var(--r-m)}
 .scale-lab{display:flex; justify-content:space-between; font-size:0.8rem; color:var(--ink-4); margin-top:4px; max-width:13.5rem}

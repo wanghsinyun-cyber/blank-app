@@ -2,7 +2,6 @@
    82-ui-teacher.js — 教師端：後台、派題精靈、派題分析（KIDMAP）、非選評閱、迷思橋接
    ========================================================================== */
 
-let TAB = 'overview';
 let WIZ = null;
 
 function viewTeacher(){
@@ -20,7 +19,7 @@ function viewTeacher(){
     /* 研究控制台與建立派題屬於研究者的工具，教師端不出現 */
     (isResearcher()
       ? '<a class="btn" href="#/research">研究控制台</a><a class="btn primary" href="#/create">建立派題</a>'
-      : '<a class="btn primary" href="#/assign/a-post">看這節課的作答與對話</a>')) +
+      : '<a class="btn primary" href="#/assign/a-post/replay">看這節課的作答與對話</a>')) +
   '<div class="grid g4" style="margin-bottom:18px">' +
     statCard('全體樣本', nAll + ' 人', state.classes.length + ' 班 · 四條件叢集分派') +
     statCard('待處理迷思題', flagged, '迷思比例 ≥ ' + state.settings.misThreshold + '%', flagged ? 'crit' : '') +
@@ -60,9 +59,9 @@ function viewTeacher(){
     '<div class="card"><div class="card-h"><h3>班級名單</h3><span class="muted small">共 ' + k.studentIds.length + ' 人</span></div>' +
     '<div class="card-p"><div class="row" style="gap:6px">' +
       k.studentIds.map(function(sid){
-        return '<span class="pill" title="切換為此學生檢視" data-act="asrole" data-id="' + sid + '" style="cursor:pointer">' + esc(userName(sid)) + '</span>';
+        return '<button type="button" class="pill" data-act="asrole" data-id="' + sid + '">' + esc(userName(sid)) + '<span class="sr-only">：以這位學生的視角唯讀檢視</span></button>';
       }).join('') + '</div>' +
-      '<p class="muted small" style="margin-top:12px">點任一位同學可切換成他的視角，直接看到他的作業、個人 KIDMAP 與知識建構空間。</p>' +
+      '<p class="muted small" style="margin-top:12px">點任一位同學會以他的視角唯讀檢視（你的閱讀與貼文不會記到他名下），畫面上方會出現結束檢視的按鈕。</p>' +
     '</div></div>' +
     '<div class="card"><div class="card-h"><h3>從迷思開啟的共構視圖</h3></div><div class="card-p col">' +
       (state.views.filter(function(v){ return v.origin; }).map(function(v){
@@ -149,36 +148,48 @@ function viewCreate(){
 /* ==========================================================================
    派題分析
    ========================================================================== */
-function viewAssign(aid){
+function viewAssign(aid, tab){
   if (!isTeacher()) return studentBlocked();
   const diag = diagnose(state, aid);
   if (!diag) return '<div class="empty"><h3>找不到這份派題</h3><p>它可能已刪除。</p><a class="btn" href="#/teacher">回教師後台</a></div>';
   const a = diag.assignment;
+  /* 每個分頁補一句副標，老師點進去之前就知道那是什麼 */
   const tabs = [
-    ['overview', '成績總覽'],
-    ['process', '理解歷程'],
-    ['kidmap', 'KIDMAP 診斷'],
-    ['items', '每題四象限'],
-    ['bridge', '迷思橋接'],
-    ['cr', '建構反應題評閱'],
-    ['replay', '作答與 AI 互動'],
-    ['ai', 'AI 深度分析']
+    ['overview', '成績總覽', '全班答對率與分佈'],
+    ['process', '理解歷程', '四種讀法各答對幾成'],
+    ['kidmap', 'KIDMAP 診斷', '個別學生的四象限圖'],
+    ['items', '每題四象限', '哪一題最多人卡住'],
+    ['bridge', '迷思橋接', '把卡住的題目變成討論'],
+    ['cr', '建構反應題評閱', '逐生批改與給評語'],
+    ['replay', '作答與 AI 互動', '重播學生當時的畫面'],
+    ['ai', 'AI 深度分析', '整班的教學建議']
   ];
+  const T = tabs.some(function(t){ return t[0] === tab; }) ? tab : 'overview';
   let body = '';
-  if (TAB === 'overview') body = tabOverview(diag);
-  else if (TAB === 'process') body = tabProcess(diag);
-  else if (TAB === 'kidmap') body = tabKidmap(diag);
-  else if (TAB === 'items') body = tabItems(diag);
-  else if (TAB === 'bridge') body = tabBridge(diag);
-  else if (TAB === 'cr') body = tabCR(diag);
-  else if (TAB === 'replay') body = tabReplay(diag);
+  if (T === 'overview') body = tabOverview(diag);
+  else if (T === 'process') body = tabProcess(diag);
+  else if (T === 'kidmap') body = tabKidmap(diag);
+  else if (T === 'items') body = tabItems(diag);
+  else if (T === 'bridge') body = tabBridge(diag);
+  else if (T === 'cr') body = tabCR(diag);
+  else if (T === 'replay') body = tabReplay(diag);
   else body = tabAI(diag);
 
+  const k = currentClass();
   return sectionHead(a.title, (a.phase === 'post' ? '共構後測' : '前測') + '　·　' +
-      diag.done.length + ' / ' + diag.roster.length + ' 位已交　·　' + diag.items.length + ' 道選擇題',
+      '四班共同校準　·　' + diag.done.length + ' / ' + diag.roster.length + ' 位已交' +
+      '（本班 ' + k.studentIds.length + ' 人）　·　' + diag.items.length + ' 道選擇題',
       '<a class="btn" href="#/teacher">回教師後台</a>') +
-    '<div class="tabs">' + tabs.map(function(t){
-      return '<button data-act="tab" data-id="' + t[0] + '" aria-selected="' + (TAB === t[0]) + '">' + t[1] + '</button>';
+    /* 八個分頁裡七個是四班合計卻用班級語彙，老師會以為那是她班上的數字 */
+    '<div class="card card-p" style="margin-bottom:12px;border-left:3px solid var(--accent)">' +
+    '<p class="small" style="margin:0">這一頁的統計範圍是<strong>四個班級共 ' + diag.roster.length +
+    ' 人</strong>——四班共用同一次 Rasch 校準，條件之間才可以比較。' +
+    '只有「理解歷程」分頁另外把本班拆出來。</p></div>' +
+    '<div class="tabs" role="tablist">' + tabs.map(function(t){
+      const on = T === t[0];
+      return '<a href="#/assign/' + aid + '/' + t[0] + '"' + (on ? ' aria-current="true"' : '') +
+        ' title="' + esc(t[2]) + '">' + esc(t[1]) +
+        (on ? '<span class="sr-only">（目前顯示中）</span>' : '') + '</a>';
     }).join('') + '</div>' + body;
 }
 
@@ -187,7 +198,7 @@ function tabOverview(diag){
   const nItems = diag.items.length;
   if (!diag.done.length) return '<div class="empty"><h3>還沒有學生作答</h3><p>把班級加入代碼發給學生，作答後這裡會顯示。</p></div>';
   return '<div class="grid g4" style="margin-bottom:16px">' +
-    statCard('班級平均', fx(mean(scores) / nItems * 100, 1) + '<span style="font-size:15px">%</span>', '答對 ' + fx(mean(scores), 1) + ' / ' + nItems + ' 題') +
+    statCard('全體平均', fx(mean(scores) / nItems * 100, 1) + '<span style="font-size:15px">%</span>', '答對 ' + fx(mean(scores), 1) + ' / ' + nItems + ' 題') +
     statCard('已交作答', diag.done.length, '未完成 ' + (diag.roster.length - diag.done.length) + ' 人') +
     statCard('迷思題次', diag.totals[2], '占全部作答 ' + pct(diag.totals[2] / Math.max(1, diag.cells.length)), diag.totals[2] ? 'crit' : '') +
     statCard('優勢題次', diag.totals[1], '超越預期答對', 'good') +
@@ -195,7 +206,7 @@ function tabOverview(diag){
   '<div class="grid g2">' +
     '<div class="card"><div class="card-h"><h3>成績分佈</h3></div><div class="card-p">' +
       histSVG(scores, Math.min(10, nItems), '答對題數（滿分 ' + nItems + '）') + '</div></div>' +
-    '<div class="card"><div class="card-h"><h3>全班四象限分佈</h3>' +
+    '<div class="card"><div class="card-h"><h3>全體四象限分佈（96 人）</h3>' +
       '<span class="muted small">排列方式與 KIDMAP 圖一致</span></div><div class="card-p">' +
       // 依 KIDMAP 圖上的位置排列：左上 III、右上 I、左下 II、右下 IV
       '<div class="grid" style="grid-template-columns:repeat(2,minmax(0,1fr))">' + [3,1,2,4].map(function(q){
@@ -207,11 +218,17 @@ function tabOverview(diag){
       '再把每一個「人 × 題」的結果分成四象限。<strong>迷思概念（II）</strong>指能力足以答對卻答錯，是最需要老師介入的格子。</p>' +
     '</div></div>' +
   '</div>' +
-  '<div class="card" style="margin-top:16px"><div class="card-h"><h3>學生表現</h3><span class="muted small">依能力估計值排序</span></div>' +
-  '<div class="tablewrap"><table><thead><tr><th>學生</th><th class="n">答對</th><th class="n">θ</th><th class="n">SE</th>' +
-  '<th class="n">Infit</th><th>四象限</th><th class="n">迷思</th><th></th></tr></thead><tbody>' +
+  '<div class="card" style="margin-top:16px"><div class="card-h"><h3>學生表現（全體）</h3><span class="muted small">依能力估計值排序</span></div>' +
+  /* θ／SE／Infit 對只用過 Google Classroom 的老師是天書，就地解釋 */
+  '<div class="tablewrap"><table><thead><tr><th>學生</th><th>班級</th><th class="n">答對</th>' +
+  '<th class="n"><abbr title="這位學生的閱讀能力估計值，與題目難度在同一量尺上">θ 能力</abbr></th>' +
+  '<th class="n"><abbr title="估計的誤差範圍，越小越準">SE 誤差</abbr></th>' +
+  '<th class="n"><abbr title="作答型態是否異常。明顯大於 1.3 常來自理解失誤或猜測">Infit 適配</abbr></th>' +
+  '<th>四象限</th><th class="n">迷思</th><th></th></tr></thead><tbody>' +
   diag.perStudent.slice().sort(function(a, b){ return (b.theta || 0) - (a.theta || 0); }).map(function(p){
-    return '<tr><td>' + esc(userName(p.sid)) + '</td><td class="n">' + p.right + '/' + p.n + '</td>' +
+    return '<tr><td>' + esc(userName(p.sid)) + '</td>' +
+      '<td class="small muted">' + esc((classOfStudent(p.sid) || {}).name || '') + '</td>' +
+      '<td class="n">' + p.right + '/' + p.n + '</td>' +
       '<td class="n">' + fx(p.theta) + '</td><td class="n">' + fx(p.se) + '</td><td class="n">' + fx(p.infit) + '</td>' +
       '<td style="min-width:110px">' + quadBar(p.q, p.n) + '</td>' +
       '<td class="n" style="color:var(--q2)">' + p.q[2] + '</td>' +
@@ -425,7 +442,7 @@ function tabBridge(diag){
     '按下〈開啟共構視圖〉，系統會建立一個 Knowledge Forum 式的視圖，把題目、誘答分析與探究問題貼進去，' +
     '同時把在該題落在<span class="pill q1"><span class="dot"></span>I 優勢概念</span>的同學標為<strong>知識資源人</strong>，' +
     '請他們先貼出自己的想法，而不是直接公布答案。</p>' +
-    '<p class="muted small">門檻：迷思比例 ≥ ' + state.settings.misThreshold + '%（可在系統設定調整）。</p></div>' +
+    '<p class="muted small">門檻：迷思比例 ≥ ' + state.settings.misThreshold + '%（由研究者在系統設定調整）。</p></div>' +
     (list.length ? list.map(function(pi){
       const it = pi.item;
       const v = bridgeExists(diag.assignment.id, it.id);
@@ -507,7 +524,7 @@ function tabAI(diag){
     '<p class="small" style="margin-top:6px"><strong>內建規則引擎</strong>直接讀 Rasch 估計值與題庫的誘答標記，' +
     '輸出完全可重現、每一句都能追溯到資料，適合寫進研究報告；<strong>外部語言模型</strong>語言較自然、能處理沒有標記的例外情況，' +
     '但同一份資料兩次結果可能不同。研究上建議兩者都跑一次並比對差異。</p>' +
-    '<p class="muted small">切換引擎請到「系統設定」。</p></div>';
+    '<p class="muted small">目前引擎：' + esc(engineLabel()) + '（由研究者設定）。</p></div>';
 }
 
 /* 作答與 AI 互動：列出名單，點進去用學生當時的版面唯讀重播。

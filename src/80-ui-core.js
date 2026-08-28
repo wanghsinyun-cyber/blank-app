@@ -33,12 +33,26 @@ function toast(msg){
 function modal(html, opts){
   opts = opts || {};
   const r = $('#modalRoot');
+  /* 彈窗要有可及名稱（拿第一個標題）與 Esc 出口，
+     否則報讀器只會唸「對話方塊」，而鍵盤使用者被困在裡面。 */
   r.innerHTML = '<div class="modal-back" data-act="modal-back"><div class="modal' +
-    (opts.wide ? ' wide' : '') + '" role="dialog" aria-modal="true">' + html + '</div></div>';
-  const first = r.querySelector('input,textarea,select,button');
+    (opts.wide ? ' wide' : '') + '" role="dialog" aria-modal="true" aria-labelledby="modalTitle"' +
+    ' tabindex="-1">' + html + '</div></div>';
+  const h = r.querySelector('h2,h3,h4');
+  if (h && !h.id) h.id = 'modalTitle';
+  if (!h) r.querySelector('.modal').setAttribute('aria-label', opts.label || '對話方塊');
+  modal._returnTo = document.activeElement;
+  const first = r.querySelector('input,textarea,select,button') || r.querySelector('.modal');
   if (first) first.focus();
 }
-function closeModal(){ $('#modalRoot').innerHTML = ''; }
+function closeModal(){
+  $('#modalRoot').innerHTML = '';
+  /* 焦點還給打開它的那顆按鈕，不要掉回 body */
+  if (modal._returnTo && document.contains(modal._returnTo)){
+    try { modal._returnTo.focus(); } catch (e) {}
+  }
+  modal._returnTo = null;
+}
 
 /* --- 外殼 --- */
 function renderShell(){
@@ -68,13 +82,33 @@ function renderShell(){
   const cw = $('#classWrap');
   if (isTeacher()){
     cw.style.display = '';
-    $('#classSel').innerHTML = state.classes.map(function(k){
+    const sel2 = $('#classSel');
+    sel2.innerHTML = state.classes.map(function(k){
       return '<option value="' + k.id + '"' + (k.id === state.ui.classId ? ' selected' : '') + '>' +
         esc(k.name) + '　·　' + esc(condition(k.condition).name) + '</option>';
     }).join('');
   } else {
     cw.style.display = 'none';
   }
+
+  /* 代為檢視的出口。學生本人永遠看不到這條橫幅，
+     所以不影響四條件的版面幾何。 */
+  let bar = document.getElementById('impBar');
+  if (isImpersonating()){
+    if (!bar){
+      bar = document.createElement('div');
+      bar.id = 'impBar';
+      bar.className = 'imp-bar';
+      const main = document.querySelector('.main');
+      if (main && main.parentNode) main.parentNode.insertBefore(bar, main);
+    }
+    bar.innerHTML = '<span>你正在以「' + esc(currentUser().name) + '」的視角檢視（唯讀，' +
+      '你的操作不會記到他名下）</span>' +
+      '<button class="btn sm" data-act="exit-impersonate">結束檢視，回教師後台</button>';
+  } else if (bar){
+    bar.remove();
+  }
+
   renderRail();
 }
 function roleName(r){ return r === 'admin' ? '管理員' : r === 'teacher' ? '老師' : '學生'; }
@@ -84,16 +118,34 @@ function roleName(r){ return r === 'admin' ? '管理員' : r === 'teacher' ? '�
 const RAIL_PARENT = {quiz:'student', result:'student', aal:'student',
   note:'kb', synth:'kb', inspect:'assign', create:'teacher'};
 
+/* 側欄的「派題分析」不要寫死 a-pre——寫死的話，人在後測頁時
+   側欄不是點錯項目就是完全不點亮。 */
+function latestAssignmentId(){
+  const a = state.assignments.slice().sort(function(x, y){ return y.createdAt - x.createdAt; })[0];
+  return a ? a.id : 'a-pre';
+}
+
 function renderRail(){
   const unread = state.notes.filter(isUnread).length;
   const me = currentUser();
+
+  /* 雙軌儀表板永遠只涵蓋知識建構示範班，班級選單在那一頁不作用。
+     假的控制項比沒有控制項更傷。放在 renderRail 而不是 renderShell，
+     因為只有前者每次換頁都會跑。 */
+  const csel = $('#classSel');
+  if (csel){
+    const dead = (ROUTE.name === 'dash');
+    csel.disabled = dead;
+    csel.title = dead ? '這一頁只涵蓋知識建構示範班，班級選單在這裡不作用' : '';
+  }
+
   /* 三種導覽：研究者（super user，看得到全部）、教師（只看教學會用到的四項）、學生。
      研究控制台、建立派題、題庫與系統設定屬於研究者的工具，不進教師的側欄。 */
   const nav = me.role === 'admin' ? [
     {g:'評量'},
     {h:'#/teacher', g2:'教', t:'教師後台'},
     {h:'#/create',  g2:'派', t:'建立派題'},
-    {h:'#/assign/a-pre', g2:'診', t:'派題分析'},
+    {h:'#/assign/' + latestAssignmentId(), g2:'診', t:'派題分析'},
     {g:'評量即學習'},
     {h:'#/research', g2:'研', t:'研究控制台'},
     {g:'知識建構'},
@@ -106,10 +158,13 @@ function renderRail(){
   ] : me.role === 'teacher' ? [
     {g:'評量'},
     {h:'#/teacher', g2:'教', t:'教師後台'},
-    {h:'#/assign/a-pre', g2:'診', t:'派題分析'},
+    {h:'#/assign/' + latestAssignmentId(), g2:'診', t:'派題分析'},
     {g:'知識建構'},
-    {h:'#/kb', g2:'構', t:'知識建構中心', b: unread ? unread : null},
-    {h:'#/dash', g2:'雙', t:'雙軌評量儀表板'}
+    {h:'#/kb', g2:'構', t:'知識建構空間', b: unread ? unread : null},
+    {h:'#/dash', g2:'雙', t:'雙軌評量儀表板'},
+    /* 教師的每一頁都是 θ、SE、Infit、δ，卻是唯一沒有名詞說明入口的角色 */
+    {g:'關於'},
+    {h:'#/about', g2:'說', t:'名詞說明'}
   ] : [
     {g:'我的學習'},
     {h:'#/student', g2:'業', t:'我的作業'},
@@ -129,7 +184,7 @@ function renderRail(){
        要點亮它的來源項目，否則使用者永遠不知道自己在哪一區。 */
     const base = RAIL_PARENT[ROUTE.name] || ROUTE.name;
     const same = base === parts[0] &&
-      (parts.length < 2 || parts[0] === 'assign' || base !== ROUTE.name || ROUTE.args[0] === parts[1]);
+      (parts.length < 2 || base !== ROUTE.name || parts[0] === 'assign' || ROUTE.args[0] === parts[1]);
     const cur = same ? ' aria-current="page"' : '';
     /* 徽章在窄版會被 CSS 隱藏，所以另外給一份只有報讀器聽得到的文字，
        否則「待填」「測驗後開放」這些狀態在手機上等於消失。 */
@@ -215,7 +270,20 @@ function kidmapSVG(diag, ps, student){
   const xW = m.l + iw * 0.27, xR = m.l + iw * 0.73;
 
   const parts = [];
-  parts.push('<svg class="kidmap" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="' + (student ? '你這次的閱讀地圖' : 'KIDMAP 四象限圖') + '">');
+  /* role="img" + aria-label 會讓整個子樹變 presentational，
+     裡面的象限標籤、刻度與所有資料點文字全部從可及性樹消失。
+     改用 title + desc，並在 desc 裡寫出老師真正要的摘要（迷思題號）。 */
+  const q2list = ps.cells.filter(function(c){ return c.q === 2; })
+    .map(function(c){ return '第 ' + getItem(c.iid).no + ' 題'; });
+  const qn = [1,2,3,4].map(function(k){ return ps.cells.filter(function(c){ return c.q === k; }).length; });
+  const desc = (student ? '你這次的閱讀地圖：' : 'KIDMAP 四象限圖。能力估計值 θ = ' + fx(ps.theta) + '。')
+    + (student ? '' : '優勢概念 ' + qn[0] + ' 題、迷思概念 ' + qn[1] + ' 題、合理答錯 ' + qn[2] +
+       ' 題、合理答對 ' + qn[3] + ' 題。')
+    + (q2list.length ? (student ? '可惜的題目：' : '落在迷思象限的是：') + q2list.join('、') + '。'
+                     : (student ? '這次沒有可惜的題目。' : '沒有題目落在迷思象限。'));
+  parts.push('<svg class="kidmap" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-labelledby="kmTitle kmDesc">');
+  parts.push('<title id="kmTitle">' + esc(student ? '你這次的閱讀地圖' : 'KIDMAP 四象限圖') + '</title>');
+  parts.push('<desc id="kmDesc">' + esc(desc) + '</desc>');
   // 四個象限底色
   parts.push('<rect x="' + m.l + '" y="' + m.t + '" width="' + (iw / 2) + '" height="' + (yTheta - m.t) + '" fill="var(--q3-bg)"/>');
   parts.push('<rect x="' + (m.l + iw / 2) + '" y="' + m.t + '" width="' + (iw / 2) + '" height="' + (yTheta - m.t) + '" fill="var(--q1-bg)"/>');
@@ -383,13 +451,19 @@ function dualSVG(dt){
 }
 
 /* --- 四象限橫條（每題） --- */
+/* 7px 高的四色橫條原本是空的儲存格：報讀器聽不到任何東西，
+   辨色困難的人也讀不出比例。補 aria-label 與一行數字。 */
 function quadBar(q, n){
   if (!n) return '<div class="bar"></div>';
   const seg = [2,1,3,4].map(function(k){
     const w = 100 * q[k] / n;
     return w > 0 ? '<i style="width:' + w + '%;background:var(--' + QUAD[k].key + ')"></i>' : '';
   }).join('');
-  return '<div class="bar" style="display:flex">' + seg + '</div>';
+  const label = '四象限分佈：優勢概念 ' + q[1] + ' 題、迷思概念 ' + q[2] + ' 題、' +
+    '合理答錯 ' + q[3] + ' 題、合理答對 ' + q[4] + ' 題，共 ' + n + ' 題';
+  return '<div class="bar" style="display:flex" role="img" aria-label="' + esc(label) + '">' + seg + '</div>' +
+    '<div class="small muted" aria-hidden="true" style="margin-top:2px">I ' + q[1] +
+    '・II ' + q[2] + '・III ' + q[3] + '・IV ' + q[4] + '</div>';
 }
 
 /* --- AI 輸出區塊 --- */

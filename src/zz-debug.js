@@ -11,11 +11,11 @@
     ['diagnose a-pre', function(){ window._pre = diagnose(state, 'a-pre'); log('   n=' + window._pre.done.length + ' ready=' + window._pre.ready); }],
     ['diagnose a-post', function(){ window._post = diagnose(state, 'a-post'); }],
     ['viewAssign whole', function(){ V(viewAssign('a-pre')); }],
-    ['tabKidmap', function(){ TAB='kidmap'; V(viewAssign('a-pre')); }],
-    ['tabItems', function(){ TAB='items'; V(viewAssign('a-pre')); }],
-    ['tabBridge', function(){ TAB='bridge'; V(viewAssign('a-pre')); }],
-    ['tabCR', function(){ TAB='cr'; V(viewAssign('a-pre')); }],
-    ['tabAI', function(){ TAB='ai'; V(viewAssign('a-pre')); TAB='overview'; }],
+    ['tabKidmap', function(){ V(viewAssign("a-pre","kidmap")); }],
+    ['tabItems', function(){ V(viewAssign("a-pre","items")); }],
+    ['tabBridge', function(){ V(viewAssign("a-pre","bridge")); }],
+    ['tabCR', function(){ V(viewAssign("a-pre","cr")); }],
+    ['tabAI', function(){ V(viewAssign("a-pre","ai")); }],
     ['viewTeacher', function(){ V(viewTeacher()); }],
     ['viewCreate', function(){ WIZ = null; V(viewCreate()); }],
     ['viewKBList', function(){ V(viewKBList()); }],
@@ -118,7 +118,7 @@
     ['researchBundle', function(){ log('   bytes=' + JSON.stringify(researchBundle()).length); }],
     ['viewInspect (tutor)', function(){ INSPECT = null; V(viewInspect('a-post', 'u-s3')); }],
     ['viewInspect (control)', function(){ INSPECT = null; V(viewInspect('a-post', 'u-s75')); }],
-    ['tabReplay', function(){ TAB = 'replay'; V(viewAssign('a-post')); TAB = 'overview'; }],
+    ['tabReplay', function(){ V(viewAssign("a-post","replay")); }],
     ['kb gate (未交卷學生)', function(){
       state.ui.role = 'u-s3'; renderShell();
       state.submissions = state.submissions.filter(function(s){ return s.sid !== 'u-s3'; });

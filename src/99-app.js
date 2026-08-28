@@ -43,7 +43,7 @@ function render(){
   switch (ROUTE.name){
     case 'teacher':   html = isTeacher() ? viewTeacher() : viewStudent(); break;
     case 'create':    html = viewCreate(); break;
-    case 'assign':    html = viewAssign(a[0]); break;
+    case 'assign':    html = viewAssign(a[0], a[1]); break;
     case 'kb':        html = a[0] ? viewKBCanvas(a[0]) : viewKBList(); break;
     case 'note':      html = viewNote(a[0]); break;
     case 'synth':     html = viewSynth(a[0]); break;
@@ -287,6 +287,10 @@ function bindEvents(){
      e.isComposing 這一行不可省——全中文的國小學童用注音選字時按 Enter
      是「確認選字」，不該把半成品送出去。 */
   document.addEventListener('keydown', function(e){
+    /* Esc 關閉彈窗 */
+    if (e.key === 'Escape' && document.getElementById('modalRoot').firstChild){
+      e.preventDefault(); closeModal(); return;
+    }
     if (e.key !== 'Enter' || e.isComposing) return;
     if (!e.target || e.target.id !== 'aalSay') return;
     e.preventDefault();
@@ -307,9 +311,19 @@ function bindEvents(){
 
     if (act === 'modal-back' && e.target === t){ closeModal(); EDIT = null; return; }
     if (act === 'close-modal'){ closeModal(); EDIT = null; return; }
-    if (act === 'asrole'){ e.preventDefault(); state.ui.role = id; save(); renderShell();
-      go(isTeacher() ? '#/teacher' : '#/student'); render(); toast('已切換為 ' + userName(id)); return; }
-    if (act === 'tab'){ TAB = id; render(); return; }
+    /* 代為檢視：記住真實身分，畫面上方常駐一條有出口的橫幅，且全程唯讀。 */
+    if (act === 'asrole'){
+      e.preventDefault();
+      if (!isImpersonating()) state.ui.impersonate = {realRole: state.ui.role, at: Date.now()};
+      state.ui.role = id; save(); renderShell();
+      go('#/student'); render();
+      toast('以 ' + userName(id) + ' 的視角檢視（唯讀）');
+      return; }
+    if (act === 'exit-impersonate'){
+      const real = state.ui.impersonate ? state.ui.impersonate.realRole : 'u-t1';
+      state.ui.role = real; state.ui.impersonate = null; save(); renderShell();
+      go('#/teacher'); render(); toast('已結束檢視');
+      return; }
     if (act === 'dtab'){ DTAB = id; render(); return; }
 
     /* 派題精靈 */
@@ -321,7 +335,7 @@ function bindEvents(){
     if (act === 'wiz-submit'){ submitWizard(); return; }
 
     /* 診斷 */
-    if (act === 'kidmap-one' || act === 'kidmap-sel'){ tabKidmap.sel = id; TAB = 'kidmap'; render(); return; }
+    if (act === 'kidmap-one' || act === 'kidmap-sel'){ tabKidmap.sel = id; go('#/assign/' + ROUTE.args[0] + '/kidmap'); render(); return; }
     if (act === 'item-strategy'){ openItemStrategy(id); return; }
     if (act === 'bridge'){ doBridge(id); return; }
     if (act === 'cr-sel'){ tabCR.sel = id; render(); return; }

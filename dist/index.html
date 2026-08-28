@@ -186,6 +186,7 @@ textarea{resize:vertical; min-height:80px; line-height:1.7}
    不要再宣告 outline，否則會蓋掉全域規則並讓滑鼠點擊也出現外框。 */
 input:focus-visible,select:focus-visible,textarea:focus-visible{border-color:transparent}
 
+button.pill{font:inherit; font-size:0.8rem; cursor:pointer; border-color:var(--rule-strong)}
 .pill{display:inline-flex; align-items:center; gap:5px; border-radius:100px; padding:1px 9px; font-size:0.8rem; border:1px solid var(--rule); background:var(--shade); color:var(--ink-2); white-space:nowrap}
 .pill .dot{width:7px; height:7px; border-radius:50%; background:currentColor}
 .q1{color:var(--q1); background:var(--q1-bg); border-color:var(--q1-line)}
@@ -212,11 +213,15 @@ td.n,th.n{text-align:right; font-family:var(--f-mono); font-variant-numeric:tabu
 .bar i{display:block; height:100%; background:var(--accent)}
 
 .tabs{display:flex; gap:2px; border-bottom:1px solid var(--rule); margin-bottom:18px; overflow-x:auto}
-.tabs button{
+/* 分頁是連結（狀態進網址，可以複製、可以上一頁），不是 button。
+   用 aria-current 而不是 aria-selected——後者掛在連結上不會被讀出來。 */
+.tabs button, .tabs a{
   border:0; background:transparent; padding:9px 13px; cursor:pointer; color:var(--ink-3);
   border-bottom:2px solid transparent; font-size:0.9rem; white-space:nowrap;
+  text-decoration:none; display:inline-block;
 }
-.tabs button[aria-selected="true"]{color:var(--ink); border-bottom-color:var(--accent); font-weight:600}
+.tabs button[aria-selected="true"], .tabs a[aria-current="true"]{
+  color:var(--ink); border-bottom-color:var(--accent); font-weight:600}
 
 .steps{display:flex; gap:8px; align-items:center; margin-bottom:18px; flex-wrap:wrap}
 .step{display:flex; align-items:center; gap:7px; padding:5px 12px; border:1px solid var(--rule); border-radius:100px; font-size:0.85rem; color:var(--ink-3); background:var(--card)}
@@ -458,6 +463,12 @@ input[type=checkbox],input[type=radio]{ width:1.15em; height:1.15em; accent-colo
 .lk.on{background:var(--accent); border-color:var(--accent); color:var(--accent-ink); font-weight:600}
 .lk.on .lk-t{color:var(--accent-ink)}
 .lk:focus-within{outline:3px solid var(--focus); outline-offset:2px}
+/* 代為檢視的橫幅。貼在頂列下方，學生本人看不到，
+   所以不影響四條件的版面幾何。 */
+.imp-bar{position:sticky; top:var(--topbar-h); z-index:19; display:flex; align-items:center;
+  gap:12px; padding:8px 16px; background:var(--q2-bg); border-bottom:1px solid var(--q2-line);
+  font-size:0.85rem; color:var(--ink)}
+.imp-bar span{flex:1}
 .unread-dot{color:var(--accent); margin-right:.25rem}
 .likert.missing{outline:3px solid var(--crit); outline-offset:6px; border-radius:var(--r-m)}
 .scale-lab{display:flex; justify-content:space-between; font-size:0.8rem; color:var(--ink-4); margin-top:4px; max-width:13.5rem}
@@ -2285,8 +2296,22 @@ const STORE_KEY = 'kidforum.state.v1';
 let state = null;
 
 function save(){
-  try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch (e) { /* 無痕模式等情況：僅存在記憶體 */ }
+  try {
+    /* 代為檢視是一個「模式」，不是身分變更：不能落地。
+       否則老師關掉分頁、隔天開機還是學生身分，而且不知道怎麼回來。 */
+    const imp = state.ui && state.ui.impersonate;
+    if (imp){
+      const clone = Object.assign({}, state, {ui: Object.assign({}, state.ui, {
+        role: imp.realRole, impersonate: undefined})});
+      localStorage.setItem(STORE_KEY, JSON.stringify(clone));
+      return;
+    }
+    localStorage.setItem(STORE_KEY, JSON.stringify(state));
+  } catch (e) { /* 無痕模式等情況：僅存在記憶體 */ }
 }
+/* 老師正在以某位學生的視角檢視。此時一律唯讀——
+   他的閱讀、貼文、註記都不可以記到學生名下（reads 是 KB 指數的原料）。 */
+function isImpersonating(){ return !!(state.ui && state.ui.impersonate); }
 function loadState(){
   try {
     const raw = localStorage.getItem(STORE_KEY);
@@ -2396,6 +2421,7 @@ function threadOf(rootId){
 
 /* --- 寫入操作 --- */
 function createNote(o){
+  if (isImpersonating()) return null;
   const n = {
     id: uid('n'), viewId: o.viewId, title: o.title || '（未命名）',
     segs: o.segs || [], authorIds: o.authorIds || [currentUser().id],
@@ -2424,6 +2450,7 @@ function deleteNote(id){
   save();
 }
 function markRead(id){
+  if (isImpersonating()) return;   // 代為檢視：不寫進學生的閱讀紀錄
   const n = getNote(id); const me = currentUser().id;
   if (n && n.authorIds.indexOf(me) < 0 && (n.reads || []).indexOf(me) < 0){ n.reads.push(me); save(); }
 }
@@ -2432,6 +2459,7 @@ function isUnread(n){
   return n.authorIds.indexOf(me) < 0 && (n.reads || []).indexOf(me) < 0;
 }
 function addAnnotation(id, text){
+  if (isImpersonating()) return;
   const n = getNote(id); if (!n || !text.trim()) return;
   n.annotations = n.annotations || [];
   n.annotations.push({id: uid('an'), authorId: currentUser().id, text: text.trim(), at: Date.now()});
@@ -4035,12 +4063,26 @@ function toast(msg){
 function modal(html, opts){
   opts = opts || {};
   const r = $('#modalRoot');
+  /* 彈窗要有可及名稱（拿第一個標題）與 Esc 出口，
+     否則報讀器只會唸「對話方塊」，而鍵盤使用者被困在裡面。 */
   r.innerHTML = '<div class="modal-back" data-act="modal-back"><div class="modal' +
-    (opts.wide ? ' wide' : '') + '" role="dialog" aria-modal="true">' + html + '</div></div>';
-  const first = r.querySelector('input,textarea,select,button');
+    (opts.wide ? ' wide' : '') + '" role="dialog" aria-modal="true" aria-labelledby="modalTitle"' +
+    ' tabindex="-1">' + html + '</div></div>';
+  const h = r.querySelector('h2,h3,h4');
+  if (h && !h.id) h.id = 'modalTitle';
+  if (!h) r.querySelector('.modal').setAttribute('aria-label', opts.label || '對話方塊');
+  modal._returnTo = document.activeElement;
+  const first = r.querySelector('input,textarea,select,button') || r.querySelector('.modal');
   if (first) first.focus();
 }
-function closeModal(){ $('#modalRoot').innerHTML = ''; }
+function closeModal(){
+  $('#modalRoot').innerHTML = '';
+  /* 焦點還給打開它的那顆按鈕，不要掉回 body */
+  if (modal._returnTo && document.contains(modal._returnTo)){
+    try { modal._returnTo.focus(); } catch (e) {}
+  }
+  modal._returnTo = null;
+}
 
 /* --- 外殼 --- */
 function renderShell(){
@@ -4070,13 +4112,33 @@ function renderShell(){
   const cw = $('#classWrap');
   if (isTeacher()){
     cw.style.display = '';
-    $('#classSel').innerHTML = state.classes.map(function(k){
+    const sel2 = $('#classSel');
+    sel2.innerHTML = state.classes.map(function(k){
       return '<option value="' + k.id + '"' + (k.id === state.ui.classId ? ' selected' : '') + '>' +
         esc(k.name) + '　·　' + esc(condition(k.condition).name) + '</option>';
     }).join('');
   } else {
     cw.style.display = 'none';
   }
+
+  /* 代為檢視的出口。學生本人永遠看不到這條橫幅，
+     所以不影響四條件的版面幾何。 */
+  let bar = document.getElementById('impBar');
+  if (isImpersonating()){
+    if (!bar){
+      bar = document.createElement('div');
+      bar.id = 'impBar';
+      bar.className = 'imp-bar';
+      const main = document.querySelector('.main');
+      if (main && main.parentNode) main.parentNode.insertBefore(bar, main);
+    }
+    bar.innerHTML = '<span>你正在以「' + esc(currentUser().name) + '」的視角檢視（唯讀，' +
+      '你的操作不會記到他名下）</span>' +
+      '<button class="btn sm" data-act="exit-impersonate">結束檢視，回教師後台</button>';
+  } else if (bar){
+    bar.remove();
+  }
+
   renderRail();
 }
 function roleName(r){ return r === 'admin' ? '管理員' : r === 'teacher' ? '老師' : '學生'; }
@@ -4086,16 +4148,34 @@ function roleName(r){ return r === 'admin' ? '管理員' : r === 'teacher' ? '�
 const RAIL_PARENT = {quiz:'student', result:'student', aal:'student',
   note:'kb', synth:'kb', inspect:'assign', create:'teacher'};
 
+/* 側欄的「派題分析」不要寫死 a-pre——寫死的話，人在後測頁時
+   側欄不是點錯項目就是完全不點亮。 */
+function latestAssignmentId(){
+  const a = state.assignments.slice().sort(function(x, y){ return y.createdAt - x.createdAt; })[0];
+  return a ? a.id : 'a-pre';
+}
+
 function renderRail(){
   const unread = state.notes.filter(isUnread).length;
   const me = currentUser();
+
+  /* 雙軌儀表板永遠只涵蓋知識建構示範班，班級選單在那一頁不作用。
+     假的控制項比沒有控制項更傷。放在 renderRail 而不是 renderShell，
+     因為只有前者每次換頁都會跑。 */
+  const csel = $('#classSel');
+  if (csel){
+    const dead = (ROUTE.name === 'dash');
+    csel.disabled = dead;
+    csel.title = dead ? '這一頁只涵蓋知識建構示範班，班級選單在這裡不作用' : '';
+  }
+
   /* 三種導覽：研究者（super user，看得到全部）、教師（只看教學會用到的四項）、學生。
      研究控制台、建立派題、題庫與系統設定屬於研究者的工具，不進教師的側欄。 */
   const nav = me.role === 'admin' ? [
     {g:'評量'},
     {h:'#/teacher', g2:'教', t:'教師後台'},
     {h:'#/create',  g2:'派', t:'建立派題'},
-    {h:'#/assign/a-pre', g2:'診', t:'派題分析'},
+    {h:'#/assign/' + latestAssignmentId(), g2:'診', t:'派題分析'},
     {g:'評量即學習'},
     {h:'#/research', g2:'研', t:'研究控制台'},
     {g:'知識建構'},
@@ -4108,10 +4188,13 @@ function renderRail(){
   ] : me.role === 'teacher' ? [
     {g:'評量'},
     {h:'#/teacher', g2:'教', t:'教師後台'},
-    {h:'#/assign/a-pre', g2:'診', t:'派題分析'},
+    {h:'#/assign/' + latestAssignmentId(), g2:'診', t:'派題分析'},
     {g:'知識建構'},
-    {h:'#/kb', g2:'構', t:'知識建構中心', b: unread ? unread : null},
-    {h:'#/dash', g2:'雙', t:'雙軌評量儀表板'}
+    {h:'#/kb', g2:'構', t:'知識建構空間', b: unread ? unread : null},
+    {h:'#/dash', g2:'雙', t:'雙軌評量儀表板'},
+    /* 教師的每一頁都是 θ、SE、Infit、δ，卻是唯一沒有名詞說明入口的角色 */
+    {g:'關於'},
+    {h:'#/about', g2:'說', t:'名詞說明'}
   ] : [
     {g:'我的學習'},
     {h:'#/student', g2:'業', t:'我的作業'},
@@ -4131,7 +4214,7 @@ function renderRail(){
        要點亮它的來源項目，否則使用者永遠不知道自己在哪一區。 */
     const base = RAIL_PARENT[ROUTE.name] || ROUTE.name;
     const same = base === parts[0] &&
-      (parts.length < 2 || parts[0] === 'assign' || base !== ROUTE.name || ROUTE.args[0] === parts[1]);
+      (parts.length < 2 || base !== ROUTE.name || parts[0] === 'assign' || ROUTE.args[0] === parts[1]);
     const cur = same ? ' aria-current="page"' : '';
     /* 徽章在窄版會被 CSS 隱藏，所以另外給一份只有報讀器聽得到的文字，
        否則「待填」「測驗後開放」這些狀態在手機上等於消失。 */
@@ -4217,7 +4300,20 @@ function kidmapSVG(diag, ps, student){
   const xW = m.l + iw * 0.27, xR = m.l + iw * 0.73;
 
   const parts = [];
-  parts.push('<svg class="kidmap" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="' + (student ? '你這次的閱讀地圖' : 'KIDMAP 四象限圖') + '">');
+  /* role="img" + aria-label 會讓整個子樹變 presentational，
+     裡面的象限標籤、刻度與所有資料點文字全部從可及性樹消失。
+     改用 title + desc，並在 desc 裡寫出老師真正要的摘要（迷思題號）。 */
+  const q2list = ps.cells.filter(function(c){ return c.q === 2; })
+    .map(function(c){ return '第 ' + getItem(c.iid).no + ' 題'; });
+  const qn = [1,2,3,4].map(function(k){ return ps.cells.filter(function(c){ return c.q === k; }).length; });
+  const desc = (student ? '你這次的閱讀地圖：' : 'KIDMAP 四象限圖。能力估計值 θ = ' + fx(ps.theta) + '。')
+    + (student ? '' : '優勢概念 ' + qn[0] + ' 題、迷思概念 ' + qn[1] + ' 題、合理答錯 ' + qn[2] +
+       ' 題、合理答對 ' + qn[3] + ' 題。')
+    + (q2list.length ? (student ? '可惜的題目：' : '落在迷思象限的是：') + q2list.join('、') + '。'
+                     : (student ? '這次沒有可惜的題目。' : '沒有題目落在迷思象限。'));
+  parts.push('<svg class="kidmap" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-labelledby="kmTitle kmDesc">');
+  parts.push('<title id="kmTitle">' + esc(student ? '你這次的閱讀地圖' : 'KIDMAP 四象限圖') + '</title>');
+  parts.push('<desc id="kmDesc">' + esc(desc) + '</desc>');
   // 四個象限底色
   parts.push('<rect x="' + m.l + '" y="' + m.t + '" width="' + (iw / 2) + '" height="' + (yTheta - m.t) + '" fill="var(--q3-bg)"/>');
   parts.push('<rect x="' + (m.l + iw / 2) + '" y="' + m.t + '" width="' + (iw / 2) + '" height="' + (yTheta - m.t) + '" fill="var(--q1-bg)"/>');
@@ -4385,13 +4481,19 @@ function dualSVG(dt){
 }
 
 /* --- 四象限橫條（每題） --- */
+/* 7px 高的四色橫條原本是空的儲存格：報讀器聽不到任何東西，
+   辨色困難的人也讀不出比例。補 aria-label 與一行數字。 */
 function quadBar(q, n){
   if (!n) return '<div class="bar"></div>';
   const seg = [2,1,3,4].map(function(k){
     const w = 100 * q[k] / n;
     return w > 0 ? '<i style="width:' + w + '%;background:var(--' + QUAD[k].key + ')"></i>' : '';
   }).join('');
-  return '<div class="bar" style="display:flex">' + seg + '</div>';
+  const label = '四象限分佈：優勢概念 ' + q[1] + ' 題、迷思概念 ' + q[2] + ' 題、' +
+    '合理答錯 ' + q[3] + ' 題、合理答對 ' + q[4] + ' 題，共 ' + n + ' 題';
+  return '<div class="bar" style="display:flex" role="img" aria-label="' + esc(label) + '">' + seg + '</div>' +
+    '<div class="small muted" aria-hidden="true" style="margin-top:2px">I ' + q[1] +
+    '・II ' + q[2] + '・III ' + q[3] + '・IV ' + q[4] + '</div>';
 }
 
 /* --- AI 輸出區塊 --- */
@@ -4423,7 +4525,6 @@ async function runAI(outId, fn, force){
    82-ui-teacher.js — 教師端：後台、派題精靈、派題分析（KIDMAP）、非選評閱、迷思橋接
    ========================================================================== */
 
-let TAB = 'overview';
 let WIZ = null;
 
 function viewTeacher(){
@@ -4441,7 +4542,7 @@ function viewTeacher(){
     /* 研究控制台與建立派題屬於研究者的工具，教師端不出現 */
     (isResearcher()
       ? '<a class="btn" href="#/research">研究控制台</a><a class="btn primary" href="#/create">建立派題</a>'
-      : '<a class="btn primary" href="#/assign/a-post">看這節課的作答與對話</a>')) +
+      : '<a class="btn primary" href="#/assign/a-post/replay">看這節課的作答與對話</a>')) +
   '<div class="grid g4" style="margin-bottom:18px">' +
     statCard('全體樣本', nAll + ' 人', state.classes.length + ' 班 · 四條件叢集分派') +
     statCard('待處理迷思題', flagged, '迷思比例 ≥ ' + state.settings.misThreshold + '%', flagged ? 'crit' : '') +
@@ -4481,9 +4582,9 @@ function viewTeacher(){
     '<div class="card"><div class="card-h"><h3>班級名單</h3><span class="muted small">共 ' + k.studentIds.length + ' 人</span></div>' +
     '<div class="card-p"><div class="row" style="gap:6px">' +
       k.studentIds.map(function(sid){
-        return '<span class="pill" title="切換為此學生檢視" data-act="asrole" data-id="' + sid + '" style="cursor:pointer">' + esc(userName(sid)) + '</span>';
+        return '<button type="button" class="pill" data-act="asrole" data-id="' + sid + '">' + esc(userName(sid)) + '<span class="sr-only">：以這位學生的視角唯讀檢視</span></button>';
       }).join('') + '</div>' +
-      '<p class="muted small" style="margin-top:12px">點任一位同學可切換成他的視角，直接看到他的作業、個人 KIDMAP 與知識建構空間。</p>' +
+      '<p class="muted small" style="margin-top:12px">點任一位同學會以他的視角唯讀檢視（你的閱讀與貼文不會記到他名下），畫面上方會出現結束檢視的按鈕。</p>' +
     '</div></div>' +
     '<div class="card"><div class="card-h"><h3>從迷思開啟的共構視圖</h3></div><div class="card-p col">' +
       (state.views.filter(function(v){ return v.origin; }).map(function(v){
@@ -4570,36 +4671,48 @@ function viewCreate(){
 /* ==========================================================================
    派題分析
    ========================================================================== */
-function viewAssign(aid){
+function viewAssign(aid, tab){
   if (!isTeacher()) return studentBlocked();
   const diag = diagnose(state, aid);
   if (!diag) return '<div class="empty"><h3>找不到這份派題</h3><p>它可能已刪除。</p><a class="btn" href="#/teacher">回教師後台</a></div>';
   const a = diag.assignment;
+  /* 每個分頁補一句副標，老師點進去之前就知道那是什麼 */
   const tabs = [
-    ['overview', '成績總覽'],
-    ['process', '理解歷程'],
-    ['kidmap', 'KIDMAP 診斷'],
-    ['items', '每題四象限'],
-    ['bridge', '迷思橋接'],
-    ['cr', '建構反應題評閱'],
-    ['replay', '作答與 AI 互動'],
-    ['ai', 'AI 深度分析']
+    ['overview', '成績總覽', '全班答對率與分佈'],
+    ['process', '理解歷程', '四種讀法各答對幾成'],
+    ['kidmap', 'KIDMAP 診斷', '個別學生的四象限圖'],
+    ['items', '每題四象限', '哪一題最多人卡住'],
+    ['bridge', '迷思橋接', '把卡住的題目變成討論'],
+    ['cr', '建構反應題評閱', '逐生批改與給評語'],
+    ['replay', '作答與 AI 互動', '重播學生當時的畫面'],
+    ['ai', 'AI 深度分析', '整班的教學建議']
   ];
+  const T = tabs.some(function(t){ return t[0] === tab; }) ? tab : 'overview';
   let body = '';
-  if (TAB === 'overview') body = tabOverview(diag);
-  else if (TAB === 'process') body = tabProcess(diag);
-  else if (TAB === 'kidmap') body = tabKidmap(diag);
-  else if (TAB === 'items') body = tabItems(diag);
-  else if (TAB === 'bridge') body = tabBridge(diag);
-  else if (TAB === 'cr') body = tabCR(diag);
-  else if (TAB === 'replay') body = tabReplay(diag);
+  if (T === 'overview') body = tabOverview(diag);
+  else if (T === 'process') body = tabProcess(diag);
+  else if (T === 'kidmap') body = tabKidmap(diag);
+  else if (T === 'items') body = tabItems(diag);
+  else if (T === 'bridge') body = tabBridge(diag);
+  else if (T === 'cr') body = tabCR(diag);
+  else if (T === 'replay') body = tabReplay(diag);
   else body = tabAI(diag);
 
+  const k = currentClass();
   return sectionHead(a.title, (a.phase === 'post' ? '共構後測' : '前測') + '　·　' +
-      diag.done.length + ' / ' + diag.roster.length + ' 位已交　·　' + diag.items.length + ' 道選擇題',
+      '四班共同校準　·　' + diag.done.length + ' / ' + diag.roster.length + ' 位已交' +
+      '（本班 ' + k.studentIds.length + ' 人）　·　' + diag.items.length + ' 道選擇題',
       '<a class="btn" href="#/teacher">回教師後台</a>') +
-    '<div class="tabs">' + tabs.map(function(t){
-      return '<button data-act="tab" data-id="' + t[0] + '" aria-selected="' + (TAB === t[0]) + '">' + t[1] + '</button>';
+    /* 八個分頁裡七個是四班合計卻用班級語彙，老師會以為那是她班上的數字 */
+    '<div class="card card-p" style="margin-bottom:12px;border-left:3px solid var(--accent)">' +
+    '<p class="small" style="margin:0">這一頁的統計範圍是<strong>四個班級共 ' + diag.roster.length +
+    ' 人</strong>——四班共用同一次 Rasch 校準，條件之間才可以比較。' +
+    '只有「理解歷程」分頁另外把本班拆出來。</p></div>' +
+    '<div class="tabs" role="tablist">' + tabs.map(function(t){
+      const on = T === t[0];
+      return '<a href="#/assign/' + aid + '/' + t[0] + '"' + (on ? ' aria-current="true"' : '') +
+        ' title="' + esc(t[2]) + '">' + esc(t[1]) +
+        (on ? '<span class="sr-only">（目前顯示中）</span>' : '') + '</a>';
     }).join('') + '</div>' + body;
 }
 
@@ -4608,7 +4721,7 @@ function tabOverview(diag){
   const nItems = diag.items.length;
   if (!diag.done.length) return '<div class="empty"><h3>還沒有學生作答</h3><p>把班級加入代碼發給學生，作答後這裡會顯示。</p></div>';
   return '<div class="grid g4" style="margin-bottom:16px">' +
-    statCard('班級平均', fx(mean(scores) / nItems * 100, 1) + '<span style="font-size:15px">%</span>', '答對 ' + fx(mean(scores), 1) + ' / ' + nItems + ' 題') +
+    statCard('全體平均', fx(mean(scores) / nItems * 100, 1) + '<span style="font-size:15px">%</span>', '答對 ' + fx(mean(scores), 1) + ' / ' + nItems + ' 題') +
     statCard('已交作答', diag.done.length, '未完成 ' + (diag.roster.length - diag.done.length) + ' 人') +
     statCard('迷思題次', diag.totals[2], '占全部作答 ' + pct(diag.totals[2] / Math.max(1, diag.cells.length)), diag.totals[2] ? 'crit' : '') +
     statCard('優勢題次', diag.totals[1], '超越預期答對', 'good') +
@@ -4616,7 +4729,7 @@ function tabOverview(diag){
   '<div class="grid g2">' +
     '<div class="card"><div class="card-h"><h3>成績分佈</h3></div><div class="card-p">' +
       histSVG(scores, Math.min(10, nItems), '答對題數（滿分 ' + nItems + '）') + '</div></div>' +
-    '<div class="card"><div class="card-h"><h3>全班四象限分佈</h3>' +
+    '<div class="card"><div class="card-h"><h3>全體四象限分佈（96 人）</h3>' +
       '<span class="muted small">排列方式與 KIDMAP 圖一致</span></div><div class="card-p">' +
       // 依 KIDMAP 圖上的位置排列：左上 III、右上 I、左下 II、右下 IV
       '<div class="grid" style="grid-template-columns:repeat(2,minmax(0,1fr))">' + [3,1,2,4].map(function(q){
@@ -4628,11 +4741,17 @@ function tabOverview(diag){
       '再把每一個「人 × 題」的結果分成四象限。<strong>迷思概念（II）</strong>指能力足以答對卻答錯，是最需要老師介入的格子。</p>' +
     '</div></div>' +
   '</div>' +
-  '<div class="card" style="margin-top:16px"><div class="card-h"><h3>學生表現</h3><span class="muted small">依能力估計值排序</span></div>' +
-  '<div class="tablewrap"><table><thead><tr><th>學生</th><th class="n">答對</th><th class="n">θ</th><th class="n">SE</th>' +
-  '<th class="n">Infit</th><th>四象限</th><th class="n">迷思</th><th></th></tr></thead><tbody>' +
+  '<div class="card" style="margin-top:16px"><div class="card-h"><h3>學生表現（全體）</h3><span class="muted small">依能力估計值排序</span></div>' +
+  /* θ／SE／Infit 對只用過 Google Classroom 的老師是天書，就地解釋 */
+  '<div class="tablewrap"><table><thead><tr><th>學生</th><th>班級</th><th class="n">答對</th>' +
+  '<th class="n"><abbr title="這位學生的閱讀能力估計值，與題目難度在同一量尺上">θ 能力</abbr></th>' +
+  '<th class="n"><abbr title="估計的誤差範圍，越小越準">SE 誤差</abbr></th>' +
+  '<th class="n"><abbr title="作答型態是否異常。明顯大於 1.3 常來自理解失誤或猜測">Infit 適配</abbr></th>' +
+  '<th>四象限</th><th class="n">迷思</th><th></th></tr></thead><tbody>' +
   diag.perStudent.slice().sort(function(a, b){ return (b.theta || 0) - (a.theta || 0); }).map(function(p){
-    return '<tr><td>' + esc(userName(p.sid)) + '</td><td class="n">' + p.right + '/' + p.n + '</td>' +
+    return '<tr><td>' + esc(userName(p.sid)) + '</td>' +
+      '<td class="small muted">' + esc((classOfStudent(p.sid) || {}).name || '') + '</td>' +
+      '<td class="n">' + p.right + '/' + p.n + '</td>' +
       '<td class="n">' + fx(p.theta) + '</td><td class="n">' + fx(p.se) + '</td><td class="n">' + fx(p.infit) + '</td>' +
       '<td style="min-width:110px">' + quadBar(p.q, p.n) + '</td>' +
       '<td class="n" style="color:var(--q2)">' + p.q[2] + '</td>' +
@@ -4846,7 +4965,7 @@ function tabBridge(diag){
     '按下〈開啟共構視圖〉，系統會建立一個 Knowledge Forum 式的視圖，把題目、誘答分析與探究問題貼進去，' +
     '同時把在該題落在<span class="pill q1"><span class="dot"></span>I 優勢概念</span>的同學標為<strong>知識資源人</strong>，' +
     '請他們先貼出自己的想法，而不是直接公布答案。</p>' +
-    '<p class="muted small">門檻：迷思比例 ≥ ' + state.settings.misThreshold + '%（可在系統設定調整）。</p></div>' +
+    '<p class="muted small">門檻：迷思比例 ≥ ' + state.settings.misThreshold + '%（由研究者在系統設定調整）。</p></div>' +
     (list.length ? list.map(function(pi){
       const it = pi.item;
       const v = bridgeExists(diag.assignment.id, it.id);
@@ -4928,7 +5047,7 @@ function tabAI(diag){
     '<p class="small" style="margin-top:6px"><strong>內建規則引擎</strong>直接讀 Rasch 估計值與題庫的誘答標記，' +
     '輸出完全可重現、每一句都能追溯到資料，適合寫進研究報告；<strong>外部語言模型</strong>語言較自然、能處理沒有標記的例外情況，' +
     '但同一份資料兩次結果可能不同。研究上建議兩者都跑一次並比對差異。</p>' +
-    '<p class="muted small">切換引擎請到「系統設定」。</p></div>';
+    '<p class="muted small">目前引擎：' + esc(engineLabel()) + '（由研究者設定）。</p></div>';
 }
 
 /* 作答與 AI 互動：列出名單，點進去用學生當時的版面唯讀重播。
@@ -5408,8 +5527,17 @@ function viewDash(){
   else if (DTAB === 'sna') body = dashSNA();
   else if (DTAB === 'discourse') body = dashDiscourse();
   else body = dashReport();
-  return sectionHead('雙軌評量儀表板', '把 KIDMAP 的能力估計與知識建構的論述指標放在同一張圖上。',
+  const kc = kbClass();
+  return sectionHead('雙軌評量儀表板',
+      '知識建構示範班：' + kc.name + '（' + condition(kc.condition).name + '，' +
+      kc.studentIds.length + ' 人）　·　把能力估計與論述指標放在同一張圖上。',
       '<button class="btn sm" data-act="export-json">匯出研究資料</button>') +
+    /* 這一頁永遠只有示範班的 24 人，但頂列還掛著一顆班級選單——
+       不說清楚，老師會以為自己看的是全部 96 人。 */
+    '<div class="card card-p" style="margin-bottom:12px;border-left:3px solid var(--warn)">' +
+    '<p class="small" style="margin:0">這一頁只涵蓋<strong>有討論紀錄的示範班（' + esc(kc.name) +
+    '）</strong>。其他班級還沒有知識建構資料，因此不在這張圖上；' +
+    '頂列的班級選單在這一頁不作用。</p></div>' +
     '<div class="tabs">' + tabs.map(function(t){
       return '<button data-act="dtab" data-id="' + t[0] + '" aria-selected="' + (DTAB === t[0]) + '">' + t[1] + '</button>';
     }).join('') + '</div>' + body;
@@ -5421,7 +5549,7 @@ function dashDual(){
   const counts = {}; zones.forEach(function(z){ counts[z] = dt.rows.filter(function(r){ return r.zone === z; }).length; });
   return '<div class="grid" style="grid-template-columns:minmax(0,1.15fr) minmax(300px,.85fr);gap:16px">' +
     '<div class="card"><div class="card-h"><h3>能力變化 × 論述參與</h3>' +
-      '<span class="muted small">分界線為班級中位數</span></div>' +
+      '<span class="muted small">分界線為 ' + esc(kbClass().name) + ' 的中位數</span></div>' +
       '<div class="card-p">' + dualSVG(dt) + '</div></div>' +
     '<div class="col">' + zones.map(function(z){
       const Z = DUAL_ZONE[z];
@@ -5432,8 +5560,8 @@ function dashDual(){
         '<span class="num" style="font-size:20px;font-weight:600">' + counts[z] + '</span></div>' +
         '<p class="small muted">' + esc(Z.desc) + '</p>' +
         '<div class="row" style="gap:5px;margin-top:6px">' + rows.map(function(r){
-          return '<span class="pill" data-act="asrole" data-id="' + r.sid + '" style="cursor:pointer" title="切換為此學生檢視">' +
-            esc(userName(r.sid)) + '</span>'; }).join('') + '</div>' +
+          return '<button type="button" class="pill" data-act="asrole" data-id="' + r.sid + '">' +
+            esc(userName(r.sid)) + '</button>'; }).join('') + '</div>' +
         '</div></div>';
     }).join('') + '</div></div>' +
     '<div class="card" style="margin-top:16px"><div class="card-p">' +
@@ -7124,12 +7252,14 @@ function viewInspect(aid, sid){
       '<span class="pill">他標記了 ' + marks.length + ' 句</span></div>' +
       '<div class="card-p">' +
       '<p class="muted small" id="passageHelp">底色與「▍」記號是這位學生自己標起來的句子，由事件日誌還原。</p>' +
-      '<div class="passage" role="group" aria-labelledby="passageTitle" aria-describedby="passageHelp">' +
+      /* 唯讀重播用文字語意，不用控制項語意：
+         38 顆 disabled button 會讓報讀器唸 38 次「按鈕　未按下　無法使用」。 */
+      '<div class="passage" role="region" tabindex="0" aria-labelledby="passageTitle" aria-describedby="passageHelp">' +
         text.paras.map(function(_, pi){
           return '<p class="para">' + sents.filter(function(s){ return s.para === pi; }).map(function(s){
             const on = marks.indexOf(s.i) >= 0;
-            return '<button type="button" class="sent' + (on ? ' on' : '') + '" disabled' +
-              ' aria-pressed="' + on + '">' + esc(s.text) + '</button>';
+            return '<span class="sent' + (on ? ' on' : '') + '">' +
+              (on ? '<span class="sr-only">學生標記：</span>' : '') + esc(s.text) + '</span>';
           }).join('') + '</p>';
         }).join('') +
       '</div>' +
@@ -7872,7 +8002,7 @@ function render(){
   switch (ROUTE.name){
     case 'teacher':   html = isTeacher() ? viewTeacher() : viewStudent(); break;
     case 'create':    html = viewCreate(); break;
-    case 'assign':    html = viewAssign(a[0]); break;
+    case 'assign':    html = viewAssign(a[0], a[1]); break;
     case 'kb':        html = a[0] ? viewKBCanvas(a[0]) : viewKBList(); break;
     case 'note':      html = viewNote(a[0]); break;
     case 'synth':     html = viewSynth(a[0]); break;
@@ -8116,6 +8246,10 @@ function bindEvents(){
      e.isComposing 這一行不可省——全中文的國小學童用注音選字時按 Enter
      是「確認選字」，不該把半成品送出去。 */
   document.addEventListener('keydown', function(e){
+    /* Esc 關閉彈窗 */
+    if (e.key === 'Escape' && document.getElementById('modalRoot').firstChild){
+      e.preventDefault(); closeModal(); return;
+    }
     if (e.key !== 'Enter' || e.isComposing) return;
     if (!e.target || e.target.id !== 'aalSay') return;
     e.preventDefault();
@@ -8136,9 +8270,19 @@ function bindEvents(){
 
     if (act === 'modal-back' && e.target === t){ closeModal(); EDIT = null; return; }
     if (act === 'close-modal'){ closeModal(); EDIT = null; return; }
-    if (act === 'asrole'){ e.preventDefault(); state.ui.role = id; save(); renderShell();
-      go(isTeacher() ? '#/teacher' : '#/student'); render(); toast('已切換為 ' + userName(id)); return; }
-    if (act === 'tab'){ TAB = id; render(); return; }
+    /* 代為檢視：記住真實身分，畫面上方常駐一條有出口的橫幅，且全程唯讀。 */
+    if (act === 'asrole'){
+      e.preventDefault();
+      if (!isImpersonating()) state.ui.impersonate = {realRole: state.ui.role, at: Date.now()};
+      state.ui.role = id; save(); renderShell();
+      go('#/student'); render();
+      toast('以 ' + userName(id) + ' 的視角檢視（唯讀）');
+      return; }
+    if (act === 'exit-impersonate'){
+      const real = state.ui.impersonate ? state.ui.impersonate.realRole : 'u-t1';
+      state.ui.role = real; state.ui.impersonate = null; save(); renderShell();
+      go('#/teacher'); render(); toast('已結束檢視');
+      return; }
     if (act === 'dtab'){ DTAB = id; render(); return; }
 
     /* 派題精靈 */
@@ -8150,7 +8294,7 @@ function bindEvents(){
     if (act === 'wiz-submit'){ submitWizard(); return; }
 
     /* 診斷 */
-    if (act === 'kidmap-one' || act === 'kidmap-sel'){ tabKidmap.sel = id; TAB = 'kidmap'; render(); return; }
+    if (act === 'kidmap-one' || act === 'kidmap-sel'){ tabKidmap.sel = id; go('#/assign/' + ROUTE.args[0] + '/kidmap'); render(); return; }
     if (act === 'item-strategy'){ openItemStrategy(id); return; }
     if (act === 'bridge'){ doBridge(id); return; }
     if (act === 'cr-sel'){ tabCR.sel = id; render(); return; }
