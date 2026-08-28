@@ -4,6 +4,7 @@
 
 const DISCOURSE_ROUTES = {kb:1, note:1, synth:1};
 const PLAIN_ROUTES = {about:1, settings:1, bank:1, survey:1};
+const RESEARCHER_ONLY = {research:1, create:1, settings:1};
 
 function render(){
   ROUTE = parseRoute();
@@ -12,6 +13,17 @@ function render(){
   const v = $('#view');
   let html = '';
   const a = ROUTE.args;
+  /* 研究者專屬的頁面：教師從側欄看不到，直接打網址也擋下來。
+     這些是研究工具（分派條件、命題、改系統設定），不是教學工具。 */
+  if (RESEARCHER_ONLY[ROUTE.name] && !isResearcher()){
+    stage.className = 'stage';
+    $('#view').innerHTML = '<div class="empty"><h3>這一頁只有研究者看得到</h3>' +
+      '<p style="max-width:60ch">條件分派、建立派題與系統設定屬於研究端的操作。' +
+      '教學上需要的資料在「教師後台」「派題分析」「知識建構中心」與「雙軌評量儀表板」。</p>' +
+      '<a class="btn" href="#/teacher">回教師後台</a></div>';
+    renderRail();
+    return;
+  }
   switch (ROUTE.name){
     case 'teacher':   html = isTeacher() ? viewTeacher() : viewStudent(); break;
     case 'create':    html = viewCreate(); break;
@@ -25,6 +37,7 @@ function render(){
     case 'about':     html = viewAbout(); break;
     case 'research':  html = viewResearch(); break;
     case 'aal':       html = viewAaL(a[0]); break;
+    case 'inspect':   html = viewInspect(a[0], a[1]); break;
     case 'survey':    html = viewSurvey(a[0] === 'pre' ? 'pre' : 'post'); break;
     case 'student':   html = viewStudent(); break;
     case 'quiz':      html = viewQuiz(a[0]); break;
@@ -243,7 +256,7 @@ function bindEvents(){
     /* 派題精靈 */
     if (act === 'wiz-unit'){ if (WIZ.units[id]) delete WIZ.units[id]; else WIZ.units[id] = 1; render(); return; }
     if (act === 'wiz-next'){ WIZ.step++; if (WIZ.step === 3 && !WIZ.title)
-      WIZ.title = uniq(Object.keys(WIZ.units)).map(function(u){ return getUnit(u).name; }).join('、') + ' 練習';
+      WIZ.title = uniq(Object.keys(WIZ.units)).map(function(u){ return textTitle(u); }).join('、') + ' 閱讀理解';
       render(); return; }
     if (act === 'wiz-back'){ collectWizard(); WIZ.step--; render(); return; }
     if (act === 'wiz-submit'){ submitWizard(); return; }
@@ -325,6 +338,10 @@ function bindEvents(){
     if (act === 'aal-say'){ render._focusSay = true; aalSay(); return; }
     if (act === 'aal-prev'){ AAL.idx = Math.max(0, AAL.idx - 1); render(); return; }
     if (act === 'aal-next'){ AAL.idx = Math.min(AAL.items.length - 1, AAL.idx + 1); render(); return; }
+
+    /* 教師／研究者的唯讀檢視：換題不寫任何日誌 */
+    if (act === 'inspect-prev'){ INSPECT.idx = Math.max(0, INSPECT.idx - 1); render(); return; }
+    if (act === 'inspect-next'){ INSPECT.idx = Math.min(INSPECT.items.length - 1, INSPECT.idx + 1); render(); return; }
     if (act === 'aal-submit'){ aalSubmit(); return; }
     if (act === 'aal-check'){
       const it = aalItem();
@@ -339,13 +356,13 @@ function bindEvents(){
 
     /* 設定與匯出 */
     if (act === 'test-llm'){ testLLM(); return; }
-    if (act === 'export-survey'){ saveFile('kidforum-surveys.csv', toSurveyCsv(), 'text/csv'); return; }
-    if (act === 'export-sdis'){ saveFile('kidforum-sequences.sdis', toSDIS(), 'text/plain'); return; }
-    if (act === 'export-tele'){ saveFile('kidforum-telemetry.csv', toTelemetryCsv(), 'text/csv'); return; }
-    if (act === 'export-ena'){ saveFile('kidforum-ena-lines.csv', toENACsv(), 'text/csv'); return; }
-    if (act === 'export-json'){ saveFile('kidforum-research-data.json',
+    if (act === 'export-survey'){ saveFile('kairos-surveys.csv', toSurveyCsv(), 'text/csv'); return; }
+    if (act === 'export-sdis'){ saveFile('kairos-sequences.sdis', toSDIS(), 'text/plain'); return; }
+    if (act === 'export-tele'){ saveFile('kairos-telemetry.csv', toTelemetryCsv(), 'text/csv'); return; }
+    if (act === 'export-ena'){ saveFile('kairos-ena-lines.csv', toENACsv(), 'text/csv'); return; }
+    if (act === 'export-json'){ saveFile('kairos-research-data.json',
       JSON.stringify(researchBundle(), null, 2), 'application/json'); return; }
-    if (act === 'export-csv'){ saveFile('kidforum-responses.csv', responseCSV(), 'text/csv'); return; }
+    if (act === 'export-csv'){ saveFile('kairos-responses.csv', responseCSV(), 'text/csv'); return; }
     if (act === 'reset'){ if (confirm('重設會清除你在這台瀏覽器上新增的所有貼文與作答，回到出廠的模擬班級。確定嗎？')){
       resetState(); renderShell(); render(); toast('已重設為示範資料。'); } return; }
   });
@@ -362,6 +379,7 @@ function bindEvents(){
     if (act === 'seg-sc'){ collectEditor(); EDIT.segs[+t.dataset.i].s = t.value; renderEditor(); return; }
     if (e.target.id === 'classSel'){ state.ui.classId = e.target.value; save(); render(); return; }
     if (act === 'search-field'){ KBSEARCH.field = t.value; render(); return; }
+    if (act === 'inspect-who'){ go('#/inspect/' + INSPECT.aid + '/' + t.value); return; }
     if (act === 'dg-cond'){ rDesign.sel.cond = t.value; render(); return; }
     if (act === 'dg-proc'){ rDesign.sel.proc = t.value; render(); return; }
     if (act === 'dg-qfn'){ rDesign.sel.qfn = t.value; render(); return; }
@@ -485,6 +503,17 @@ function applyA11y(){
     btn.setAttribute('aria-pressed', a.highContrast ? 'true' : 'false');
     btn.classList.toggle('primary', !!a.highContrast);
   }
+  syncTopbarHeight();   // 字級變大時頂列會變高，sticky 的偏移量要跟著更新
+}
+
+/* 把頂列的實際高度寫進 --topbar-h。頂列是 min-height + flex-wrap，
+   視窗變窄或字級放大時會換行變高；不更新的話 sticky 的側欄與文本欄
+   會被壓在頂列底下（WCAG 2.4.11 焦點不被遮蔽）。 */
+function syncTopbarHeight(){
+  const t = document.querySelector('.topbar');
+  if (!t) return;
+  const h = Math.round(t.getBoundingClientRect().height);
+  if (h > 0) document.documentElement.style.setProperty('--topbar-h', h + 'px');
 }
 
 function applyTheme(){
@@ -627,6 +656,11 @@ async function testLLM(){
 
 /* --- 啟動 --- */
 function boot(){
+  /* 產物是 HTML 片段（沒有自己的 <html> 標籤，這樣才能同時給 GitHub Pages
+     與 Artifact 檢視器使用），所以語言宣告只能在這裡補（WCAG 3.1.1）。 */
+  document.documentElement.lang = 'zh-Hant';
+  syncTopbarHeight();
+  window.addEventListener('resize', syncTopbarHeight);
   state = loadState();
   if (!state.ui) state.ui = {role:'u-t1', classId:'c-1'};
   if (!state.ui.classId) state.ui.classId = 'c-1';

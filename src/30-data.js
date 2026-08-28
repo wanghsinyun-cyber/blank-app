@@ -8,6 +8,11 @@
    資料結構完全相同，只需替換 TEXTS 與 ITEMS 兩個常數。
    ========================================================================== */
 
+/* 示範資料的結構版號。存檔的版號與這個值不符時就重建示範資料。
+   改資料結構時要把它加一——loadState() 與 buildSeedState() 都讀同一個常數，
+   不要在兩邊各寫一個字面量（曾經因此讓存檔永遠讀不回）。 */
+const STATE_VERSION = 4;
+
 /* --- 固定種子亂數（mulberry32），確保示範資料可重現 --- */
 function mulberry32(a){
   return function(){
@@ -325,7 +330,8 @@ function buildSeedState(){
       sn++;
       const name = ci === 0 ? STUDENT_NAMES[i] : genName(rnd);
       const theta = -1.7 + 3.5 * (i + 0.5) / 24 + (rnd() - 0.5) * 0.7;
-      // 八種理解失誤在班上輪流分配，確保每一種都有幾位持有者，且橫跨各種能力
+      // 只在「真的有題目測得到」的失誤類型之間輪流分配（errPool 已過濾掉 E5、E8），
+      // 確保每一種都有幾位持有者，且橫跨各種能力
       // —— 高能力學生也可能有頑固的閱讀習慣問題，這正是 KIDMAP 第二象限要抓的人。
       const held = [];
       held.push(errPool[i % errPool.length]);
@@ -588,7 +594,7 @@ function buildSeedState(){
   notes[8].annotations.push({id:'an-2', authorId:S['陳柏宇'], text:'那如果一句話同時支撐好幾段呢？我想在躍升貼文裡補這一點。', at:now - 4*DAY});
 
   const st = {
-    version: 4,
+    version: STATE_VERSION,
     users: users,
     classes: classes,
     assignments: [pre, post],

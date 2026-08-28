@@ -1,4 +1,4 @@
-# 建置的除錯版本（由 build.sh + src/zz-debug.js 產生，不需版控）
+# 建置的除錯版本（由 README 的手動指令串接產生，build.sh 不會產生它，不需版控）
 dist/debug.html
 
 # 注意：dist/index.html 要進版控——它是可直接下載使用的單檔成品，

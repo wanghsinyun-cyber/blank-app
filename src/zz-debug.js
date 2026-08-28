@@ -35,21 +35,21 @@
 
     /* --- 評量即學習 --- */
     ['applyItemProcesses', function(){ applyItemProcesses();
-      log('   Q01=' + getItem('Q01').process + ' C01=' + getItem('C01').process); }],
+      log('   R01=' + getItem('R01').process + ' C01=' + getItem('C01').process); }],
     ['buildDemoLogs', function(){ buildDemoLogs(); log('   logs=' + DEMO_LOGS.length + ' dialog=' + DEMO_DIALOG.length); }],
     ['buildDemoSurveys', function(){ log('   surveys=' + state.surveys.length); }],
     ['agentTurn x3', function(){
       ['tutor','tutee','peer'].forEach(function(c){
-        var a = agentTurn(c, getItem('Q13'), 2);
+        var a = agentTurn(c, getItem('R13'), 2);
         log('   ' + c + '｜' + a.text.slice(0, 34) + '…  qfn=' + a.qfn + ' sub=' + a.sub);
       }); }],
     ['leakGuard', function(){
-      var g = leakGuard('答案是 x = 7 或 x = −7，你答對了', getItem('Q01'));
+      var g = leakGuard('答案是 B，就在第 3 段第 1 句，你答對了', getItem('R01'));
       log('   blocked=' + g.blocked + ' hits=' + g.hits.join(',')); }],
-    ['composePrompt', function(){ window._cp = composePrompt('tutee', 'R', 'F3'); log('   len=' + window._cp.length); }],
+    ['composePrompt', function(){ window._cp = composePrompt('tutee', 'II', 'F3'); log('   len=' + window._cp.length); }],
     ['relativeProcessCode', function(){
-      log('   ' + relativeProcessCode('公式是什麼', getItem('C01')) + ' / ' +
-          relativeProcessCode('如果數字換掉還成立嗎，我想舉個反例', getItem('Q01'))); }],
+      log('   ' + relativeProcessCode('這個詞在哪一段', getItem('C01')) + ' / ' +
+          relativeProcessCode('我覺得作者想告訴我們的是另一件事，而且他沒說清楚', getItem('R01'))); }],
     ['lsa (all)', function(){ window._l = lsa(); log('   N=' + window._l.N + ' sig=' + window._l.sig.length); }],
     ['lsa (per cond)', function(){ CONDITIONS.forEach(function(c){
       var r = lsa({cond:c.id}); log('   ' + c.id + ' N=' + r.N + ' sig=' + r.sig.length); }); }],
@@ -97,7 +97,7 @@
     ['aal interactions', function(){
       aalMark(0); aalPick(1);
       var it = aalItem();
-      aalTurns(it.id).push({speaker:'student', text:'如果數字換掉還成立嗎', rel:'ABOVE', at:Date.now()});
+      aalTurns(it.id).push({speaker:'student', text:'我覺得作者想告訴我們的是另一件事', rel:'ABOVE', at:Date.now()});
       var a = agentTurn(AAL.cond, it, 0);
       aalTurns(it.id).push({speaker:'agent', text:a.text, at:Date.now()});
       V(viewAaL('a-post'));
@@ -116,7 +116,20 @@
     ['toSurveyCsv', function(){ log('   bytes=' + toSurveyCsv().length); }],
     ['responseCSV', function(){ log('   bytes=' + responseCSV().length); }],
     ['researchBundle', function(){ log('   bytes=' + JSON.stringify(researchBundle()).length); }],
-    ['back to teacher', function(){ state.ui.role = 'u-t1'; renderShell(); }]
+    ['viewInspect (tutor)', function(){ INSPECT = null; V(viewInspect('a-post', 'u-s3')); }],
+    ['viewInspect (control)', function(){ INSPECT = null; V(viewInspect('a-post', 'u-s75')); }],
+    ['tabReplay', function(){ TAB = 'replay'; V(viewAssign('a-post')); TAB = 'overview'; }],
+    ['kb gate (未交卷學生)', function(){
+      state.ui.role = 'u-s3'; renderShell();
+      state.submissions = state.submissions.filter(function(s){ return s.sid !== 'u-s3'; });
+      log('   locked=' + kbLocked(currentUser()) + ' pending=' + pendingAssignments('u-s3').length);
+      V(viewKBList()); }],
+    ['back to teacher', function(){ state.ui.role = 'u-t1'; renderShell(); }],
+    ['rail: 研究者', function(){ state.ui.role = 'u-admin'; renderShell();
+      log('   連結數=' + document.querySelectorAll('#rail a').length); }],
+    ['rail: 教師', function(){ state.ui.role = 'u-t1'; renderShell();
+      log('   連結數=' + document.querySelectorAll('#rail a').length +
+          '　' + Array.prototype.map.call(document.querySelectorAll('#rail a'), function(a){ return a.textContent; }).join('｜')); }]
   ];
 
   var i = 0;

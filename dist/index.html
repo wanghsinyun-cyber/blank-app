@@ -1,3 +1,6 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>KAIROS</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -86,11 +89,11 @@
 html,body{height:100%}
 body{
   margin:0; background:var(--paper); color:var(--ink);
-  font-family:var(--f-body); font-size:20px; line-height:1.65;
+  font-family:var(--f-body); font-size:1rem; line-height:1.65;
   -webkit-font-smoothing:antialiased;
 }
 h1,h2,h3,h4{font-family:var(--f-display); font-weight:700; text-wrap:balance; margin:0; line-height:1.32; letter-spacing:.01em}
-h1{font-size:35px} h2{font-size:27px} h3{font-size:21px} h4{font-size:19px}
+h1{font-size:1.75rem} h2{font-size:1.35rem} h3{font-size:1.05rem} h4{font-size:0.95rem}
 p{margin:0 0 .8em}
 a{color:var(--accent); text-underline-offset:3px}
 :focus-visible{outline:3px solid var(--focus); outline-offset:2px; border-radius:3px}
@@ -108,32 +111,32 @@ button,input,select,textarea{font:inherit; color:inherit}
   background:var(--card); border-bottom:1px solid var(--rule); z-index:20;
 }
 .brand{display:flex; align-items:baseline; gap:9px; margin-right:4px}
-.brand b{font-family:var(--f-display); font-size:24px; letter-spacing:.06em}
-.brand span{font-size:16px; color:var(--ink-3); letter-spacing:.06em}
+.brand b{font-family:var(--f-display); font-size:1.2rem; letter-spacing:.06em}
+.brand span{font-size:0.8rem; color:var(--ink-3); letter-spacing:.06em}
 .spacer{flex:1}
 .chip-demo{
-  font-size:16px; letter-spacing:.06em; color:var(--ink-3);
+  font-size:0.8rem; letter-spacing:.06em; color:var(--ink-3);
   border:1px dashed var(--rule); border-radius:100px; padding:2px 9px; white-space:nowrap;
 }
 
 .rail{
-  position:sticky; top:68px; align-self:flex-start; flex:0 0 272px; width:272px;
-  min-height:calc(100vh - 68px); max-height:calc(100vh - 68px); overflow-y:auto;
+  position:sticky; top:var(--topbar-h); align-self:flex-start; flex:0 0 272px; width:272px;
+  min-height:calc(100vh - var(--topbar-h)); max-height:calc(100vh - var(--topbar-h)); overflow-y:auto;
   background:var(--card); border-right:1px solid var(--rule);
   padding:12px 10px 24px; display:flex; flex-direction:column; gap:2px;
 }
-.rail-group{font-size:16px; letter-spacing:.14em; color:var(--ink-4); padding:14px 10px 6px}
+.rail-group{font-size:0.8rem; letter-spacing:.14em; color:var(--ink-4); padding:14px 10px 6px}
 .rail a{
   display:flex; align-items:center; gap:9px; padding:7px 10px; border-radius:var(--r-m);
-  color:var(--ink-2); text-decoration:none; font-size:18px; border:1px solid transparent;
+  color:var(--ink-2); text-decoration:none; font-size:0.9rem; border:1px solid transparent;
 }
 .rail a:hover{background:var(--shade)}
 .rail a[aria-current="page"]{background:var(--shade); border-color:var(--rule); color:var(--ink); font-weight:600}
-.rail .glyph{width:18px; text-align:center; color:var(--ink-4); font-family:var(--f-mono); font-size:16px}
+.rail .glyph{width:18px; text-align:center; color:var(--ink-4); font-family:var(--f-mono); font-size:0.8rem}
 .rail a[aria-current="page"] .glyph{color:var(--ink)}
-.rail .badge{margin-left:auto; font-family:var(--f-mono); font-size:16px; color:var(--ink-3); background:var(--shade); border:1px solid var(--rule-soft); border-radius:100px; padding:0 6px}
+.rail .badge{margin-left:auto; font-family:var(--f-mono); font-size:0.8rem; color:var(--ink-3); background:var(--shade); border:1px solid var(--rule-soft); border-radius:100px; padding:0 6px}
 
-.stage{flex:1; min-width:0; position:relative; min-height:calc(100vh - 68px)}
+.stage{flex:1; min-width:0; position:relative; min-height:calc(100vh - var(--topbar-h))}
 .stage.measure{background:var(--cool);
   background-image:linear-gradient(var(--grid) 1px,transparent 1px),linear-gradient(90deg,var(--grid) 1px,transparent 1px);
   background-size:26px 26px}
@@ -152,16 +155,16 @@ button,input,select,textarea{font:inherit; color:inherit}
 .g4{grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}
 .row{display:flex; gap:10px; align-items:center; flex-wrap:wrap}
 .col{display:flex; flex-direction:column; gap:10px}
-.eyebrow{font-size:16px; letter-spacing:.16em; color:var(--ink-4); font-family:var(--f-mono)}
+.eyebrow{font-size:0.8rem; letter-spacing:.16em; color:var(--ink-4); font-family:var(--f-mono)}
 .muted{color:var(--ink-3)}
-.small{font-size:17px}
+.small{font-size:0.85rem}
 .hr{height:1px; background:var(--rule-soft); border:0; margin:16px 0}
-.lead{font-size:20px; color:var(--ink-2); line-height:1.8; max-width:66ch}
+.lead{font-size:1rem; color:var(--ink-2); line-height:1.8; max-width:66ch}
 
 .btn{
   display:inline-flex; align-items:center; gap:7px; padding:7px 13px; border-radius:var(--r-m);
   border:1px solid var(--rule); background:var(--card); color:var(--ink); cursor:pointer;
-  font-size:18px; line-height:1.4; transition:background .12s,border-color .12s;
+  font-size:0.9rem; line-height:1.4; transition:background .12s,border-color .12s;
 }
 .btn:hover{background:var(--shade)}
 .btn:disabled{opacity:.45; cursor:not-allowed}
@@ -169,19 +172,21 @@ button,input,select,textarea{font:inherit; color:inherit}
 .btn.primary:hover{filter:brightness(1.14)}
 .btn.ghost{border-color:transparent; background:transparent}
 .btn.ghost:hover{background:var(--shade)}
-.btn.sm{padding:4px 9px; font-size:17px}
+.btn.sm{padding:4px 9px; font-size:0.85rem}
 .btn.danger{color:var(--crit); border-color:var(--q2-line)}
 
 .field{display:flex; flex-direction:column; gap:5px}
-.field > label{font-size:16px; color:var(--ink-3)}
+.field > label{font-size:0.8rem; color:var(--ink-3)}
 input[type=text],input[type=email],input[type=password],input[type=number],input[type=datetime-local],select,textarea{
   width:100%; padding:7px 10px; border:1px solid var(--rule); border-radius:var(--r-m);
   background:var(--card); color:var(--ink);
 }
 textarea{resize:vertical; min-height:80px; line-height:1.7}
-input:focus,select:focus,textarea:focus{outline:2px solid var(--focus); border-color:transparent}
+/* 焦點樣式統一由 :focus-visible 提供（3px），這裡只處理邊框顏色，
+   不要再宣告 outline，否則會蓋掉全域規則並讓滑鼠點擊也出現外框。 */
+input:focus-visible,select:focus-visible,textarea:focus-visible{border-color:transparent}
 
-.pill{display:inline-flex; align-items:center; gap:5px; border-radius:100px; padding:1px 9px; font-size:16px; border:1px solid var(--rule); background:var(--shade); color:var(--ink-2); white-space:nowrap}
+.pill{display:inline-flex; align-items:center; gap:5px; border-radius:100px; padding:1px 9px; font-size:0.8rem; border:1px solid var(--rule); background:var(--shade); color:var(--ink-2); white-space:nowrap}
 .pill .dot{width:7px; height:7px; border-radius:50%; background:currentColor}
 .q1{color:var(--q1); background:var(--q1-bg); border-color:var(--q1-line)}
 .q2{color:var(--q2); background:var(--q2-bg); border-color:var(--q2-line)}
@@ -189,17 +194,17 @@ input:focus,select:focus,textarea:focus{outline:2px solid var(--focus); border-c
 .q4{color:var(--q4); background:var(--q4-bg); border-color:var(--q4-line)}
 
 .stat{padding:14px 16px; background:var(--card); border:1px solid var(--rule); border-radius:var(--r-l)}
-.stat .k{font-size:16px; letter-spacing:.1em; color:var(--ink-4); font-family:var(--f-mono)}
-.stat .v{font-family:var(--f-mono); font-size:36px; font-weight:600; line-height:1.25; letter-spacing:-.01em}
-.stat .s{font-size:16px; color:var(--ink-3)}
+.stat .k{font-size:0.8rem; letter-spacing:.1em; color:var(--ink-4); font-family:var(--f-mono)}
+.stat .v{font-family:var(--f-mono); font-size:1.8rem; font-weight:600; line-height:1.25; letter-spacing:-.01em}
+.stat .s{font-size:0.8rem; color:var(--ink-3)}
 .stat.crit{border-left:3px solid var(--crit)}
 .stat.good{border-left:3px solid var(--good)}
 .stat.warn{border-left:3px solid var(--warn)}
 
 .tablewrap{overflow-x:auto; -webkit-overflow-scrolling:touch}
-table{border-collapse:collapse; width:100%; font-size:17px}
+table{border-collapse:collapse; width:100%; font-size:0.85rem}
 th,td{text-align:left; padding:7px 10px; border-bottom:1px solid var(--rule-soft); vertical-align:middle}
-th{font-size:16px; letter-spacing:.08em; color:var(--ink-4); font-weight:600; white-space:nowrap; background:var(--card)}
+th{font-size:0.8rem; letter-spacing:.08em; color:var(--ink-4); font-weight:600; white-space:nowrap; background:var(--card)}
 tbody tr:hover{background:var(--shade)}
 td.n,th.n{text-align:right; font-family:var(--f-mono); font-variant-numeric:tabular-nums}
 
@@ -209,13 +214,13 @@ td.n,th.n{text-align:right; font-family:var(--f-mono); font-variant-numeric:tabu
 .tabs{display:flex; gap:2px; border-bottom:1px solid var(--rule); margin-bottom:18px; overflow-x:auto}
 .tabs button{
   border:0; background:transparent; padding:9px 13px; cursor:pointer; color:var(--ink-3);
-  border-bottom:2px solid transparent; font-size:18px; white-space:nowrap;
+  border-bottom:2px solid transparent; font-size:0.9rem; white-space:nowrap;
 }
 .tabs button[aria-selected="true"]{color:var(--ink); border-bottom-color:var(--accent); font-weight:600}
 
 .steps{display:flex; gap:8px; align-items:center; margin-bottom:18px; flex-wrap:wrap}
-.step{display:flex; align-items:center; gap:7px; padding:5px 12px; border:1px solid var(--rule); border-radius:100px; font-size:17px; color:var(--ink-3); background:var(--card)}
-.step b{font-family:var(--f-mono); font-size:16px; width:17px; height:17px; border-radius:50%; display:grid; place-items:center; background:var(--shade); color:var(--ink-3)}
+.step{display:flex; align-items:center; gap:7px; padding:5px 12px; border:1px solid var(--rule); border-radius:100px; font-size:0.85rem; color:var(--ink-3); background:var(--card)}
+.step b{font-family:var(--f-mono); font-size:0.8rem; width:17px; height:17px; border-radius:50%; display:grid; place-items:center; background:var(--shade); color:var(--ink-3)}
 .step.on{color:var(--ink); border-color:var(--accent)}
 .step.on b{background:var(--accent); color:var(--accent-ink)}
 
@@ -225,7 +230,7 @@ td.n,th.n{text-align:right; font-family:var(--f-mono); font-variant-numeric:tabu
 .toast{
   position:fixed; left:50%; bottom:26px; transform:translateX(-50%); z-index:200;
   background:var(--ink); color:var(--card); padding:9px 16px; border-radius:100px;
-  font-size:17px; box-shadow:var(--shadow); max-width:88vw;
+  font-size:0.85rem; box-shadow:var(--shadow); max-width:88vw;
 }
 .modal-back{position:fixed; inset:0; background:rgba(10,14,20,.45); z-index:100; display:grid; place-items:center; padding:18px}
 .modal{background:var(--card); border:1px solid var(--rule); border-radius:var(--r-l); box-shadow:var(--shadow); width:min(760px,100%); max-height:88dvh; overflow:auto}
@@ -249,11 +254,11 @@ td.n,th.n{text-align:right; font-family:var(--f-mono); font-variant-numeric:tabu
 
 /* ---------- KIDMAP ---------- */
 .kidmap{width:100%; height:auto; display:block; overflow:visible}
-.kidmap text{font-family:var(--f-mono); font-size:16px; fill:var(--ink-3)}
+.kidmap text{font-family:var(--f-mono); font-size:0.8rem; fill:var(--ink-3)}
 .kidmap .axis{stroke:var(--rule); stroke-width:1}
 .kidmap .theta{stroke:var(--accent); stroke-width:1.4; stroke-dasharray:5 4}
-.kidmap .qlabel{font-size:16px; letter-spacing:.06em; font-weight:600}
-.legend{display:flex; gap:14px; flex-wrap:wrap; font-size:16px; color:var(--ink-3)}
+.kidmap .qlabel{font-size:0.8rem; letter-spacing:.06em; font-weight:600}
+.legend{display:flex; gap:14px; flex-wrap:wrap; font-size:0.8rem; color:var(--ink-3)}
 .legend span{display:inline-flex; align-items:center; gap:6px}
 .swatch{width:10px; height:10px; border-radius:2px; display:inline-block}
 
@@ -272,9 +277,9 @@ td.n,th.n{text-align:right; font-family:var(--f-mono); font-variant-numeric:tabu
 }
 .note:active{cursor:grabbing}
 .note.sel{outline:2px solid var(--focus); outline-offset:1px}
-.note .nt{font-weight:600; font-size:18px; line-height:1.45; margin-bottom:3px; font-family:var(--f-display)}
-.note .nb{font-size:16px; color:var(--ink-3); line-height:1.55; max-height:54px; overflow:hidden}
-.note .nf{display:flex; gap:7px; align-items:center; margin-top:7px; font-size:16px; color:var(--ink-4); font-family:var(--f-mono); flex-wrap:wrap}
+.note .nt{font-weight:600; font-size:0.9rem; line-height:1.45; margin-bottom:3px; font-family:var(--f-display)}
+.note .nb{font-size:0.8rem; color:var(--ink-3); line-height:1.55; max-height:3.4em; overflow:hidden}
+.note .nf{display:flex; gap:7px; align-items:center; margin-top:7px; font-size:0.8rem; color:var(--ink-4); font-family:var(--f-mono); flex-wrap:wrap}
 .note.unread{box-shadow:var(--shadow),inset 0 3px 0 var(--accent)}
 .note.problem{border-left-color:var(--q2); background:var(--q2-bg)}
 .note.rise{border-left-color:var(--sc-6); box-shadow:var(--shadow),0 0 0 3px var(--card),0 0 0 4px var(--sc-6)}
@@ -285,10 +290,10 @@ td.n,th.n{text-align:right; font-family:var(--f-mono); font-variant-numeric:tabu
 .edges path.rise{stroke:var(--sc-6); stroke-dasharray:6 3; opacity:.65}
 
 .sc-btns{display:flex; gap:6px; flex-wrap:wrap}
-.sc-btn{border:1px solid var(--rule); background:var(--card); border-radius:100px; padding:3px 11px; font-size:17px; cursor:pointer; border-left-width:4px}
+.sc-btn{border:1px solid var(--rule); background:var(--card); border-radius:100px; padding:3px 11px; font-size:0.85rem; cursor:pointer; border-left-width:4px}
 .sc-btn:hover{background:var(--shade)}
 .sc-seg{border-left:3px solid var(--rule); padding:2px 0 2px 10px; margin:0 0 10px}
-.sc-seg .lab{font-size:16px; letter-spacing:.05em; font-weight:600; display:block; margin-bottom:1px}
+.sc-seg .lab{font-size:0.8rem; letter-spacing:.05em; font-weight:600; display:block; margin-bottom:1px}
 .sc1{border-left-color:var(--sc-1)} .sc1 .lab,.sc-btn.sc1{color:var(--sc-1)}
 .sc2{border-left-color:var(--sc-2)} .sc2 .lab,.sc-btn.sc2{color:var(--sc-2)}
 .sc3{border-left-color:var(--sc-3)} .sc3 .lab,.sc-btn.sc3{color:var(--sc-3)}
@@ -298,25 +303,25 @@ td.n,th.n{text-align:right; font-family:var(--f-mono); font-variant-numeric:tabu
 
 .thread{border-left:2px solid var(--rule-soft); padding-left:14px; margin-left:6px; margin-top:10px; display:flex; flex-direction:column; gap:10px}
 .note-full{border:1px solid var(--rule); border-radius:var(--r-m); padding:13px 15px; background:var(--card)}
-.note-full .meta{font-size:16px; color:var(--ink-4); font-family:var(--f-mono); display:flex; gap:9px; flex-wrap:wrap; align-items:center}
+.note-full .meta{font-size:0.8rem; color:var(--ink-4); font-family:var(--f-mono); display:flex; gap:9px; flex-wrap:wrap; align-items:center}
 
-.ai-out{background:var(--shade); border:1px solid var(--rule-soft); border-radius:var(--r-m); padding:14px 16px; font-size:18px; line-height:1.78}
-.ai-out h3,.ai-out h4,.ai-out h5,.ai-out h6{margin:15px 0 6px; font-size:19px}
-.ai-out h3{font-size:21px}
+.ai-out{background:var(--shade); border:1px solid var(--rule-soft); border-radius:var(--r-m); padding:14px 16px; font-size:0.9rem; line-height:1.78}
+.ai-out h3,.ai-out h4,.ai-out h5,.ai-out h6{margin:15px 0 6px; font-size:0.95rem}
+.ai-out h3{font-size:1.05rem}
 .ai-out h3:first-child,.ai-out h4:first-child,.ai-out h5:first-child{margin-top:0}
 .ai-out ul,.ai-out ol{margin:0 0 10px; padding-left:20px}
 .ai-out li{margin-bottom:3px}
-.ai-out code{font-family:var(--f-mono); font-size:17px; background:var(--card); padding:1px 5px; border-radius:3px; border:1px solid var(--rule-soft)}
+.ai-out code{font-family:var(--f-mono); font-size:0.85rem; background:var(--card); padding:1px 5px; border-radius:3px; border:1px solid var(--rule-soft)}
 .ai-out strong{color:var(--ink)}
 .ai-out table{margin-bottom:10px}
 
-.rub-row{display:grid; grid-template-columns:130px 1fr 54px; gap:10px; align-items:center; font-size:17px}
-.rub-row .lv{font-family:var(--f-mono); font-size:16px; text-align:right; color:var(--ink-3)}
+.rub-row{display:grid; grid-template-columns:130px 1fr 54px; gap:10px; align-items:center; font-size:0.85rem}
+.rub-row .lv{font-family:var(--f-mono); font-size:0.8rem; text-align:right; color:var(--ink-3)}
 
 canvas.pad{border:1px solid var(--rule); border-radius:var(--r-m); background:var(--card); touch-action:none; display:block; width:100%; cursor:crosshair}
 
 .sna{width:100%; height:auto; display:block}
-.sna text{font-family:var(--f-body); font-size:16px; fill:var(--ink-3)}
+.sna text{font-family:var(--f-body); font-size:0.8rem; fill:var(--ink-3)}
 .sna line{stroke:var(--rule)}
 .sna circle{stroke:var(--card); stroke-width:1.5}
 
@@ -330,9 +335,14 @@ canvas.pad{border:1px solid var(--rule); border-radius:var(--r-m); background:va
    ‧ 1.4.1 不以顏色單獨傳達訊息（形狀記號與文字標籤與顏色並用）
    ========================================================================== */
 
-/* 字級調整：--fs 由使用者控制（100% / 125% / 150%），整份介面等比放大 */
-:root{ --fs:1 }
-body{ font-size:calc(20px * var(--fs)) }
+/* 字級調整：--fs 由使用者控制（100% / 125% / 150% / 175%）。
+   基準字級放在 :root 上、元件一律用 rem，所以標題、按鈕、表格、pill 都會
+   等比放大；用 rem 而不是 em，是為了避免巢狀時層層相乘。 */
+:root{ --fs:1; font-size:calc(20px * var(--fs)) }
+/* 頂列實際高度。頂列是 min-height + flex-wrap，視窗變窄或字級放大時會換行變高；
+   syncTopbarHeight()（99-app.js）會把量到的高度寫進這個變數，
+   sticky 的側欄與文本欄才不會被壓在頂列底下（2.4.11 焦點不被遮蔽）。 */
+:root{ --topbar-h:68px }
 
 /* 表單控制項的邊界需 3:1（1.4.11）——一般 --rule 只有 1.5:1，不足以標示可互動邊界 */
 input[type=text],input[type=email],input[type=password],input[type=number],
@@ -359,9 +369,16 @@ input[type=checkbox],input[type=radio]{ width:1.15em; height:1.15em; accent-colo
   --ink:#000; --ink-2:#111; --ink-3:#333; --ink-4:#444;
   --rule:#555; --rule-strong:#333; --rule-soft:#777;
   --card:#fff; --paper:#fff; --cool:#fff; --shade:#f0f0f0; --grid:#ddd;
-  --accent:#0b2e63; --focus:#0b57d0;
+  --accent:#0b2e63; --accent-ink:#fff; --focus:#0b57d0;
   --q1:#125c3c; --q2:#8f1d10; --q3:#3d4756; --q4:#123a70;
   --q1-bg:#e8f3ed; --q2-bg:#fbe9e6; --q3-bg:#eef0f4; --q4-bg:#e8eef8;
+  --q1-line:#125c3c; --q2-line:#8f1d10; --q3-line:#3d4756; --q4-line:#123a70;
+  /* 支架與狀態色也要一起覆寫，否則同時開啟深色主題與高對比時，
+     會留下深色主題的殘值配在白底上（本區塊特異度與 [data-theme] 相同、
+     但寫在後面而勝出，所以沒被覆寫的 token 就會殘留）。 */
+  --sc-1:#0b3f7a; --sc-2:#6b4400; --sc-3:#125c3c;
+  --sc-4:#8f1d10; --sc-5:#4a2d80; --sc-6:#005c63;
+  --good:#125c3c; --warn:#6b4400; --crit:#8f1d10;
   --shadow:none;
 }
 :root[data-contrast="high"] .card,
@@ -387,39 +404,41 @@ input[type=checkbox],input[type=radio]{ width:1.15em; height:1.15em; accent-colo
    四條件共用同一份版面幾何：對照組只是把對話卡換成同尺寸的筆記卡，
    使外在認知負荷、捲動深度與畫面留白在條件之間保持一致。 */
 .aal{display:grid; grid-template-columns:minmax(0,1.05fr) minmax(330px,.95fr); gap:16px; align-items:start}
-.aal-text{position:sticky; top:70px}
+.aal-text{position:sticky; top:calc(var(--topbar-h) + 2px)}
 .aal-side{display:flex; flex-direction:column; gap:16px; min-width:0}
 .aal-chat .card-p{display:flex; flex-direction:column}
-.sentences{line-height:2.1; font-size:21px}
-.sent{cursor:pointer; padding:1px 2px; border-radius:3px; border-bottom:1px dashed var(--rule)}
+.sentences{line-height:2.1; font-size:1.05rem}
+.sent{cursor:pointer; padding:1px 2px; border-radius:3px; border-bottom:1px dashed var(--rule-strong)}
 .sent:hover{background:var(--shade)}
-.sent.on{background:var(--q4-bg); border-bottom:2px solid var(--q4); color:var(--ink)}
+.sent.on{background:var(--q4-bg); border-bottom:3px solid var(--q4); color:var(--ink); font-weight:600}
+/* 不以顏色單獨傳達訊息（1.4.1）：這一組規則沒有 .passage 前綴，也要帶記號 */
+.sent.on::after{content:"�08D"; color:var(--q4); font-weight:700}
 .chat{display:flex; flex-direction:column; gap:8px; height:300px; overflow-y:auto; padding-right:4px}
-.msg{max-width:88%; padding:8px 12px; border-radius:12px; font-size:18px; line-height:1.6}
-.msg b{display:block; font-size:16px; letter-spacing:.04em; color:var(--ink-4); font-weight:600; margin-bottom:2px}
+.msg{max-width:88%; padding:8px 12px; border-radius:12px; font-size:1rem; line-height:1.6}
+.msg b{display:block; font-size:0.8rem; letter-spacing:.04em; color:var(--ink-4); font-weight:600; margin-bottom:2px}
 .msg.agent{align-self:flex-start; background:var(--shade); border:1px solid var(--rule-soft); border-bottom-left-radius:3px}
 .msg.me{align-self:flex-end; background:var(--accent); color:var(--accent-ink); border-bottom-right-radius:3px}
-.msg.sys{align-self:center; background:transparent; border:1px dashed var(--rule); color:var(--ink-3); font-size:17px}
+.msg.sys{align-self:center; background:transparent; border:1px dashed var(--rule); color:var(--ink-3); font-size:0.85rem}
 
 /* ---------- 問卷 ---------- */
 .likert{padding:10px 0; border-bottom:1px solid var(--rule-soft)}
 .likert:last-child{border-bottom:0}
-.likert .q{font-size:19px; margin-bottom:7px; line-height:1.6}
+.likert .q{font-size:0.95rem; margin-bottom:7px; line-height:1.6}
 .scale{display:flex; gap:6px; flex-wrap:wrap}
 .lk{width:38px; height:34px; border:1px solid var(--rule); background:var(--card); border-radius:var(--r-m);
-    cursor:pointer; font-family:var(--f-mono); font-size:17px; color:var(--ink-3)}
+    cursor:pointer; font-family:var(--f-mono); font-size:0.85rem; color:var(--ink-3)}
 .lk:hover{background:var(--shade)}
 .lk.on{background:var(--accent); border-color:var(--accent); color:var(--accent-ink); font-weight:600}
-.scale-lab{display:flex; justify-content:space-between; font-size:16px; color:var(--ink-4); margin-top:4px; max-width:270px}
+.scale-lab{display:flex; justify-content:space-between; font-size:0.8rem; color:var(--ink-4); margin-top:4px; max-width:270px}
 
 pre.prompt{
-  font-family:var(--f-mono); font-size:16px; line-height:1.65; white-space:pre-wrap; word-break:break-word;
+  font-family:var(--f-mono); font-size:0.8rem; line-height:1.65; white-space:pre-wrap; word-break:break-word;
   background:var(--shade); border:1px solid var(--rule-soft); border-radius:var(--r-m);
   padding:11px 13px; margin:0; color:var(--ink-2);
 }
 
 .principle{display:grid; grid-template-columns:26px 1fr; gap:12px; padding:10px 0; border-bottom:1px solid var(--rule-soft)}
-.principle .no{font-family:var(--f-mono); font-size:16px; color:var(--ink-4); padding-top:3px}
+.principle .no{font-family:var(--f-mono); font-size:0.8rem; color:var(--ink-4); padding-top:3px}
 .principle b{display:block; margin-bottom:2px}
 
 @media (max-width:900px){
@@ -438,7 +457,7 @@ pre.prompt{
 @media (prefers-reduced-motion:reduce){*{animation:none!important; transition:none!important}}
 @media print{.rail,.topbar,.kb-toolbar{display:none} .app,.main{display:block} .stage{min-height:0}}
 </style>
-<a class="skip" href="#main">跳至主要內容</a>
+<a class="skip" href="#stage">跳至主要內容</a>
 <div class="app">
   <header class="topbar">
     <div class="brand"><b>KAIROS</b><span>契機 · 評量即學習平台</span></div>
@@ -459,7 +478,7 @@ pre.prompt{
         <option value="1.75">字級 175%</option>
       </select>
       <button class="btn sm ghost" id="contrastBtn" aria-pressed="false" title="切換高對比模式">高對比</button>
-      <button class="btn sm ghost" id="themeBtn" title="切換淺色／深色">◐</button>
+      <button class="btn sm ghost" id="themeBtn" title="切換外觀（自動／淺色／深色）" aria-label="切換外觀（自動／淺色／深色）"><span aria-hidden="true">◐</span></button>
     </div>
   </header>
   <div class="main">
@@ -480,6 +499,11 @@ pre.prompt{
    **不是** PIRLS 官方釋出文本。正式施測請換上取得授權的釋出題本，
    資料結構完全相同，只需替換 TEXTS 與 ITEMS 兩個常數。
    ========================================================================== */
+
+/* 示範資料的結構版號。存檔的版號與這個值不符時就重建示範資料。
+   改資料結構時要把它加一——loadState() 與 buildSeedState() 都讀同一個常數，
+   不要在兩邊各寫一個字面量（曾經因此讓存檔永遠讀不回）。 */
+const STATE_VERSION = 4;
 
 /* --- 固定種子亂數（mulberry32），確保示範資料可重現 --- */
 function mulberry32(a){
@@ -798,7 +822,8 @@ function buildSeedState(){
       sn++;
       const name = ci === 0 ? STUDENT_NAMES[i] : genName(rnd);
       const theta = -1.7 + 3.5 * (i + 0.5) / 24 + (rnd() - 0.5) * 0.7;
-      // 八種理解失誤在班上輪流分配，確保每一種都有幾位持有者，且橫跨各種能力
+      // 只在「真的有題目測得到」的失誤類型之間輪流分配（errPool 已過濾掉 E5、E8），
+      // 確保每一種都有幾位持有者，且橫跨各種能力
       // —— 高能力學生也可能有頑固的閱讀習慣問題，這正是 KIDMAP 第二象限要抓的人。
       const held = [];
       held.push(errPool[i % errPool.length]);
@@ -1061,7 +1086,7 @@ function buildSeedState(){
   notes[8].annotations.push({id:'an-2', authorId:S['陳柏宇'], text:'那如果一句話同時支撐好幾段呢？我想在躍升貼文裡補這一點。', at:now - 4*DAY});
 
   const st = {
-    version: 4,
+    version: STATE_VERSION,
     users: users,
     classes: classes,
     assignments: [pre, post],
@@ -1467,9 +1492,9 @@ function behaviorName(c){ const b = BEHAVIOR_CODES.find(function(x){ return x.co
 /* 送出前自我檢核項目（勾選與否由學生決定，勾選數記為後設認知監控指標） */
 const SELF_CHECKS = [
   '我有把題目再讀過一次',
-  '我確認我用到了題目給的每一個條件',
-  '我有想過另一個做法',
-  '我把答案代回去檢查過',
+  '我有回到文章裡找依據，不是只憑印象',
+  '我可以指出答案是從第幾段看出來的',
+  '我有想過另一種讀法說不說得通',
   '我可以說出我為什麼選這個'
 ];
 
@@ -1506,21 +1531,27 @@ function classOfStudent(sid){
    ‧ 對照：無對話，以筆記與重讀替代
    這些是模擬資料，用來示範分析管線，不得當成實徵結果。
    ========================================================================== */
+/* 示範發話。三個池刻意寫成不同的認知層次，並且用得到 PROCESS_CUES 的線索詞，
+   codeUtteranceProcess() 才抓得到訊號（BELOW≈直接提取、AT≈直接推論、
+   ABOVE≈詮釋整合／比較評估）。 */
 const DEMO_UTTER = {
-  BELOW: ['這題是不是就用公式算就好？', '我先算算看好了', '這個要代進去哪裡？',
-          '答案要算到小數嗎', '我記得公式是這樣', '這步是不是先移項'],
-  AT:    ['我想先設寬是 x，然後列式子', '我打算用因式分解，因為係數是小整數',
-          '題目給了兩個條件，我用了面積那個', '我覺得要先把它整理成等於 0',
-          '我用的是判別式那個方法', '我先確認題目在問哪一個東西'],
-  ABOVE: ['如果數字換成別的，這個做法應該還是可以，除非變成負的',
-          '我想不通為什麼一定要先移項，如果右邊不是 0 會怎樣',
-          '我覺得另一個做法比較容易錯，因為要多算一次',
-          '我可以舉一個反例：2 乘 3 等於 6，但 2 不等於 6',
-          '這一題跟前面那題很像，差別只在有沒有負根',
-          '我要怎麼確定兩個根都對？我把它們都代回去了']
+  BELOW: ['這個答案是不是就寫在哪一句？', '我找到了，在第二段',
+          '「傳播」這個詞的意思是什麼？', '文章有說他幾點出門嗎',
+          '我先看看哪一段有出現這個詞', '這個要去哪裡找'],
+  AT:    ['我選這個是因為前面說他每天推車', '我把兩句合起來看，所以他是想讓太太吃到柚子',
+          '這裡的「它」指的是那棵柚子樹', '因為第三段說樹都在最亮的地方，所以他是在追太陽',
+          '前面說陶盆很重，後面說他要停下來喘氣，這樣就接得起來',
+          '我先確認題目在問哪一段'],
+  ABOVE: ['我覺得作者是想告訴我們，有些奇怪的舉動背後藏著心意',
+          '這裡的語氣有點難過，他停頓了一下才回答，感覺不想講',
+          '如果換成不是老人家來搬，這個故事的感覺就完全不一樣了',
+          '我想知道整篇的主題到底是柚子還是那個人的心情',
+          '這樣寫真的可能嗎？我覺得作者沒說清楚樹是怎麼固定的',
+          '比較起來，第二篇的說明有給例子，第一篇是用故事讓你自己想']
 };
-const DEMO_NOTE = ['先讀題目', '設 x = 寬', '要先移項成 =0', '檢查有沒有漏根',
-                   '再讀一次題目', '這題和前面那題像', '代回去檢查'];
+const DEMO_NOTE = ['先把整篇讀一次', '這句畫起來，等一下要用',
+                   '「它」指的是柚子樹', '第三段講規律', '回去看第一段有沒有寫',
+                   '這題問的是作者的想法，不是事情經過', '再確認一次是哪一段'];
 
 /* 情緒語尾：讓模擬對話帶有可分析的情緒訊號。
    各條件的情緒分布依研究構想的理論預測設定（同儕最正向、對照最平淡）。 */
@@ -1760,65 +1791,65 @@ const SCALE5 = {n:5, labels:['完全不符合', '不太符合', '普通', '有�
 const CONSTRUCTS = [
   {id:'mot_in',  name:'內在動機',   dim:'學習動機', scale:SCALE6, phase:'both', cls:'sc3',
    src:'MSLQ 內在目標導向', items:[
-    '這個單元的題目就算不算成績，我也想弄懂',
-    '遇到比較難的題目時，我會想知道自己到底哪裡沒想通',
-    '把一題想清楚的感覺，本身就讓我覺得值得',
-    '我喜歡去試那些一開始看不出怎麼做的題目']},
+    '這篇文章就算不算成績，我也想把它讀懂',
+    '遇到讀不太懂的地方，我會想知道自己是哪裡讀錯了',
+    '把一段話想清楚的感覺，本身就讓我覺得值得',
+    '我喜歡去讀那些一開始看不太懂的文章']},
   {id:'mot_ex',  name:'外在動機',   dim:'學習動機', scale:SCALE6, phase:'both', cls:'sc2',
    src:'MSLQ 外在目標導向', items:[
-    '我認真做這些題目，主要是因為會算成績',
-    '我希望在這個單元的表現比班上多數同學好',
-    '如果沒有人會看到結果，我大概不會這麼認真']},
+    '我認真讀這篇文章，主要是因為會算成績',
+    '我希望這次閱讀測驗的表現比班上多數同學好',
+    '如果沒有人會看到結果，我大概不會讀得這麼仔細']},
   {id:'eff',     name:'自我效能',   dim:'自我效能', scale:SCALE6, phase:'both', cls:'sc1',
    src:'MSLQ 學習自我效能', items:[
-    '我有把握弄懂這個單元的內容',
-    '就算題目換個問法，我也做得出來',
-    '碰到不會的題目，我知道可以從哪裡開始想',
-    '我可以把我的做法講給別人聽',
-    '我相信我可以在這個單元拿到不錯的成績',
-    '就算一開始算錯，我也有辦法把它救回來',
-    '我能判斷自己的答案合不合理',
-    '這個單元對我來說是做得到的']},
+    '我有把握讀懂這樣長度的文章',
+    '就算題目換個問法，我也答得出來',
+    '碰到不會的題目，我知道可以回文章的哪裡去找',
+    '我可以把我為什麼這樣讀講給別人聽',
+    '我相信我可以在這次閱讀測驗拿到不錯的成績',
+    '就算一開始讀錯了，我也有辦法自己發現並改過來',
+    '我能判斷自己的答案有沒有文章的根據',
+    '這篇文章對我來說是讀得懂的']},
   {id:'cl_in',   name:'內在負荷',   dim:'認知負荷', scale:SCALE6, phase:'post', cls:'sc4',
    src:'Leppink 三因素·內在', items:[
-    '這些題目本身的內容對我來說很複雜',
-    '題目裡要同時記住的東西很多',
-    '這個單元的概念本身就不容易']},
+    '這篇文章的內容對我來說很複雜',
+    '要同時記住的人物、事情或訊息很多',
+    '文章想講的道理本身就不容易懂']},
   {id:'cl_ex',   name:'外在負荷',   dim:'認知負荷', scale:SCALE6, phase:'post', cls:'sc4',
    src:'Leppink 三因素·外在', items:[
-    '畫面上的東西讓我不容易專心在題目上',
+    '畫面上的東西讓我不容易專心在文章上',
     '我花了不少力氣在弄清楚「這個系統要我做什麼」',
-    '題目和說明的呈現方式讓我覺得吃力']},
+    '文章和題目的呈現方式讓我覺得吃力']},
   {id:'cl_ge',   name:'增生負荷',   dim:'認知負荷', scale:SCALE6, phase:'post', cls:'sc6',
    src:'Leppink 三因素·增生', items:[
-    '這節課的活動幫助我把概念弄得更清楚',
-    '過程中我有真的在想「為什麼」，不只是在算',
-    '這樣的做法讓我對這個單元的理解變好']},
+    '這節課的活動幫助我把文章的意思弄得更清楚',
+    '過程中我有真的在想「作者為什麼這樣寫」，不只是在找答案',
+    '這樣的做法讓我更知道要怎麼讀一篇文章']},
   {id:'eng_b',   name:'行為投入',   dim:'學習投入', scale:SCALE5, phase:'post', cls:'sc1',
    src:'Fredricks 三維·行為', items:[
-    '整節課我都有跟著在做',
+    '整節課我都有跟著在讀',
     '我很少分心去做別的事',
     '該我回應的時候我都有回應',
     '我把每一題都做完了']},
   {id:'eng_e',   name:'情緒投入',   dim:'學習投入', scale:SCALE5, phase:'post', cls:'sc3',
    src:'Fredricks 三維·情緒', items:[
-    '做這些題目的時候我覺得有興趣',
+    '讀這篇文章的時候我覺得有興趣',
     '我還蠻喜歡這節課的進行方式',
     '過程中我覺得放鬆，不會一直緊繃',
-    '我會想再做一次類似的活動']},
+    '我會想再讀一篇這樣的文章']},
   {id:'eng_c',   name:'認知投入',   dim:'學習投入', scale:SCALE5, phase:'post', cls:'sc5',
    src:'Fredricks 三維·認知', items:[
-    '我會把新的題目跟以前學過的連起來想',
-    '我會先想清楚再動筆',
-    '答完之後我會回頭檢查自己的想法',
-    '我會問自己「這樣做對嗎」']},
+    '我會把文章裡的訊息跟自己知道的事連起來想',
+    '我會先把整段讀完再決定答案',
+    '答完之後我會回頭確認文章裡有沒有這樣說',
+    '我會問自己「這樣讀說得通嗎」']},
   {id:'anx',     name:'學習焦慮',   dim:'學習焦慮', scale:SCALE6, phase:'both', cls:'sc4',
    src:'MSLQ 考試焦慮', items:[
-    '做這些題目的時候我覺得緊張',
-    '我擔心自己表現得比別人差',
+    '做這些閱讀題的時候我覺得緊張',
+    '我擔心自己讀得比別人慢或比別人差',
     '想到要被看到答案，我就有點不安',
-    '我會因為怕做錯而不敢下筆',
-    '結束之後我還會一直想「我是不是寫錯了」']}
+    '我會因為怕答錯而不敢寫下來',
+    '結束之後我還會一直想「我是不是讀錯了」']}
 ];
 
 /* 角色知覺之操弄檢核（後測；對照組不施） */
@@ -2189,7 +2220,7 @@ function loadState(){
     const raw = localStorage.getItem(STORE_KEY);
     if (raw){
       const s = JSON.parse(raw);
-      if (s && s.version === 2) return s;   // 版號不符（示範資料改版）→ 重新產生
+      if (s && s.version === STATE_VERSION) return s;   // 版號不符（示範資料改版）→ 重新產生
     }
   } catch (e) { /* 讀不到就重新產生示範資料 */ }
   return buildSeedState();
@@ -2202,7 +2233,8 @@ function resetState(){
 /* --- 查詢輔助 --- */
 function getItem(id){ return ITEMS.find(function(i){ return i.id === id; }); }
 function getUnit(id){ return UNITS.find(function(u){ return u.id === id; }); }
-function unitName(id){ const u = getUnit(id); return u ? u.grade + ' ' + u.name : id; }
+/* unitName() 定義在 30-data.js（本平台的「單元」＝「文本」）。
+   這裡曾有一份讀 u.name 的舊定義，會蓋掉正確版本並印出 undefined，已移除。 */
 function getUser(id){ return state.users.find(function(u){ return u.id === id; }); }
 function userName(id){ const u = getUser(id); return u ? u.name : id; }
 function getView(id){ return state.views.find(function(v){ return v.id === id; }); }
@@ -2232,6 +2264,24 @@ function assignmentRoster(a){
   return out;
 }
 function isTeacher(){ const u = currentUser(); return u.role === 'teacher' || u.role === 'admin'; }
+function isResearcher(){ return currentUser().role === 'admin'; }
+
+/* 指派給這位學生、但還沒交卷的作業 */
+function pendingAssignments(sid){
+  return state.assignments.filter(function(a){
+    return assignmentRoster(a).indexOf(sid) >= 0 &&
+           !state.submissions.some(function(s){ return s.aid === a.id && s.sid === sid; });
+  });
+}
+/* 知識建構空間在「測驗之後」才對學生開放。
+   理由是系統迴圈的次序：先作答 → 才有 KIDMAP 診斷 → 才有值得討論的共同問題。
+   若在作答前就看得到別人的討論，等於先看到答案，前測也就不成立了。
+   教師與研究者不受此限（他們要在課前備課、課後分析）。 */
+function kbLocked(u){
+  const me = u || currentUser();
+  if (me.role !== 'student') return false;
+  return pendingAssignments(me.id).length > 0;
+}
 function scaffold(id){ return SCAFFOLDS.find(function(s){ return s.id === id; }); }
 function scaffoldLabel(id){ const s = scaffold(id); return s ? s.label : ''; }
 
@@ -3480,22 +3530,37 @@ function builtinItemStrategy(pi){
   L.push('');
   L.push('#### 三個教學動作');
   const acts = (pi.misCode && STRATEGY[pi.misCode]) || [
-    '請兩位落在迷思象限的同學上台講自己的想法，不要先糾正。',
-    '給一個相同結構、數字更小的題目，讓他們重走一次流程。',
-    '要求把答案代回原式檢驗，並把檢驗過程寫下來。'];
+    '請兩位落在迷思象限的同學說說他們是從哪一段讀到的，先不要糾正。',
+    '把四個選項各自對應到文本的哪一段標出來，讓學生看到誘答其實來自別的地方。',
+    '要求每個答案都補一句「我是從第◯段第◯句看出來的」，寫不出來就回去再讀一次。'];
   acts.forEach(function(a){ L.push('- ' + a); });
   L.push('');
-  L.push('#### 錯誤類型判斷');
-  const type = !m ? '策略錯' : (['M1','M3','M7'].indexOf(m.id) >= 0 ? '概念錯' : (['M2','M4'].indexOf(m.id) >= 0 ? '程序錯' : '程序錯'));
-  L.push('**' + type + '**：' + (type === '概念錯'
-    ? '學生對符號或定義本身的理解就有偏差，補練習沒有用，必須回到定義重新協商。'
-    : type === '程序錯'
-      ? '學生知道概念，但漏掉了一個必要步驟，適合用固定的檢核流程來矯正。'
-      : '學生缺的是「什麼時候該用哪一招」的判斷，適合用題目分類活動處理。'));
+  L.push('#### 失誤類型判斷');
+  /* 依 READING_ERRORS（E1–E8）分成四類閱讀失誤；沒有掛代碼時退回「歷程不明」。 */
+  const READ_TYPE = {
+    E1:'依據失誤', E7:'依據失誤',
+    E2:'定位失誤', E5:'定位失誤',
+    E3:'推論失誤', E4:'推論失誤', E6:'推論失誤',
+    E8:'評估失誤'
+  };
+  const TYPE_DESC = {
+    '依據失誤':'學生根本沒有回到文本，是憑常識或生活經驗作答。補讀更多文章沒有用，' +
+               '要先建立「不畫出依據就不能作答」的規矩。',
+    '定位失誤':'學生知道要回文本，但停在錯的段落或認錯了指涉對象。' +
+               '適合用「關鍵詞 → 掃描 → 核對」的固定流程矯正。',
+    '推論失誤':'學生找得到訊息，問題出在連起來的那一步——不是停在字面，就是推得超出文本能支持的範圍。' +
+               '適合練習描述文本的邊界：「文章只說到……，沒有說……」。',
+    '評估失誤':'學生讀得懂內容，但沒有讀出作者的態度與寫作用意。' +
+               '適合用同一件事的兩種寫法對照，讓立場浮出來。',
+    '歷程不明':'這一題的誘答沒有掛失誤代碼，無法判斷失誤型態。' +
+               '建議先補上誘答標記——規則引擎的診斷品質完全取決於這一步。'
+  };
+  const type = (m && READ_TYPE[m.id]) || '歷程不明';
+  L.push('**' + type + '**：' + TYPE_DESC[type]);
   L.push('');
   L.push('#### 建議的共構切入點');
   L.push('把這一題貼進知識建構空間時，不要問「正確答案是什麼」，改問「' +
-    (m ? m.name.replace(/^./, function(c){ return c; }) : '這個做法') + '在什麼情況下會出錯？請舉一個能檢驗的例子」。');
+    (m ? '「' + m.name + '」' : '這樣的讀法') + '在什麼情況下會讓我們讀錯？請從文章裡舉一個例子」。');
   return L.join('\n');
 }
 
@@ -3509,7 +3574,7 @@ async function aiRubric(item, force){
     out = await llmChat([
       {role:'system', content:'你是資深國小閱讀教師，熟悉 PIRLS 建構反應題的閱卷標準。用臺灣繁體中文，具體可操作，避免空話。'},
       {role:'user', content:'題目：' + item.stem + '\n單元：' + unitName(item.unit) +
-        '\n\n請產出評量規準（Markdown）：開頭寫「滿分：N 分」；分成三個向度並標配分（策略/概念、執行/計算、表達/結論）；最後列出 3 個常見錯誤與扣分建議。只要規準本身，不要開場白。'}
+        '\n\n請產出評量規準（Markdown）：開頭寫「滿分：N 分」；分成三個向度並標配分（回到文本、推論或評估品質、表達與論證）；最後列出 3 個常見錯誤與扣分建議。只要規準本身，不要開場白。'}
     ], {max_tokens:900});
   } else {
     out = builtinRubric(item);
@@ -3526,23 +3591,25 @@ function builtinRubric(item){
   L.push('| 向度 | 配分 | 給分描述 |');
   L.push('| --- | --- | --- |');
   if (item.id === 'C01'){
-    L.push('| 策略／概念 | 2 | 選用因式分解、配方法或公式解其中一種，且該方法對此題可行；有寫出所選方法的名稱或關鍵步驟。 |');
-    L.push('| 執行／計算 | 3 | 移項成 ＝0；正確求得 x=3 與 x=1/2 兩個根；過程無運算錯誤。只求得一根給 1 分。 |');
-    L.push('| 表達／結論 | 1 | 有把根代回原式檢驗，並明確寫出結論。 |');
+    /* II 詮釋整合 · II-2：思考人物行動的其他可能作法 */
+    L.push('| 回到文本 | 2 | 理由明確連到故事裡的某一段（不必寫出段號，但要看得出依據來自文本）。只寫「因為他很可憐」這類沒有文本依據的理由給 0 分。 |');
+    L.push('| 詮釋品質 | 3 | 提出的做法與「老先生每天搬樹是為了太太」這個已詮釋出來的動機一致；能說出這個做法會帶來什麼結果。做法與動機無關給 1 分。 |');
+    L.push('| 表達與論證 | 1 | 做法與理由分得清楚，讀得出「我會做什麼」與「我為什麼這樣做」兩層。 |');
     L.push('');
     L.push('#### 扣分要點');
-    L.push('- **只寫一個根**：扣 2 分。二次方程式在此題有兩相異實根，漏根屬概念性缺漏。');
-    L.push('- **未移項就分解**（如由 2x²−7x=−3 直接拆）：扣 2 分，並在評語中指出乘積為零性質的使用條件。');
-    L.push('- **沒有檢驗**：扣 1 分。即使答案正確，也要提醒代回原式是解方程式的必要習慣。');
+    L.push('- **只寫做法沒有理由**：扣 3 分。本題明確要求說明理由，理由才是評的東西。');
+    L.push('- **理由來自生活經驗而非文本**（E7 以經驗代替文本）：扣 2 分，並在評語中請學生指出是從哪一段看出來的。');
+    L.push('- **推論超出文本**（E4 過度推論，例如斷定阿嬤一定會康復）：扣 1 分，提醒區分「文章說的」與「我希望的」。');
   } else {
-    L.push('| 策略／概念 | 2 | 能指出小明的說法不完整，並說明「平方等於 25 的數」不只一個。 |');
-    L.push('| 執行／計算 | 2 | 正確寫出 x=5 或 x=−5，並用 (−5)²=25 佐證。 |');
-    L.push('| 表達／結論 | 2 | 舉出一個具體例子（情境或數例）支持說明；若能同時指出「√25=5」與「x²=25 的解」是不同問題，給滿分。 |');
+    /* EE 比較評估 · EE-3：評斷文中訊息的完整性或清晰度 */
+    L.push('| 指出空缺 | 3 | 提出的問題確實是這篇文章沒有回答的，且與文章主題相關（例如「哪一種傳播方法最有效」「為什麼有些植物同時用兩種方法」）。問題與文章無關給 0 分。 |');
+    L.push('| 說明不足的理由 | 2 | 能指出文章寫到哪裡為止，說明為什麼現有訊息不足以回答；有引用或轉述文中相關段落。 |');
+    L.push('| 表達 | 1 | 問題寫成一個完整、可回答的問句，不是感嘆或評論。 |');
     L.push('');
     L.push('#### 扣分要點');
-    L.push('- **只回答「對」或「錯」而無理由**：僅給 1 分。本題評的是論證，不是判斷。');
-    L.push('- **把 √25 寫成 ±5**：扣 1 分，並在評語中區分算術平方根與方程式的解。');
-    L.push('- **沒有舉例**：扣 2 分。舉例是本題明確要求的表現。');
+    L.push('- **問題其實文章有答**（E2 找錯位置）：扣 3 分，並帶學生回到該段核對。');
+    L.push('- **泛泛的好奇**（「我想知道更多關於植物的事」）：扣 2 分。本題評的是能否指出**具體**的空缺。');
+    L.push('- **只提問沒說明為什麼不足**：扣 2 分。說明才是比較評估歷程的證據。');
   }
   L.push('');
   L.push('*本規準由內建規則引擎依題目類型產生，請老師依班級狀況調整後再使用。*');
@@ -3574,34 +3641,23 @@ async function aiSimilarItems(item, force){
   return out;
 }
 
-const SIMILAR_BANK = {
-  Q01:[{stem:'若 x² = 81，則 x 的所有可能值為何？', options:['x = 9','x = 9 或 x = −9','x = 9 或 x = 0','x = 40.5'], answer:1, hint:'問的是「所有平方後等於 81 的數」，正負都要寫。'},
-       {stem:'若 x² = 5，則 x 的所有可能值為何？', options:['x = √5','x = ±√5','x = 2.5','沒有解'], answer:1, hint:'不是完全平方數也一樣有兩個根，寫成 ±√5。'},
-       {stem:'方程式 (x + 2)² = 36 的解為何？', options:['x = 4','x = 4 或 x = −8','x = 6 或 x = −6','x = 34'], answer:1, hint:'先開方得 x+2 = ±6，再分別解出兩個 x。'}],
-  Q03:[{stem:'解方程式 x(x + 2) = 8 時，下列哪一個第一步是正確的？', options:['x = 8 或 x + 2 = 8','先展開並移項成 x² + 2x − 8 = 0','把 8 拆成 2×4','兩邊同除以 x'], answer:1, hint:'乘積為零性質只有在一邊為 0 時能用。'},
-       {stem:'下列哪一個方程式可以直接使用「乘積為零」性質？', options:['(x − 1)(x + 4) = 0','(x − 1)(x + 4) = 6','x(x + 3) = 10','2(x − 5) = 8'], answer:0, hint:'看等號右邊是不是 0。'},
-       {stem:'若 (2x − 6)(x + 1) = 0，則 x 的值為何？', options:['3 或 −1','−3 或 1','6 或 −1','3 或 1'], answer:0, hint:'兩個括號分別令為 0 後各自解出。'}],
-  Q07:[{stem:'計算 √25 + √4 之值為何？', options:['7','√29','29','5.4'], answer:0, hint:'先各自開方再相加，根號不能逐項合併。'},
-       {stem:'下列敘述何者正確？', options:['√9 + √16 = √25','√9 × √16 = √144','√9 + √16 = 7 且 √25 = 5，兩者不相等','√25 = ±5'], answer:2, hint:'加法不能進根號，但乘法可以。'},
-       {stem:'計算 √36 − √9 之值為何？', options:['3','√27','√45','27'], answer:0, hint:'6 − 3 = 3；減法一樣要先各自開方。'}],
-  Q10:[{stem:'直角三角形的斜邊長 25，一股長 7，另一股長為何？', options:['24','√674','18','32'], answer:0, hint:'25² − 7² = 625 − 49 = 576，開方得 24。'},
-       {stem:'一個直角三角形兩邊長為 9 與 15，且 15 為斜邊，則第三邊長為何？', options:['12','√306','6','24'], answer:0, hint:'先確認哪一邊是斜邊，再用相減。'},
-       {stem:'梯子長 13 公尺靠牆，底端離牆 5 公尺，梯頂離地多高？', options:['12 公尺','√194 公尺','8 公尺','18 公尺'], answer:0, hint:'梯子本身是斜邊。'}],
-  Q12:[{stem:'將 3x² + 10x + 3 因式分解，結果為何？', options:['(3x + 1)(x + 3)','(3x + 3)(x + 1)','(x + 1)(x + 3)','(3x + 10)(x + 3)'], answer:0, hint:'交叉相乘後檢驗一次項係數是否為 10。'},
-       {stem:'將 2x² − 5x − 3 因式分解，結果為何？', options:['(2x + 1)(x − 3)','(2x − 1)(x + 3)','(2x − 3)(x + 1)','(x − 1)(2x + 3)'], answer:0, hint:'常數項為負，兩括號的常數一正一負。'},
-       {stem:'下列哪一組是 6x² + 7x + 2 的因式分解？', options:['(2x + 1)(3x + 2)','(6x + 1)(x + 2)','(3x + 1)(2x + 2)','(6x + 2)(x + 1)'], answer:0, hint:'首項與常數項都要拆，再檢驗中間項 4x + 3x = 7x。'}]
-};
 
+/* 內建引擎不「生成」新題——閱讀題離不開文本，憑空造題會造出沒有文本依據的題目。
+   改為從現有題庫挑出「測同一項理解歷程」的題目：先取同一篇文本的，不足再跨文本補，
+   讓老師拿得到可以直接用的替代題，而不是一段看起來像題目的生成文字。 */
 function builtinSimilar(item){
-  if (SIMILAR_BANK[item.id]) return SIMILAR_BANK[item.id];
-  // 沒有預備題組時，用同單元、同難度的題目做為練習
-  const alt = ITEMS.filter(function(i){
-    return i.id !== item.id && i.unit === item.unit && i.type === 'mc';
-  }).slice(0, 3).map(function(i){
-    return {stem:i.stem, options:i.options, answer:i.answer, hint:i.note};
+  const sameProc = function(i){ return i.type === 'mc' && i.id !== item.id && i.process === item.process; };
+  const near = ITEMS.filter(function(i){ return sameProc(i) && i.unit === item.unit; });
+  const far  = ITEMS.filter(function(i){ return sameProc(i) && i.unit !== item.unit; });
+  const alt = near.concat(far).slice(0, 3).map(function(i){
+    return {stem:i.stem, options:i.options, answer:i.answer,
+            hint:'同樣測「' + processName(i.process) + '」' +
+                 (i.unit === item.unit ? '，同一篇文本' : '，取自' + textTitle(i.unit)) +
+                 '。' + (i.note || '')};
   });
-  return alt.length ? alt : [{stem:'（內建題庫尚未為這一題準備相似題。切換到外部語言模型即可即時生成。）',
-    options:['—','—','—','—'], answer:0, hint:'到「系統設定」填入 OpenAI 相容 API key。'}];
+  return alt.length ? alt : [{stem:'（題庫裡沒有其他測同一項理解歷程的選擇題。' +
+      '切換到外部語言模型可以依這篇文本即時生成；離線模式不會憑空造閱讀題。）',
+    options:['—','—','—','—'], answer:0, hint:'到「系統設定」填入 OpenAI 相容端點與 API key。'}];
 }
 
 /* ==========================================================================
@@ -3936,10 +3992,11 @@ function renderShell(){
 function roleName(r){ return r === 'admin' ? '管理員' : r === 'teacher' ? '老師' : '學生'; }
 
 function renderRail(){
-  const t = isTeacher();
   const unread = state.notes.filter(isUnread).length;
   const me = currentUser();
-  const nav = t ? [
+  /* 三種導覽：研究者（super user，看得到全部）、教師（只看教學會用到的四項）、學生。
+     研究控制台、建立派題、題庫與系統設定屬於研究者的工具，不進教師的側欄。 */
+  const nav = me.role === 'admin' ? [
     {g:'評量'},
     {h:'#/teacher', g2:'教', t:'教師後台'},
     {h:'#/create',  g2:'派', t:'建立派題'},
@@ -3950,13 +4007,21 @@ function renderRail(){
     {h:'#/kb', g2:'構', t:'知識建構空間', b: unread ? unread : null},
     {h:'#/dash', g2:'雙', t:'雙軌評量儀表板'},
     {g:'設定'},
-    {h:'#/bank', g2:'庫', t:'題庫與單元'},
+    {h:'#/bank', g2:'庫', t:'文本與題庫'},
     {h:'#/settings', g2:'設', t:'系統設定'},
     {h:'#/about', g2:'說', t:'系統說明與研究設計'}
+  ] : me.role === 'teacher' ? [
+    {g:'評量'},
+    {h:'#/teacher', g2:'教', t:'教師後台'},
+    {h:'#/assign/a-pre', g2:'診', t:'派題分析'},
+    {g:'知識建構'},
+    {h:'#/kb', g2:'構', t:'知識建構中心', b: unread ? unread : null},
+    {h:'#/dash', g2:'雙', t:'雙軌評量儀表板'}
   ] : [
     {g:'我的學習'},
     {h:'#/student', g2:'業', t:'我的作業'},
-    {h:'#/kb', g2:'構', t:'知識建構空間', b: unread ? unread : null},
+    {h:'#/kb', g2:'構', t:'知識建構空間',
+     b: kbLocked(me) ? '測驗後開放' : (unread ? unread : null)},
     {h:'#/mygrowth', g2:'長', t:'我的學習軌跡'},
     {g:'問卷'},
     {h:'#/survey/pre',  g2:'前', t:'課前問卷', b: surveyOf(me.id, 'pre')  ? null : '待填'},
@@ -4246,7 +4311,10 @@ function viewTeacher(){
 
   return sectionHead('教師後台',
     k.name + '　·　加入代碼 ' + k.code + '　·　' + k.studentIds.length + ' 位學生　·　夥伴條件：' + cond.name,
-    '<a class="btn" href="#/research">研究控制台</a><a class="btn primary" href="#/create">建立派題</a>') +
+    /* 研究控制台與建立派題屬於研究者的工具，教師端不出現 */
+    (isResearcher()
+      ? '<a class="btn" href="#/research">研究控制台</a><a class="btn primary" href="#/create">建立派題</a>'
+      : '<a class="btn primary" href="#/assign/a-post">看這節課的作答與對話</a>')) +
   '<div class="grid g4" style="margin-bottom:18px">' +
     statCard('全體樣本', nAll + ' 人', state.classes.length + ' 班 · 四條件叢集分派') +
     statCard('待處理迷思題', flagged, '迷思比例 ≥ ' + state.settings.misThreshold + '%', flagged ? 'crit' : '') +
@@ -4255,13 +4323,13 @@ function viewTeacher(){
   '</div>' +
 
   '<div class="card" style="margin-bottom:18px"><div class="card-h"><h3>四條件分派概況</h3>' +
-    '<a class="btn sm" href="#/research">條件分派與歷程分析 →</a></div>' +
+    (isResearcher() ? '<a class="btn sm" href="#/research">條件分派與歷程分析 →</a>' : '') + '</div>' +
     '<div class="card-p"><div class="grid g4">' + CONDITIONS.map(function(c){
       const ks = state.classes.filter(function(x){ return x.condition === c.id; });
       const n = ks.reduce(function(a, x){ return a + x.studentIds.length; }, 0);
       return '<div class="stat"><div class="k">' + esc(c.name) + '</div>' +
         '<div class="v">' + n + '</div><div class="s">' +
-        (ks.map(function(x){ return esc(x.name.replace('114 學年 ', '')); }).join('、') || '—') + '</div></div>';
+        (ks.map(function(x){ return esc(x.name); }).join('、') || '—') + '</div></div>';
     }).join('') + '</div>' +
     '<p class="muted small" style="margin-top:10px">條件在班級層次操弄：同一班的同學拿到同一種夥伴，' +
     '避免同班互相看到不同條件而造成擴散污染。四個班共用同一份題本、同一次 Rasch 校準，條件之間才可比較。</p>' +
@@ -4322,7 +4390,7 @@ function viewCreate(){
           '<b>' + esc(t.title) + '</b><span class="pill">' + esc(t.genre) + '</span>' +
           '<span class="pill">' + n + ' 題</span></button>';
       }).join('') + '</div>' +
-      '<hr class="hr"><div class="row"><span class="muted small">已選 ' + Object.keys(WIZ.units).length + ' 個單元</span>' +
+      '<hr class="hr"><div class="row"><span class="muted small">已選 ' + Object.keys(WIZ.units).length + ' 篇文本</span>' +
       '<div class="spacer"></div><button class="btn primary" data-act="wiz-next"' +
       (Object.keys(WIZ.units).length ? '' : ' disabled') + '>下一步：挑題目 →</button></div></div>';
   }
@@ -4355,7 +4423,7 @@ function viewCreate(){
     body = '<div class="card card-p"><h3>派題細節</h3>' +
       '<div class="col" style="max-width:520px;margin-top:12px">' +
       '<div class="field"><label for="wt">作業標題</label><input id="wt" type="text" value="' + esc(WIZ.title) +
-        '" placeholder="例：八上 · 一元二次方程式練習"></div>' +
+        '" placeholder="例：〈會走路的樹〉閱讀理解"></div>' +
       '<div class="field"><label for="wd">說明（給學生的提示，可留空）</label><textarea id="wd">' + esc(WIZ.desc) + '</textarea></div>' +
       '<div class="field"><label for="wp">階段</label><select id="wp">' +
         '<option value="pre"' + (WIZ.phase === 'pre' ? ' selected' : '') + '>前測（診斷用，會進入迷思橋接）</option>' +
@@ -4386,6 +4454,7 @@ function viewAssign(aid){
     ['items', '每題四象限'],
     ['bridge', '迷思橋接'],
     ['cr', '建構反應題評閱'],
+    ['replay', '作答與 AI 互動'],
     ['ai', 'AI 深度分析']
   ];
   let body = '';
@@ -4395,6 +4464,7 @@ function viewAssign(aid){
   else if (TAB === 'items') body = tabItems(diag);
   else if (TAB === 'bridge') body = tabBridge(diag);
   else if (TAB === 'cr') body = tabCR(diag);
+  else if (TAB === 'replay') body = tabReplay(diag);
   else body = tabAI(diag);
 
   return sectionHead(a.title, (a.phase === 'post' ? '共構後測' : '前測') + '　·　' +
@@ -4733,6 +4803,57 @@ function tabAI(diag){
     '<p class="muted small">切換引擎請到「系統設定」。</p></div>';
 }
 
+/* 作答與 AI 互動：列出名單，點進去用學生當時的版面唯讀重播。
+   測驗結束後學生端就進不去了，這裡是教師與研究者唯一看得到那個介面的入口。 */
+function tabReplay(diag){
+  const a = diag.assignment;
+  const dial = allDialog().filter(function(d){ return d.aid === a.id; });
+  const logs = allLogs().filter(function(e){ return e.aid === a.id; });
+  const rows = diag.roster.map(function(sid){
+    const cond = condition(conditionOfStudent(sid));
+    const said = dial.filter(function(d){ return d.sid === sid && d.speaker === 'student'; }).length;
+    const marks = logs.filter(function(e){ return e.sid === sid && e.code === 'M'; }).length;
+    const ans = state.responses.filter(function(r){
+      return r.aid === a.id && r.sid === sid &&
+             (r.choice != null || (r.text && r.text.length)); }).length;
+    return {sid:sid, cond:cond, said:said, marks:marks, ans:ans, done:submitted(a.id, sid)};
+  });
+  const withDialog = rows.filter(function(r){ return r.said > 0; }).length;
+
+  return '<div class="grid g4" style="margin-bottom:16px">' +
+    statCard('可檢視的學生', rows.length, a.aal ? '這是評量即學習事件' : '一般測驗，沒有 AI 對話') +
+    statCard('有對話記錄', withDialog, '對照組沒有 AI 夥伴，屬正常') +
+    statCard('學生發話總數', dial.filter(function(d){ return d.speaker === 'student'; }).length,
+             '每題上限 ' + ((state.settings && state.settings.maxTurns) || MAX_TURNS) + ' 次') +
+    statCard('文句標記總數', logs.filter(function(e){ return e.code === 'M'; }).length, '學生在文本上畫的線') +
+    '</div>' +
+
+    '<div class="card card-p" style="margin-bottom:16px;border-left:3px solid var(--accent)">' +
+    '<div class="eyebrow">為什麼會有這一頁</div>' +
+    '<p class="small" style="margin-top:6px;max-width:74ch">評量即學習的作答介面是學生端的畫面，' +
+    '測驗結束之後就沒有人進得去，教師與研究者也就看不到學生當時實際看到什麼、跟 AI 說了什麼。' +
+    '點任何一位學生，就會用<strong>與他當時完全相同的版面</strong>重播——同樣的文本、同樣的兩欄、' +
+    '同樣的對話卡，差別只在全部唯讀，並且多顯示對錯、誘答標記與系統的歷程編碼。' +
+    '這一頁不會寫入任何事件日誌。</p></div>' +
+
+    '<div class="card"><div class="card-h"><h3>學生名單</h3>' +
+    '<span class="muted small">依發話次數排序</span></div><div class="card-p">' +
+    '<div class="tablewrap"><table><thead><tr>' +
+    '<th>學生</th><th>條件</th><th>作答</th><th>標記句數</th><th>發話次數</th><th>狀態</th><th></th>' +
+    '</tr></thead><tbody>' +
+    rows.sort(function(x, y){ return y.said - x.said; }).map(function(r){
+      return '<tr><td><b>' + esc(userName(r.sid)) + '</b></td>' +
+        '<td><span class="pill"><span aria-hidden="true">' + esc(r.cond.mark || '') + '</span>' +
+        esc(r.cond.name) + '</span></td>' +
+        '<td>' + r.ans + ' / ' + diag.assignment.itemIds.length + '</td>' +
+        '<td>' + r.marks + '</td>' +
+        '<td>' + (r.said || (r.cond.id === 'control' ? '—' : 0)) + '</td>' +
+        '<td>' + (r.done ? '已交卷' : '<span class="muted">未交卷</span>') + '</td>' +
+        '<td><a class="btn sm" href="#/inspect/' + a.id + '/' + r.sid + '">檢視 →</a></td></tr>';
+    }).join('') +
+    '</tbody></table></div></div></div>';
+}
+
 /* ===== src/84-ui-kb.js ===== */
 /* ==========================================================================
    84-ui-kb.js — 知識建構空間（Knowledge Forum 式）
@@ -4744,7 +4865,26 @@ let KBPICK = {};                // 被選取的貼文
 let KBSEARCH = {field:'content', q:''};
 let EDIT = null;                // 編輯中的貼文草稿
 
+/* 測驗還沒交完的學生看到的門檻畫面。四個 KB 入口都先過這一關。 */
+function kbGate(){
+  const me = currentUser();
+  if (!kbLocked(me)) return '';
+  const pend = pendingAssignments(me.id);
+  return '<div class="empty"><h3>知識建構空間會在測驗之後開放</h3>' +
+    '<p style="max-width:62ch">這裡放的是全班一起討論的共同問題，而那些問題是從大家的作答裡整理出來的。' +
+    '如果先看到別人怎麼說，你自己的讀法就被影響了，前測也就測不到你原本的想法。' +
+    '交卷之後，這個空間就會打開。</p>' +
+    '<div class="col" style="margin-top:14px;align-items:flex-start">' +
+    pend.map(function(a){
+      return '<a class="btn primary" href="#/' + (a.aal ? 'aal' : 'quiz') + '/' + a.id + '">' +
+        esc(a.title) + '　' + (a.aal ? '開始這節課 →' : '開始作答 →') + '</a>';
+    }).join('') + '</div>' +
+    '<p class="muted small" style="margin-top:14px">還沒交的有 ' + pend.length + ' 份。</p>' +
+    '<a class="lk" href="#/student" style="margin-top:10px;display:inline-block">回我的作業</a></div>';
+}
+
 function viewKBList(){
+  const gate = kbGate(); if (gate) return gate;
   const res = KBSEARCH.q ? searchNotes(KBSEARCH.field, KBSEARCH.q) : null;
   return sectionHead('知識建構空間', '每個視圖是一塊共同的白板。想法貼上去之後就屬於社群，任何人都可以延伸、挑戰、綜整。',
     (isTeacher() ? '<button class="btn" data-act="new-view">新增視圖</button>' : '')) +
@@ -4794,6 +4934,7 @@ function noteRow(n){
 
 /* --- 視圖畫布 --- */
 function viewKBCanvas(vid){
+  const gate = kbGate(); if (gate) return gate;
   const v = getView(vid);
   if (!v) return '<div class="empty"><h3>找不到這個視圖</h3><a class="btn" href="#/kb">回知識建構空間</a></div>';
   const ns = notesOfView(vid);
@@ -4879,6 +5020,7 @@ function scaffoldUsageBar(ns){
 
 /* --- 貼文詳頁 --- */
 function viewNote(nid){
+  const gate = kbGate(); if (gate) return gate;
   const n = getNote(nid);
   if (!n) return '<div class="empty"><h3>找不到這則貼文</h3><a class="btn" href="#/kb">回知識建構空間</a></div>';
   markRead(nid);
@@ -5064,6 +5206,7 @@ function saveEditor(){
 
 /* --- 想法串綜整 --- */
 function viewSynth(vid){
+  const gate = kbGate(); if (gate) return gate;
   const v = getView(vid);
   if (!v) return '<div class="empty"><h3>找不到這個視圖</h3></div>';
   const roots = notesOfView(vid).filter(function(n){ return !n.buildOn; });
@@ -5379,7 +5522,7 @@ function viewStudent(){
     '<h4>作答之後會發生什麼</h4>' +
     '<p class="small" style="margin-top:6px;max-width:70ch">系統會用全班的作答估出每題的難度與你的能力，' +
     '把「你本來應該答得出來卻答錯」的題目標出來。這些題目不會只變成一個紅色叉叉——' +
-    '老師可以把它變成全班的共同問題，貼到知識建構空間，讓大家一起把它想清楚。</p></div></div>';
+    '系統會把它整理出來變成全班的共同問題，貼到知識建構空間，讓大家一起把它想清楚。</p></div></div>';
 }
 
 function submitted(aid, sid){
@@ -5706,7 +5849,7 @@ function viewSettings(){
     '<div class="card"><div class="card-h"><h3>診斷門檻</h3></div><div class="card-p col">' +
       '<div class="field"><label for="thr">迷思橋接門檻（%）</label>' +
       '<input id="thr" type="number" min="1" max="60" value="' + s.misThreshold + '" data-act="set-thr">' +
-      '<span class="muted small">一題的迷思(II)比例達到這個值，就會出現在「迷思橋接」清單裡。國中課堂常用 15%–20%。</span></div>' +
+      '<span class="muted small">一題的迷思(II)比例達到這個值，就會出現在「迷思橋接」清單裡。出廠預設 12%；門檻越低，被標出來一起討論的題目越多。</span></div>' +
       '<div class="field"><label for="minn">KIDMAP 最低樣本數</label>' +
       '<input id="minn" type="number" min="3" max="40" value="' + s.minN + '" data-act="set-minn">' +
       '<span class="muted small">低於這個人數不執行 Rasch 估計。人數太少時難度與能力的估計會非常不穩定。</span></div>' +
@@ -5734,8 +5877,12 @@ function viewSettings(){
     '</div></div>' +
   '</div>' +
   '<div class="card" style="margin-top:16px"><div class="card-h"><h3>研究資料</h3></div><div class="card-p">' +
-    '<p class="small">匯出的 JSON 包含：使用者、班級、題庫、作答矩陣、Rasch 估計值、四象限判定、' +
-    '所有貼文與其支架／延伸／引用結構、論述指標與雙軌分區。可直接讀進 R 或 Python 做後續分析。</p>' +
+    '<p class="small">匯出的 JSON 共 26 個頂層鍵，包含：使用者、班級、文本與題庫、作答矩陣、' +
+    'Rasch 估計值與四象限判定、所有貼文與其支架／延伸／引用結構、論述指標與雙軌分區，' +
+    '以及評量即學習的完整設計與歷程——四條件、PIRLS 四項理解歷程與 19 項子歷程、' +
+    '<strong>8 個提示模組全文</strong>、事件日誌、對話逐字、問卷原始作答與構念分數、' +
+    'LSA／ENA／情感軌跡的分析結果、效果檢定與分析資料表。' +
+    '可直接讀進 R 或 Python 做後續分析。</p>' +
     '<div class="row" style="margin-top:10px">' +
     '<button class="btn primary" data-act="export-json">匯出研究資料（JSON）</button>' +
     '<button class="btn" data-act="export-csv">匯出作答矩陣（CSV）</button>' +
@@ -5760,7 +5907,7 @@ function viewAbout(){
     ['知識建構的論述', '論述層次由連接詞、反例、證據、修正語判定，讓「討論的品質」可被觀察。'],
     ['同步、內嵌、轉化的評量', '整個系統就是這一條：評量產生問題，討論改變理解，再評量檢核遷移。']
   ];
-  return sectionHead('系統說明與研究設計', 'KAIROS 如何把「會考派題 × KIDMAP」、「Knowledge Forum」與「評量即學習」接成一個系統。') +
+  return sectionHead('系統說明與研究設計', 'KAIROS 如何把「閱讀理解診斷 × KIDMAP」、「Knowledge Forum」與「評量即學習」接成一個系統。') +
 
   '<div class="card card-p" style="margin-bottom:16px;border-left:3px solid var(--accent)">' +
     '<div class="eyebrow">評量即學習（Assessment as Learning）</div>' +
@@ -5780,7 +5927,7 @@ function viewAbout(){
         '<p class="muted small">' + esc(c.mech) + '</p></div>';
     }).join('') + '</div>' +
     '<hr class="hr">' +
-    '<h4>三項與測量效度直接相關的規格</h4>' +
+    '<h4>四項與測量效度直接相關的規格</h4>' +
     '<div class="col" style="margin-top:8px">' +
     [['回應型態由回合排程決定',
       'AI 不讀取任何學生端的編碼函式，也不指定學生下一步該用什麼策略。學生的歷程轉移因此反映他自己的選擇，不含對 AI 指令的遵從成分。'],
@@ -5808,7 +5955,7 @@ function viewAbout(){
   '<div class="card card-p" style="margin-bottom:16px">' +
     '<h3>系統迴圈</h3>' +
     '<div class="col" style="margin-top:12px">' +
-    [['①','派題','照康軒單元挑會考題，含選擇題與非選題。'],
+    [['①','派題','從文本出發挑閱讀理解題，含選擇題與建構反應題。'],
      ['②','作答','學生線上作答，非選題可手寫。'],
      ['③','KIDMAP 診斷','簡化 Rasch 估出 δ 與 θ，把每個「人 × 題」分成四象限。'],
      ['④','迷思橋接','第二象限（能力足以答對卻答錯）的題目一鍵開成知識建構視圖，附誘答分析與知識資源人名單。'],
@@ -5823,16 +5970,16 @@ function viewAbout(){
     '⑧ 讓質性討論有了可檢核的證據。少掉任何一步，系統就退回原本的兩個平台。</p>' +
   '</div>' +
   '<div class="grid g2" style="margin-bottom:16px">' +
-    '<div class="card"><div class="card-h"><h3>來自「會考派題 × KIDMAP」的功能</h3></div><div class="card-p">' +
+    '<div class="card"><div class="card-h"><h3>來自「派題 × KIDMAP 診斷」的功能</h3></div><div class="card-p">' +
     '<ul class="small" style="padding-left:18px;line-height:1.9">' +
-    ['角色與班級（管理員／老師／學生、加入代碼）',
-     '按康軒單元派題的三步驟精靈',
-     '歷屆會考題庫、年份／難度／題型篩選',
+    ['角色與班級（研究者／老師／學生、加入代碼）',
+     '從文本出發的三步驟派題精靈（選文本 → 挑題目 → 派給學生）',
+     '自編閱讀理解題庫、理解歷程／題型／文本三欄篩選',
      '簡化 Rasch 模式估計難度與能力（含 SE、Infit／Outfit）',
      'KIDMAP 四象限：優勢／迷思／合理答錯／合理答對',
-     '每題四象限表與誘答分析',
-     '非選題手寫作答與逐生評閱',
-     'AI 評量規準、教學策略、相似題生成'].map(function(x){ return '<li>' + esc(x) + '</li>'; }).join('') +
+     '每題四象限表與誘答分析（誘答掛理解失誤代碼 E1–E8）',
+     '建構反應題作答與逐生評閱',
+     'AI 評量規準、教學策略、同歷程替代題'].map(function(x){ return '<li>' + esc(x) + '</li>'; }).join('') +
     '</ul></div></div>' +
     '<div class="card"><div class="card-h"><h3>來自 Knowledge Forum 的功能</h3></div><div class="card-p">' +
     '<ul class="small" style="padding-left:18px;line-height:1.9">' +
@@ -5863,9 +6010,12 @@ function viewAbout(){
         '<td class="small muted">' + esc(r[2]) + '</td><td class="small muted">' + esc(r[3]) + '</td></tr>';
     }).join('') + '</tbody></table></div>' +
     '<p class="muted small" style="margin-top:10px">研究構想原案為國小閱讀（PIRLS 四項理解歷程 × 19 子歷程、中英雙語軸）。' +
-    '本平台移植的是<strong>設計原則</strong>，領域換成國中數學，歷程架構改用同屬 IEA 家族的 ' +
-    'TIMSS 2019 數學三認知領域 × 15 子歷程。兩者結構完全對應，' +
-    '要換回閱讀只需替換 <code>PROCESSES</code>、<code>SUBPROCESSES</code> 與題目的歷程標定，程式碼不必更動。</p>' +
+    '本平台<strong>採用同一個領域與同一套架構</strong>：PIRLS 2011 四項理解歷程' +
+    '（直接提取 5、直接推論 5、詮釋整合 5、比較評估 4，共 19 項子歷程），' +
+    '示範題本為 2 篇自編文本、16 題。中英雙語軸尚未實作，' +
+    '<code>34-log.js</code> 的事件結構保留 <code>lang</code> 欄位備用。' +
+    '若要換到其他 IEA 架構（例如 TIMSS 數學認知領域），只需替換 <code>PROCESSES</code>、' +
+    '<code>SUBPROCESSES</code> 與題目的歷程標定，分析程式不必更動。</p>' +
   '</div>' +
 
   '<div class="card card-p" style="margin-bottom:16px">' +
@@ -5914,7 +6064,7 @@ function viewAbout(){
     '<h3>使用與研究上的限制</h3>' +
     '<ul class="small" style="padding-left:18px;line-height:1.95;max-width:74ch">' +
     ['本頁的班級、學生、作答與貼文<strong>全部是模擬資料</strong>，由固定亂數種子產生，每次載入結果一致，僅供展示與方法討論，不得當成實徵結果引用。',
-     '題目為仿會考題型的自編題，不是官方原題。',
+     '文本與題目是仿 PIRLS 題型的自編示範素材，不是官方釋出文本或原題。',
      '論述層次是規則判定，會低估口語表達好但書寫少的學生；也會被刻意堆砌連接詞的貼文抬高。任何用於成績的用途都必須有人工複核。',
      '簡化 Rasch 模式假設題目等鑑別度、單一向度，且未處理題組的局部相依。樣本小時估計不穩。',
      'KB 指數的權重是本系統的設定值，不是既有文獻的標準，請在研究中明確說明並做敏感度分析。',
@@ -5934,12 +6084,13 @@ function viewAbout(){
     '<li>Vygotsky, L. S. (1978) — 社會建構論，同儕角色的理論依據。</li>' +
     '<li>Bakeman, R., &amp; Gottman, J. M. (1997) — 延宕序列分析與調整殘差。</li>' +
     '<li>Shaffer, D. W. (2017) — 認知網絡分析（Epistemic Network Analysis）。</li>' +
-    '<li>Mullis, I. V. S., &amp; Martin, M. O. — TIMSS 數學認知領域架構（本平台的歷程架構）；' +
-    'PIRLS 閱讀理解歷程架構（研究構想原案）。</li>' +
+    '<li>Mullis, I. V. S., &amp; Martin, M. O. — PIRLS 2011 閱讀理解歷程架構（本平台的歷程架構）。</li>' +
     '<li>Scardamalia, M., &amp; Bereiter, C. — 知識建構理論與 Knowledge Forum；十二項知識建構原則。</li>' +
     '<li>Wright, B. D., &amp; Stone, M. H. (1979). <em>Best Test Design</em> — Rasch 模式與 JMLE 估計。</li>' +
-    '<li>KIDMAP 四象限診斷表徵——國中教育會考成績診斷的常見呈現方式。</li>' +
-    '<li>介面詞彙參考自「會考派題 · 國中數學」平台與 knowledgeforum.org 的 KF6 介面。</li>' +
+    '<li>Earl, L.、Leppink, J. et al.、Fredricks, J. A. et al.、Pintrich, P. R. et al. — 問卷構念的來源量表。</li>' +
+    '<li>KIDMAP 四象限診斷表徵——測驗成績診斷的常見呈現方式。</li>' +
+    '<li>介面詞彙參考自前身平台「會考派題 · 國中數學」與 knowledgeforum.org 的 KF6 介面；' +
+    '本版領域已改為國小閱讀理解，部分用語（「單元」「迷思」）是那個階段留下的。</li>' +
     '</ul>' +
     '<p class="muted small" style="margin-top:10px">KAIROS 是研究用的整合原型，與上述任何平台或機構均無隸屬關係。</p>' +
   '</div>';
@@ -6311,6 +6462,202 @@ function surveySubmit(phase){
   SURVEY = null;
   toast('問卷已送出，謝謝你。');
   go('#/student');
+}
+
+/* ==========================================================================
+   學生作答與 AI 互動檢視（教師／研究者，唯讀）
+
+   為什麼要有這一頁：評量即學習事件是學生端的畫面，測驗一旦結束就沒有人
+   進得去，教師與研究者也就看不到「學生當時實際看到什麼、跟 AI 說了什麼」。
+   這裡用與 viewAaL() 相同的版面重播一位學生的作答歷程——同樣的兩欄、
+   同樣的文本、同樣的對話卡——差別只在全部唯讀，而且會多顯示對錯與編碼。
+   ========================================================================== */
+let INSPECT = null;
+
+function inspectInit(aid, sid){
+  const a = getAssignment(aid);
+  INSPECT = {aid:aid, sid:sid, idx:0,
+             items: a ? a.itemIds.map(getItem).filter(Boolean) : []};
+}
+
+/* 從事件日誌把這位學生在這篇文本上標記過的句子還原出來（MARK 事件是切換語意） */
+function inspectMarks(sid, aid, textId){
+  const on = {};
+  allLogs().forEach(function(e){
+    if (e.sid !== sid || e.aid !== aid || e.code !== 'M') return;
+    if (e.textId && e.textId !== textId) return;
+    if (e.sent == null) return;
+    if (e.on === false) delete on[e.sent]; else on[e.sent] = 1;
+  });
+  return Object.keys(on).map(Number);
+}
+
+function viewInspect(aid, sid){
+  if (!isTeacher()) return '<div class="empty"><h3>這一頁只有教師與研究者看得到</h3></div>';
+  const a = getAssignment(aid);
+  if (!a) return '<div class="empty"><h3>找不到這份派題</h3><a class="btn" href="#/teacher">回教師後台</a></div>';
+  const roster = assignmentRoster(a);
+  if (!sid || roster.indexOf(sid) < 0) sid = roster[0];
+  if (!sid) return '<div class="empty"><h3>這份派題還沒有學生</h3></div>';
+  if (!INSPECT || INSPECT.aid !== aid || INSPECT.sid !== sid) inspectInit(aid, sid);
+
+  const k = classOfStudent(sid);
+  const cond = condition(conditionOfStudent(sid));
+  const it = INSPECT.items[INSPECT.idx];
+  if (!it) return '<div class="empty"><h3>這份派題沒有題目</h3></div>';
+
+  const text = getText(it.unit);
+  const sents = passageSentences(text);
+  const marks = inspectMarks(sid, aid, it.unit);
+  const resp = state.responses.find(function(r){
+    return r.aid === aid && r.sid === sid && r.iid === it.id; }) || {};
+  const turns = allDialog().filter(function(d){
+    return d.sid === sid && d.aid === aid && d.iid === it.id; })
+    .sort(function(x, y){ return x.t - y.t; });
+  const checks = allLogs().filter(function(e){
+    return e.sid === sid && e.aid === aid && e.iid === it.id && e.code === 'C'; });
+  const done = submitted(aid, sid);
+
+  /* 全部學生的下拉，讓教師不必回上一頁就能換人 */
+  const picker = '<select id="inspectWho" data-act="inspect-who" style="width:auto">' +
+    roster.map(function(x){
+      return '<option value="' + x + '"' + (x === sid ? ' selected' : '') + '>' +
+        esc(userName(x)) + '（' + esc(condition(conditionOfStudent(x)).name) + '）</option>';
+    }).join('') + '</select>';
+
+  return sectionHead('作答與 AI 互動檢視',
+      esc(a.title) + '　·　與學生當時看到的版面相同，此處為唯讀重播。',
+      '<a class="btn" href="#/assign/' + aid + '">← 回派題分析</a>') +
+
+    '<div class="card card-p" style="margin-bottom:14px">' +
+      '<div class="row" style="gap:14px;flex-wrap:wrap;align-items:center">' +
+        '<label class="small muted" for="inspectWho">學生</label>' + picker +
+        '<span class="pill">' + esc((k || {}).name || '') + '</span>' +
+        '<span class="pill"><span aria-hidden="true">' + esc(cond.mark || '') + '</span>' + esc(cond.name) + '</span>' +
+        '<span class="pill">' + (done ? '已交卷' : '未交卷') + '</span>' +
+        '<div class="spacer"></div>' +
+        '<span class="pill">第 ' + (INSPECT.idx + 1) + ' / ' + INSPECT.items.length + ' 題</span>' +
+        '<button class="btn sm" data-act="inspect-prev"' + (INSPECT.idx ? '' : ' disabled') + '>← 上一題</button>' +
+        '<button class="btn sm" data-act="inspect-next"' +
+          (INSPECT.idx < INSPECT.items.length - 1 ? '' : ' disabled') + '>下一題 →</button>' +
+      '</div>' +
+      '<p class="muted small" style="margin-top:10px">這一頁不會產生任何事件日誌，也不會改到學生的資料。' +
+      '對照組（無對象）沒有對話，右欄顯示的是他自己的筆記區。</p>' +
+    '</div>' +
+
+    '<div class="aal">' +
+    /* ---- 左欄：文本，重播該生的標記 ---- */
+    '<div class="aal-text card"><div class="card-h"><h3 id="passageTitle">' + esc(text.title) + '</h3>' +
+      '<span class="pill">' + esc(text.genre) + '</span>' +
+      '<span class="pill">他標記了 ' + marks.length + ' 句</span></div>' +
+      '<div class="card-p">' +
+      '<p class="muted small" id="passageHelp">底色與「▍」記號是這位學生自己標起來的句子，由事件日誌還原。</p>' +
+      '<div class="passage" role="group" aria-labelledby="passageTitle" aria-describedby="passageHelp">' +
+        text.paras.map(function(_, pi){
+          return '<p class="para">' + sents.filter(function(s){ return s.para === pi; }).map(function(s){
+            const on = marks.indexOf(s.i) >= 0;
+            return '<button type="button" class="sent' + (on ? ' on' : '') + '" disabled' +
+              ' aria-pressed="' + on + '">' + esc(s.text) + '</button>';
+          }).join('') + '</p>';
+        }).join('') +
+      '</div>' +
+    '</div></div>' +
+
+    /* ---- 右欄：題目與他的作答 ＋ 對話逐字 ---- */
+    '<div class="aal-side">' +
+      '<div class="card"><div class="card-h"><h3>第 ' + (INSPECT.idx + 1) + ' 題</h3>' +
+        procPill(it.process) + subPill(it.sub) + '</div>' +
+      '<div class="card-p">' +
+      '<div class="stem">' + esc(it.stem) + '</div>' +
+      (it.type === 'mc' ? inspectOptions(it, resp) : inspectCR(it, resp)) +
+      '</div></div>' +
+
+      (turns.length ? inspectDialogPane(cond, turns) : inspectNotePane(sid, aid, it, cond)) +
+
+      '<div class="card"><div class="card-h"><h3>送出前自我檢核</h3>' +
+        '<span class="muted small">勾了 ' + checks.length + ' / ' + SELF_CHECKS.length + ' 項</span></div>' +
+        '<div class="card-p col">' +
+        SELF_CHECKS.map(function(c, i){
+          const on = checks.some(function(e){ return e.idx === i; });
+          return '<label class="opt" style="align-items:center"><input type="checkbox" disabled' +
+            (on ? ' checked' : '') + '><span>' + esc(c) + '</span></label>';
+        }).join('') +
+      '</div></div>' +
+    '</div></div>';
+}
+
+function subPill(sub){
+  const s = SUBPROCESSES.find(function(x){ return x.id === sub; });
+  return s ? '<span class="pill">' + esc(s.id) + '　' + esc(s.zh) + '</span>' : '';
+}
+
+function inspectOptions(it, resp){
+  return '<div class="opts">' + it.options.map(function(o, k){
+    const chosen = resp.choice === k;
+    const right = k === it.answer;
+    const tag = right ? '<span class="pill q1">正解</span>'
+      : (it.why && it.why[k] ? '<span class="pill q2">' + esc(it.why[k]) + '　' +
+          esc((MISCONCEPTIONS.find(function(m){ return m.id === it.why[k]; }) || {}).name || '') + '</span>' : '');
+    return '<div class="opt' + (chosen ? ' chosen' : '') + '" style="align-items:flex-start">' +
+      '<b aria-hidden="true">' + String.fromCharCode(65 + k) + '</b>' +
+      '<span>' + esc(o) + '　' + tag +
+      (chosen ? '<span class="pill" style="border-color:var(--accent);color:var(--accent)">他選這個</span>' : '') +
+      '</span></div>';
+  }).join('') + '</div>' +
+  '<p class="small" style="margin-top:8px">' +
+    (resp.choice == null ? '<span class="muted">沒有作答。</span>'
+      : (resp.correct ? '<b>答對</b>' : '<b>答錯</b>') +
+        '　·　依據位置：第 ' + (it.answerPara + 1) + ' 段第 ' + (it.answerSent + 1) + ' 句') +
+  '</p>';
+}
+
+function inspectCR(it, resp){
+  return '<div class="field"><label>他寫的答案</label>' +
+    '<div class="note-full" style="white-space:pre-wrap">' +
+    (resp.text ? esc(resp.text) : '<span class="muted">沒有作答。</span>') + '</div></div>' +
+    '<p class="muted small" style="margin-top:8px">建構反應題不進入 Rasch 估計，評閱在「派題分析 → 建構反應題評閱」。</p>';
+}
+
+function inspectDialogPane(cond, turns){
+  return '<div class="card aal-chat"><div class="card-h">' +
+    '<h3>他的夥伴：' + esc(cond.name) + '</h3>' +
+    '<span class="pill">' + turns.filter(function(t){ return t.speaker === 'student'; }).length +
+    ' 次發話</span></div>' +
+    '<div class="card-p">' +
+    '<div class="chat">' +
+      '<div class="msg agent"><b>' + esc(cond.name) + '</b>' + esc(cond.frame) + '</div>' +
+      turns.map(function(t){
+        const meta = t.speaker === 'student'
+          ? '<div class="muted small" style="margin-top:4px">' +
+            (t.rel ? esc(REL_MARK[t.rel] + ' ' + REL_LABEL[t.rel]) : '') +
+            (t.ucode ? '　·　發話歷程 ' + esc(processName(t.ucode)) : '') +
+            (t.sent != null ? '　·　情感 ' + fx(t.sent, 2) : '') + '</div>'
+          : (t.qfn ? '<div class="muted small" style="margin-top:4px">提問功能 ' + esc(t.qfn) +
+              (t.sub ? '　·　' + esc(t.sub) : '') + '</div>' : '');
+        return '<div class="msg ' + (t.speaker === 'student' ? 'me' : 'agent') + '">' +
+          (t.speaker === 'agent' ? '<b>' + esc(cond.name) + '</b>' : '') + esc(t.text) + meta + '</div>';
+      }).join('') +
+    '</div>' +
+    '<p class="muted small" style="margin-top:8px">灰字是系統的編碼，學生當時看不到。' +
+    '相對歷程以這一題官方標定的歷程為基準。</p>' +
+    '</div></div>';
+}
+
+function inspectNotePane(sid, aid, it, cond){
+  const notes = allLogs().filter(function(e){
+    return e.sid === sid && e.aid === aid && e.iid === it.id && e.code === 'N'; });
+  const isControl = cond && cond.id === 'control';
+  return '<div class="card aal-chat"><div class="card-h"><h3>' +
+    (isControl ? '他的筆記' : '這一題沒有對話') + '</h3>' +
+    '<span class="muted small">' + (isControl ? '對照組沒有 AI 夥伴' : '') + '</span></div>' +
+    '<div class="card-p">' +
+    (notes.length
+      ? notes.map(function(e){ return '<div class="note-full" style="white-space:pre-wrap">' +
+          esc(e.text || '') + '</div>'; }).join('')
+      : '<p class="muted small">這一題沒有留下' + (isControl ? '筆記' : '對話') + '記錄。</p>') +
+    (isControl ? '<p class="muted small" style="margin-top:8px">對照組的版面與其他三班完全一樣，' +
+      '只是把對話區換成同樣大小的筆記區——版面幾何恆定，避免介面差異混進依變項。</p>' : '') +
+    '</div></div>';
 }
 
 /* ===== src/94-ui-research.js ===== */
@@ -6906,6 +7253,7 @@ function rExport(){
 
 const DISCOURSE_ROUTES = {kb:1, note:1, synth:1};
 const PLAIN_ROUTES = {about:1, settings:1, bank:1, survey:1};
+const RESEARCHER_ONLY = {research:1, create:1, settings:1};
 
 function render(){
   ROUTE = parseRoute();
@@ -6914,6 +7262,17 @@ function render(){
   const v = $('#view');
   let html = '';
   const a = ROUTE.args;
+  /* 研究者專屬的頁面：教師從側欄看不到，直接打網址也擋下來。
+     這些是研究工具（分派條件、命題、改系統設定），不是教學工具。 */
+  if (RESEARCHER_ONLY[ROUTE.name] && !isResearcher()){
+    stage.className = 'stage';
+    $('#view').innerHTML = '<div class="empty"><h3>這一頁只有研究者看得到</h3>' +
+      '<p style="max-width:60ch">條件分派、建立派題與系統設定屬於研究端的操作。' +
+      '教學上需要的資料在「教師後台」「派題分析」「知識建構中心」與「雙軌評量儀表板」。</p>' +
+      '<a class="btn" href="#/teacher">回教師後台</a></div>';
+    renderRail();
+    return;
+  }
   switch (ROUTE.name){
     case 'teacher':   html = isTeacher() ? viewTeacher() : viewStudent(); break;
     case 'create':    html = viewCreate(); break;
@@ -6927,6 +7286,7 @@ function render(){
     case 'about':     html = viewAbout(); break;
     case 'research':  html = viewResearch(); break;
     case 'aal':       html = viewAaL(a[0]); break;
+    case 'inspect':   html = viewInspect(a[0], a[1]); break;
     case 'survey':    html = viewSurvey(a[0] === 'pre' ? 'pre' : 'post'); break;
     case 'student':   html = viewStudent(); break;
     case 'quiz':      html = viewQuiz(a[0]); break;
@@ -7145,7 +7505,7 @@ function bindEvents(){
     /* 派題精靈 */
     if (act === 'wiz-unit'){ if (WIZ.units[id]) delete WIZ.units[id]; else WIZ.units[id] = 1; render(); return; }
     if (act === 'wiz-next'){ WIZ.step++; if (WIZ.step === 3 && !WIZ.title)
-      WIZ.title = uniq(Object.keys(WIZ.units)).map(function(u){ return getUnit(u).name; }).join('、') + ' 練習';
+      WIZ.title = uniq(Object.keys(WIZ.units)).map(function(u){ return textTitle(u); }).join('、') + ' 閱讀理解';
       render(); return; }
     if (act === 'wiz-back'){ collectWizard(); WIZ.step--; render(); return; }
     if (act === 'wiz-submit'){ submitWizard(); return; }
@@ -7227,6 +7587,10 @@ function bindEvents(){
     if (act === 'aal-say'){ render._focusSay = true; aalSay(); return; }
     if (act === 'aal-prev'){ AAL.idx = Math.max(0, AAL.idx - 1); render(); return; }
     if (act === 'aal-next'){ AAL.idx = Math.min(AAL.items.length - 1, AAL.idx + 1); render(); return; }
+
+    /* 教師／研究者的唯讀檢視：換題不寫任何日誌 */
+    if (act === 'inspect-prev'){ INSPECT.idx = Math.max(0, INSPECT.idx - 1); render(); return; }
+    if (act === 'inspect-next'){ INSPECT.idx = Math.min(INSPECT.items.length - 1, INSPECT.idx + 1); render(); return; }
     if (act === 'aal-submit'){ aalSubmit(); return; }
     if (act === 'aal-check'){
       const it = aalItem();
@@ -7241,13 +7605,13 @@ function bindEvents(){
 
     /* 設定與匯出 */
     if (act === 'test-llm'){ testLLM(); return; }
-    if (act === 'export-survey'){ saveFile('kidforum-surveys.csv', toSurveyCsv(), 'text/csv'); return; }
-    if (act === 'export-sdis'){ saveFile('kidforum-sequences.sdis', toSDIS(), 'text/plain'); return; }
-    if (act === 'export-tele'){ saveFile('kidforum-telemetry.csv', toTelemetryCsv(), 'text/csv'); return; }
-    if (act === 'export-ena'){ saveFile('kidforum-ena-lines.csv', toENACsv(), 'text/csv'); return; }
-    if (act === 'export-json'){ saveFile('kidforum-research-data.json',
+    if (act === 'export-survey'){ saveFile('kairos-surveys.csv', toSurveyCsv(), 'text/csv'); return; }
+    if (act === 'export-sdis'){ saveFile('kairos-sequences.sdis', toSDIS(), 'text/plain'); return; }
+    if (act === 'export-tele'){ saveFile('kairos-telemetry.csv', toTelemetryCsv(), 'text/csv'); return; }
+    if (act === 'export-ena'){ saveFile('kairos-ena-lines.csv', toENACsv(), 'text/csv'); return; }
+    if (act === 'export-json'){ saveFile('kairos-research-data.json',
       JSON.stringify(researchBundle(), null, 2), 'application/json'); return; }
-    if (act === 'export-csv'){ saveFile('kidforum-responses.csv', responseCSV(), 'text/csv'); return; }
+    if (act === 'export-csv'){ saveFile('kairos-responses.csv', responseCSV(), 'text/csv'); return; }
     if (act === 'reset'){ if (confirm('重設會清除你在這台瀏覽器上新增的所有貼文與作答，回到出廠的模擬班級。確定嗎？')){
       resetState(); renderShell(); render(); toast('已重設為示範資料。'); } return; }
   });
@@ -7264,6 +7628,7 @@ function bindEvents(){
     if (act === 'seg-sc'){ collectEditor(); EDIT.segs[+t.dataset.i].s = t.value; renderEditor(); return; }
     if (e.target.id === 'classSel'){ state.ui.classId = e.target.value; save(); render(); return; }
     if (act === 'search-field'){ KBSEARCH.field = t.value; render(); return; }
+    if (act === 'inspect-who'){ go('#/inspect/' + INSPECT.aid + '/' + t.value); return; }
     if (act === 'dg-cond'){ rDesign.sel.cond = t.value; render(); return; }
     if (act === 'dg-proc'){ rDesign.sel.proc = t.value; render(); return; }
     if (act === 'dg-qfn'){ rDesign.sel.qfn = t.value; render(); return; }
@@ -7387,6 +7752,17 @@ function applyA11y(){
     btn.setAttribute('aria-pressed', a.highContrast ? 'true' : 'false');
     btn.classList.toggle('primary', !!a.highContrast);
   }
+  syncTopbarHeight();   // 字級變大時頂列會變高，sticky 的偏移量要跟著更新
+}
+
+/* 把頂列的實際高度寫進 --topbar-h。頂列是 min-height + flex-wrap，
+   視窗變窄或字級放大時會換行變高；不更新的話 sticky 的側欄與文本欄
+   會被壓在頂列底下（WCAG 2.4.11 焦點不被遮蔽）。 */
+function syncTopbarHeight(){
+  const t = document.querySelector('.topbar');
+  if (!t) return;
+  const h = Math.round(t.getBoundingClientRect().height);
+  if (h > 0) document.documentElement.style.setProperty('--topbar-h', h + 'px');
 }
 
 function applyTheme(){
@@ -7529,6 +7905,11 @@ async function testLLM(){
 
 /* --- 啟動 --- */
 function boot(){
+  /* 產物是 HTML 片段（沒有自己的 <html> 標籤，這樣才能同時給 GitHub Pages
+     與 Artifact 檢視器使用），所以語言宣告只能在這裡補（WCAG 3.1.1）。 */
+  document.documentElement.lang = 'zh-Hant';
+  syncTopbarHeight();
+  window.addEventListener('resize', syncTopbarHeight);
   state = loadState();
   if (!state.ui) state.ui = {role:'u-t1', classId:'c-1'};
   if (!state.ui.classId) state.ui.classId = 'c-1';

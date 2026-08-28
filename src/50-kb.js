@@ -14,7 +14,7 @@ function loadState(){
     const raw = localStorage.getItem(STORE_KEY);
     if (raw){
       const s = JSON.parse(raw);
-      if (s && s.version === 2) return s;   // 版號不符（示範資料改版）→ 重新產生
+      if (s && s.version === STATE_VERSION) return s;   // 版號不符（示範資料改版）→ 重新產生
     }
   } catch (e) { /* 讀不到就重新產生示範資料 */ }
   return buildSeedState();
@@ -27,7 +27,8 @@ function resetState(){
 /* --- 查詢輔助 --- */
 function getItem(id){ return ITEMS.find(function(i){ return i.id === id; }); }
 function getUnit(id){ return UNITS.find(function(u){ return u.id === id; }); }
-function unitName(id){ const u = getUnit(id); return u ? u.grade + ' ' + u.name : id; }
+/* unitName() 定義在 30-data.js（本平台的「單元」＝「文本」）。
+   這裡曾有一份讀 u.name 的舊定義，會蓋掉正確版本並印出 undefined，已移除。 */
 function getUser(id){ return state.users.find(function(u){ return u.id === id; }); }
 function userName(id){ const u = getUser(id); return u ? u.name : id; }
 function getView(id){ return state.views.find(function(v){ return v.id === id; }); }
@@ -57,6 +58,24 @@ function assignmentRoster(a){
   return out;
 }
 function isTeacher(){ const u = currentUser(); return u.role === 'teacher' || u.role === 'admin'; }
+function isResearcher(){ return currentUser().role === 'admin'; }
+
+/* 指派給這位學生、但還沒交卷的作業 */
+function pendingAssignments(sid){
+  return state.assignments.filter(function(a){
+    return assignmentRoster(a).indexOf(sid) >= 0 &&
+           !state.submissions.some(function(s){ return s.aid === a.id && s.sid === sid; });
+  });
+}
+/* 知識建構空間在「測驗之後」才對學生開放。
+   理由是系統迴圈的次序：先作答 → 才有 KIDMAP 診斷 → 才有值得討論的共同問題。
+   若在作答前就看得到別人的討論，等於先看到答案，前測也就不成立了。
+   教師與研究者不受此限（他們要在課前備課、課後分析）。 */
+function kbLocked(u){
+  const me = u || currentUser();
+  if (me.role !== 'student') return false;
+  return pendingAssignments(me.id).length > 0;
+}
 function scaffold(id){ return SCAFFOLDS.find(function(s){ return s.id === id; }); }
 function scaffoldLabel(id){ const s = scaffold(id); return s ? s.label : ''; }
 

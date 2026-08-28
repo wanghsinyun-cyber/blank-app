@@ -8,7 +8,26 @@ let KBPICK = {};                // 被選取的貼文
 let KBSEARCH = {field:'content', q:''};
 let EDIT = null;                // 編輯中的貼文草稿
 
+/* 測驗還沒交完的學生看到的門檻畫面。四個 KB 入口都先過這一關。 */
+function kbGate(){
+  const me = currentUser();
+  if (!kbLocked(me)) return '';
+  const pend = pendingAssignments(me.id);
+  return '<div class="empty"><h3>知識建構空間會在測驗之後開放</h3>' +
+    '<p style="max-width:62ch">這裡放的是全班一起討論的共同問題，而那些問題是從大家的作答裡整理出來的。' +
+    '如果先看到別人怎麼說，你自己的讀法就被影響了，前測也就測不到你原本的想法。' +
+    '交卷之後，這個空間就會打開。</p>' +
+    '<div class="col" style="margin-top:14px;align-items:flex-start">' +
+    pend.map(function(a){
+      return '<a class="btn primary" href="#/' + (a.aal ? 'aal' : 'quiz') + '/' + a.id + '">' +
+        esc(a.title) + '　' + (a.aal ? '開始這節課 →' : '開始作答 →') + '</a>';
+    }).join('') + '</div>' +
+    '<p class="muted small" style="margin-top:14px">還沒交的有 ' + pend.length + ' 份。</p>' +
+    '<a class="lk" href="#/student" style="margin-top:10px;display:inline-block">回我的作業</a></div>';
+}
+
 function viewKBList(){
+  const gate = kbGate(); if (gate) return gate;
   const res = KBSEARCH.q ? searchNotes(KBSEARCH.field, KBSEARCH.q) : null;
   return sectionHead('知識建構空間', '每個視圖是一塊共同的白板。想法貼上去之後就屬於社群，任何人都可以延伸、挑戰、綜整。',
     (isTeacher() ? '<button class="btn" data-act="new-view">新增視圖</button>' : '')) +
@@ -58,6 +77,7 @@ function noteRow(n){
 
 /* --- 視圖畫布 --- */
 function viewKBCanvas(vid){
+  const gate = kbGate(); if (gate) return gate;
   const v = getView(vid);
   if (!v) return '<div class="empty"><h3>找不到這個視圖</h3><a class="btn" href="#/kb">回知識建構空間</a></div>';
   const ns = notesOfView(vid);
@@ -143,6 +163,7 @@ function scaffoldUsageBar(ns){
 
 /* --- 貼文詳頁 --- */
 function viewNote(nid){
+  const gate = kbGate(); if (gate) return gate;
   const n = getNote(nid);
   if (!n) return '<div class="empty"><h3>找不到這則貼文</h3><a class="btn" href="#/kb">回知識建構空間</a></div>';
   markRead(nid);
@@ -328,6 +349,7 @@ function saveEditor(){
 
 /* --- 想法串綜整 --- */
 function viewSynth(vid){
+  const gate = kbGate(); if (gate) return gate;
   const v = getView(vid);
   if (!v) return '<div class="empty"><h3>找不到這個視圖</h3></div>';
   const roots = notesOfView(vid).filter(function(n){ return !n.buildOn; });

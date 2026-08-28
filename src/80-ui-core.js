@@ -71,10 +71,11 @@ function renderShell(){
 function roleName(r){ return r === 'admin' ? '管理員' : r === 'teacher' ? '老師' : '學生'; }
 
 function renderRail(){
-  const t = isTeacher();
   const unread = state.notes.filter(isUnread).length;
   const me = currentUser();
-  const nav = t ? [
+  /* 三種導覽：研究者（super user，看得到全部）、教師（只看教學會用到的四項）、學生。
+     研究控制台、建立派題、題庫與系統設定屬於研究者的工具，不進教師的側欄。 */
+  const nav = me.role === 'admin' ? [
     {g:'評量'},
     {h:'#/teacher', g2:'教', t:'教師後台'},
     {h:'#/create',  g2:'派', t:'建立派題'},
@@ -85,13 +86,21 @@ function renderRail(){
     {h:'#/kb', g2:'構', t:'知識建構空間', b: unread ? unread : null},
     {h:'#/dash', g2:'雙', t:'雙軌評量儀表板'},
     {g:'設定'},
-    {h:'#/bank', g2:'庫', t:'題庫與單元'},
+    {h:'#/bank', g2:'庫', t:'文本與題庫'},
     {h:'#/settings', g2:'設', t:'系統設定'},
     {h:'#/about', g2:'說', t:'系統說明與研究設計'}
+  ] : me.role === 'teacher' ? [
+    {g:'評量'},
+    {h:'#/teacher', g2:'教', t:'教師後台'},
+    {h:'#/assign/a-pre', g2:'診', t:'派題分析'},
+    {g:'知識建構'},
+    {h:'#/kb', g2:'構', t:'知識建構中心', b: unread ? unread : null},
+    {h:'#/dash', g2:'雙', t:'雙軌評量儀表板'}
   ] : [
     {g:'我的學習'},
     {h:'#/student', g2:'業', t:'我的作業'},
-    {h:'#/kb', g2:'構', t:'知識建構空間', b: unread ? unread : null},
+    {h:'#/kb', g2:'構', t:'知識建構空間',
+     b: kbLocked(me) ? '測驗後開放' : (unread ? unread : null)},
     {h:'#/mygrowth', g2:'長', t:'我的學習軌跡'},
     {g:'問卷'},
     {h:'#/survey/pre',  g2:'前', t:'課前問卷', b: surveyOf(me.id, 'pre')  ? null : '待填'},

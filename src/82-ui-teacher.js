@@ -17,7 +17,10 @@ function viewTeacher(){
 
   return sectionHead('教師後台',
     k.name + '　·　加入代碼 ' + k.code + '　·　' + k.studentIds.length + ' 位學生　·　夥伴條件：' + cond.name,
-    '<a class="btn" href="#/research">研究控制台</a><a class="btn primary" href="#/create">建立派題</a>') +
+    /* 研究控制台與建立派題屬於研究者的工具，教師端不出現 */
+    (isResearcher()
+      ? '<a class="btn" href="#/research">研究控制台</a><a class="btn primary" href="#/create">建立派題</a>'
+      : '<a class="btn primary" href="#/assign/a-post">看這節課的作答與對話</a>')) +
   '<div class="grid g4" style="margin-bottom:18px">' +
     statCard('全體樣本', nAll + ' 人', state.classes.length + ' 班 · 四條件叢集分派') +
     statCard('待處理迷思題', flagged, '迷思比例 ≥ ' + state.settings.misThreshold + '%', flagged ? 'crit' : '') +
@@ -26,13 +29,13 @@ function viewTeacher(){
   '</div>' +
 
   '<div class="card" style="margin-bottom:18px"><div class="card-h"><h3>四條件分派概況</h3>' +
-    '<a class="btn sm" href="#/research">條件分派與歷程分析 →</a></div>' +
+    (isResearcher() ? '<a class="btn sm" href="#/research">條件分派與歷程分析 →</a>' : '') + '</div>' +
     '<div class="card-p"><div class="grid g4">' + CONDITIONS.map(function(c){
       const ks = state.classes.filter(function(x){ return x.condition === c.id; });
       const n = ks.reduce(function(a, x){ return a + x.studentIds.length; }, 0);
       return '<div class="stat"><div class="k">' + esc(c.name) + '</div>' +
         '<div class="v">' + n + '</div><div class="s">' +
-        (ks.map(function(x){ return esc(x.name.replace('114 學年 ', '')); }).join('、') || '—') + '</div></div>';
+        (ks.map(function(x){ return esc(x.name); }).join('、') || '—') + '</div></div>';
     }).join('') + '</div>' +
     '<p class="muted small" style="margin-top:10px">條件在班級層次操弄：同一班的同學拿到同一種夥伴，' +
     '避免同班互相看到不同條件而造成擴散污染。四個班共用同一份題本、同一次 Rasch 校準，條件之間才可比較。</p>' +
@@ -93,7 +96,7 @@ function viewCreate(){
           '<b>' + esc(t.title) + '</b><span class="pill">' + esc(t.genre) + '</span>' +
           '<span class="pill">' + n + ' 題</span></button>';
       }).join('') + '</div>' +
-      '<hr class="hr"><div class="row"><span class="muted small">已選 ' + Object.keys(WIZ.units).length + ' 個單元</span>' +
+      '<hr class="hr"><div class="row"><span class="muted small">已選 ' + Object.keys(WIZ.units).length + ' 篇文本</span>' +
       '<div class="spacer"></div><button class="btn primary" data-act="wiz-next"' +
       (Object.keys(WIZ.units).length ? '' : ' disabled') + '>下一步：挑題目 →</button></div></div>';
   }
@@ -126,7 +129,7 @@ function viewCreate(){
     body = '<div class="card card-p"><h3>派題細節</h3>' +
       '<div class="col" style="max-width:520px;margin-top:12px">' +
       '<div class="field"><label for="wt">作業標題</label><input id="wt" type="text" value="' + esc(WIZ.title) +
-        '" placeholder="例：八上 · 一元二次方程式練習"></div>' +
+        '" placeholder="例：〈會走路的樹〉閱讀理解"></div>' +
       '<div class="field"><label for="wd">說明（給學生的提示，可留空）</label><textarea id="wd">' + esc(WIZ.desc) + '</textarea></div>' +
       '<div class="field"><label for="wp">階段</label><select id="wp">' +
         '<option value="pre"' + (WIZ.phase === 'pre' ? ' selected' : '') + '>前測（診斷用，會進入迷思橋接）</option>' +
@@ -157,6 +160,7 @@ function viewAssign(aid){
     ['items', '每題四象限'],
     ['bridge', '迷思橋接'],
     ['cr', '建構反應題評閱'],
+    ['replay', '作答與 AI 互動'],
     ['ai', 'AI 深度分析']
   ];
   let body = '';
@@ -166,6 +170,7 @@ function viewAssign(aid){
   else if (TAB === 'items') body = tabItems(diag);
   else if (TAB === 'bridge') body = tabBridge(diag);
   else if (TAB === 'cr') body = tabCR(diag);
+  else if (TAB === 'replay') body = tabReplay(diag);
   else body = tabAI(diag);
 
   return sectionHead(a.title, (a.phase === 'post' ? '共構後測' : '前測') + '　·　' +
@@ -502,4 +507,55 @@ function tabAI(diag){
     '輸出完全可重現、每一句都能追溯到資料，適合寫進研究報告；<strong>外部語言模型</strong>語言較自然、能處理沒有標記的例外情況，' +
     '但同一份資料兩次結果可能不同。研究上建議兩者都跑一次並比對差異。</p>' +
     '<p class="muted small">切換引擎請到「系統設定」。</p></div>';
+}
+
+/* 作答與 AI 互動：列出名單，點進去用學生當時的版面唯讀重播。
+   測驗結束後學生端就進不去了，這裡是教師與研究者唯一看得到那個介面的入口。 */
+function tabReplay(diag){
+  const a = diag.assignment;
+  const dial = allDialog().filter(function(d){ return d.aid === a.id; });
+  const logs = allLogs().filter(function(e){ return e.aid === a.id; });
+  const rows = diag.roster.map(function(sid){
+    const cond = condition(conditionOfStudent(sid));
+    const said = dial.filter(function(d){ return d.sid === sid && d.speaker === 'student'; }).length;
+    const marks = logs.filter(function(e){ return e.sid === sid && e.code === 'M'; }).length;
+    const ans = state.responses.filter(function(r){
+      return r.aid === a.id && r.sid === sid &&
+             (r.choice != null || (r.text && r.text.length)); }).length;
+    return {sid:sid, cond:cond, said:said, marks:marks, ans:ans, done:submitted(a.id, sid)};
+  });
+  const withDialog = rows.filter(function(r){ return r.said > 0; }).length;
+
+  return '<div class="grid g4" style="margin-bottom:16px">' +
+    statCard('可檢視的學生', rows.length, a.aal ? '這是評量即學習事件' : '一般測驗，沒有 AI 對話') +
+    statCard('有對話記錄', withDialog, '對照組沒有 AI 夥伴，屬正常') +
+    statCard('學生發話總數', dial.filter(function(d){ return d.speaker === 'student'; }).length,
+             '每題上限 ' + ((state.settings && state.settings.maxTurns) || MAX_TURNS) + ' 次') +
+    statCard('文句標記總數', logs.filter(function(e){ return e.code === 'M'; }).length, '學生在文本上畫的線') +
+    '</div>' +
+
+    '<div class="card card-p" style="margin-bottom:16px;border-left:3px solid var(--accent)">' +
+    '<div class="eyebrow">為什麼會有這一頁</div>' +
+    '<p class="small" style="margin-top:6px;max-width:74ch">評量即學習的作答介面是學生端的畫面，' +
+    '測驗結束之後就沒有人進得去，教師與研究者也就看不到學生當時實際看到什麼、跟 AI 說了什麼。' +
+    '點任何一位學生，就會用<strong>與他當時完全相同的版面</strong>重播——同樣的文本、同樣的兩欄、' +
+    '同樣的對話卡，差別只在全部唯讀，並且多顯示對錯、誘答標記與系統的歷程編碼。' +
+    '這一頁不會寫入任何事件日誌。</p></div>' +
+
+    '<div class="card"><div class="card-h"><h3>學生名單</h3>' +
+    '<span class="muted small">依發話次數排序</span></div><div class="card-p">' +
+    '<div class="tablewrap"><table><thead><tr>' +
+    '<th>學生</th><th>條件</th><th>作答</th><th>標記句數</th><th>發話次數</th><th>狀態</th><th></th>' +
+    '</tr></thead><tbody>' +
+    rows.sort(function(x, y){ return y.said - x.said; }).map(function(r){
+      return '<tr><td><b>' + esc(userName(r.sid)) + '</b></td>' +
+        '<td><span class="pill"><span aria-hidden="true">' + esc(r.cond.mark || '') + '</span>' +
+        esc(r.cond.name) + '</span></td>' +
+        '<td>' + r.ans + ' / ' + diag.assignment.itemIds.length + '</td>' +
+        '<td>' + r.marks + '</td>' +
+        '<td>' + (r.said || (r.cond.id === 'control' ? '—' : 0)) + '</td>' +
+        '<td>' + (r.done ? '已交卷' : '<span class="muted">未交卷</span>') + '</td>' +
+        '<td><a class="btn sm" href="#/inspect/' + a.id + '/' + r.sid + '">檢視 →</a></td></tr>';
+    }).join('') +
+    '</tbody></table></div></div></div>';
 }

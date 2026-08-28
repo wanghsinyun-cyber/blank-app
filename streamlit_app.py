@@ -1,4 +1,4 @@
-"""KIDFORUM — Streamlit 包裝層
+"""KAIROS｜契機 — Streamlit 包裝層
 
 本專案的本體是 dist/index.html：一個完全自足的單檔網頁應用，
 沒有框架、沒有 CDN、沒有建置工具鏈，直接用瀏覽器開啟就能跑。
@@ -19,7 +19,7 @@ import streamlit as st
 import streamlit.components.v1 as components
 
 st.set_page_config(
-    page_title="KIDFORUM 知識共構診斷平台",
+    page_title="KAIROS｜契機 · 評量即學習平台",
     page_icon="🧩",
     layout="wide",
     initial_sidebar_state="collapsed",

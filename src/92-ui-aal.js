@@ -364,3 +364,199 @@ function surveySubmit(phase){
   toast('問卷已送出，謝謝你。');
   go('#/student');
 }
+
+/* ==========================================================================
+   學生作答與 AI 互動檢視（教師／研究者，唯讀）
+
+   為什麼要有這一頁：評量即學習事件是學生端的畫面，測驗一旦結束就沒有人
+   進得去，教師與研究者也就看不到「學生當時實際看到什麼、跟 AI 說了什麼」。
+   這裡用與 viewAaL() 相同的版面重播一位學生的作答歷程——同樣的兩欄、
+   同樣的文本、同樣的對話卡——差別只在全部唯讀，而且會多顯示對錯與編碼。
+   ========================================================================== */
+let INSPECT = null;
+
+function inspectInit(aid, sid){
+  const a = getAssignment(aid);
+  INSPECT = {aid:aid, sid:sid, idx:0,
+             items: a ? a.itemIds.map(getItem).filter(Boolean) : []};
+}
+
+/* 從事件日誌把這位學生在這篇文本上標記過的句子還原出來（MARK 事件是切換語意） */
+function inspectMarks(sid, aid, textId){
+  const on = {};
+  allLogs().forEach(function(e){
+    if (e.sid !== sid || e.aid !== aid || e.code !== 'M') return;
+    if (e.textId && e.textId !== textId) return;
+    if (e.sent == null) return;
+    if (e.on === false) delete on[e.sent]; else on[e.sent] = 1;
+  });
+  return Object.keys(on).map(Number);
+}
+
+function viewInspect(aid, sid){
+  if (!isTeacher()) return '<div class="empty"><h3>這一頁只有教師與研究者看得到</h3></div>';
+  const a = getAssignment(aid);
+  if (!a) return '<div class="empty"><h3>找不到這份派題</h3><a class="btn" href="#/teacher">回教師後台</a></div>';
+  const roster = assignmentRoster(a);
+  if (!sid || roster.indexOf(sid) < 0) sid = roster[0];
+  if (!sid) return '<div class="empty"><h3>這份派題還沒有學生</h3></div>';
+  if (!INSPECT || INSPECT.aid !== aid || INSPECT.sid !== sid) inspectInit(aid, sid);
+
+  const k = classOfStudent(sid);
+  const cond = condition(conditionOfStudent(sid));
+  const it = INSPECT.items[INSPECT.idx];
+  if (!it) return '<div class="empty"><h3>這份派題沒有題目</h3></div>';
+
+  const text = getText(it.unit);
+  const sents = passageSentences(text);
+  const marks = inspectMarks(sid, aid, it.unit);
+  const resp = state.responses.find(function(r){
+    return r.aid === aid && r.sid === sid && r.iid === it.id; }) || {};
+  const turns = allDialog().filter(function(d){
+    return d.sid === sid && d.aid === aid && d.iid === it.id; })
+    .sort(function(x, y){ return x.t - y.t; });
+  const checks = allLogs().filter(function(e){
+    return e.sid === sid && e.aid === aid && e.iid === it.id && e.code === 'C'; });
+  const done = submitted(aid, sid);
+
+  /* 全部學生的下拉，讓教師不必回上一頁就能換人 */
+  const picker = '<select id="inspectWho" data-act="inspect-who" style="width:auto">' +
+    roster.map(function(x){
+      return '<option value="' + x + '"' + (x === sid ? ' selected' : '') + '>' +
+        esc(userName(x)) + '（' + esc(condition(conditionOfStudent(x)).name) + '）</option>';
+    }).join('') + '</select>';
+
+  return sectionHead('作答與 AI 互動檢視',
+      esc(a.title) + '　·　與學生當時看到的版面相同，此處為唯讀重播。',
+      '<a class="btn" href="#/assign/' + aid + '">← 回派題分析</a>') +
+
+    '<div class="card card-p" style="margin-bottom:14px">' +
+      '<div class="row" style="gap:14px;flex-wrap:wrap;align-items:center">' +
+        '<label class="small muted" for="inspectWho">學生</label>' + picker +
+        '<span class="pill">' + esc((k || {}).name || '') + '</span>' +
+        '<span class="pill"><span aria-hidden="true">' + esc(cond.mark || '') + '</span>' + esc(cond.name) + '</span>' +
+        '<span class="pill">' + (done ? '已交卷' : '未交卷') + '</span>' +
+        '<div class="spacer"></div>' +
+        '<span class="pill">第 ' + (INSPECT.idx + 1) + ' / ' + INSPECT.items.length + ' 題</span>' +
+        '<button class="btn sm" data-act="inspect-prev"' + (INSPECT.idx ? '' : ' disabled') + '>← 上一題</button>' +
+        '<button class="btn sm" data-act="inspect-next"' +
+          (INSPECT.idx < INSPECT.items.length - 1 ? '' : ' disabled') + '>下一題 →</button>' +
+      '</div>' +
+      '<p class="muted small" style="margin-top:10px">這一頁不會產生任何事件日誌，也不會改到學生的資料。' +
+      '對照組（無對象）沒有對話，右欄顯示的是他自己的筆記區。</p>' +
+    '</div>' +
+
+    '<div class="aal">' +
+    /* ---- 左欄：文本，重播該生的標記 ---- */
+    '<div class="aal-text card"><div class="card-h"><h3 id="passageTitle">' + esc(text.title) + '</h3>' +
+      '<span class="pill">' + esc(text.genre) + '</span>' +
+      '<span class="pill">他標記了 ' + marks.length + ' 句</span></div>' +
+      '<div class="card-p">' +
+      '<p class="muted small" id="passageHelp">底色與「▍」記號是這位學生自己標起來的句子，由事件日誌還原。</p>' +
+      '<div class="passage" role="group" aria-labelledby="passageTitle" aria-describedby="passageHelp">' +
+        text.paras.map(function(_, pi){
+          return '<p class="para">' + sents.filter(function(s){ return s.para === pi; }).map(function(s){
+            const on = marks.indexOf(s.i) >= 0;
+            return '<button type="button" class="sent' + (on ? ' on' : '') + '" disabled' +
+              ' aria-pressed="' + on + '">' + esc(s.text) + '</button>';
+          }).join('') + '</p>';
+        }).join('') +
+      '</div>' +
+    '</div></div>' +
+
+    /* ---- 右欄：題目與他的作答 ＋ 對話逐字 ---- */
+    '<div class="aal-side">' +
+      '<div class="card"><div class="card-h"><h3>第 ' + (INSPECT.idx + 1) + ' 題</h3>' +
+        procPill(it.process) + subPill(it.sub) + '</div>' +
+      '<div class="card-p">' +
+      '<div class="stem">' + esc(it.stem) + '</div>' +
+      (it.type === 'mc' ? inspectOptions(it, resp) : inspectCR(it, resp)) +
+      '</div></div>' +
+
+      (turns.length ? inspectDialogPane(cond, turns) : inspectNotePane(sid, aid, it, cond)) +
+
+      '<div class="card"><div class="card-h"><h3>送出前自我檢核</h3>' +
+        '<span class="muted small">勾了 ' + checks.length + ' / ' + SELF_CHECKS.length + ' 項</span></div>' +
+        '<div class="card-p col">' +
+        SELF_CHECKS.map(function(c, i){
+          const on = checks.some(function(e){ return e.idx === i; });
+          return '<label class="opt" style="align-items:center"><input type="checkbox" disabled' +
+            (on ? ' checked' : '') + '><span>' + esc(c) + '</span></label>';
+        }).join('') +
+      '</div></div>' +
+    '</div></div>';
+}
+
+function subPill(sub){
+  const s = SUBPROCESSES.find(function(x){ return x.id === sub; });
+  return s ? '<span class="pill">' + esc(s.id) + '　' + esc(s.zh) + '</span>' : '';
+}
+
+function inspectOptions(it, resp){
+  return '<div class="opts">' + it.options.map(function(o, k){
+    const chosen = resp.choice === k;
+    const right = k === it.answer;
+    const tag = right ? '<span class="pill q1">正解</span>'
+      : (it.why && it.why[k] ? '<span class="pill q2">' + esc(it.why[k]) + '　' +
+          esc((MISCONCEPTIONS.find(function(m){ return m.id === it.why[k]; }) || {}).name || '') + '</span>' : '');
+    return '<div class="opt' + (chosen ? ' chosen' : '') + '" style="align-items:flex-start">' +
+      '<b aria-hidden="true">' + String.fromCharCode(65 + k) + '</b>' +
+      '<span>' + esc(o) + '　' + tag +
+      (chosen ? '<span class="pill" style="border-color:var(--accent);color:var(--accent)">他選這個</span>' : '') +
+      '</span></div>';
+  }).join('') + '</div>' +
+  '<p class="small" style="margin-top:8px">' +
+    (resp.choice == null ? '<span class="muted">沒有作答。</span>'
+      : (resp.correct ? '<b>答對</b>' : '<b>答錯</b>') +
+        '　·　依據位置：第 ' + (it.answerPara + 1) + ' 段第 ' + (it.answerSent + 1) + ' 句') +
+  '</p>';
+}
+
+function inspectCR(it, resp){
+  return '<div class="field"><label>他寫的答案</label>' +
+    '<div class="note-full" style="white-space:pre-wrap">' +
+    (resp.text ? esc(resp.text) : '<span class="muted">沒有作答。</span>') + '</div></div>' +
+    '<p class="muted small" style="margin-top:8px">建構反應題不進入 Rasch 估計，評閱在「派題分析 → 建構反應題評閱」。</p>';
+}
+
+function inspectDialogPane(cond, turns){
+  return '<div class="card aal-chat"><div class="card-h">' +
+    '<h3>他的夥伴：' + esc(cond.name) + '</h3>' +
+    '<span class="pill">' + turns.filter(function(t){ return t.speaker === 'student'; }).length +
+    ' 次發話</span></div>' +
+    '<div class="card-p">' +
+    '<div class="chat">' +
+      '<div class="msg agent"><b>' + esc(cond.name) + '</b>' + esc(cond.frame) + '</div>' +
+      turns.map(function(t){
+        const meta = t.speaker === 'student'
+          ? '<div class="muted small" style="margin-top:4px">' +
+            (t.rel ? esc(REL_MARK[t.rel] + ' ' + REL_LABEL[t.rel]) : '') +
+            (t.ucode ? '　·　發話歷程 ' + esc(processName(t.ucode)) : '') +
+            (t.sent != null ? '　·　情感 ' + fx(t.sent, 2) : '') + '</div>'
+          : (t.qfn ? '<div class="muted small" style="margin-top:4px">提問功能 ' + esc(t.qfn) +
+              (t.sub ? '　·　' + esc(t.sub) : '') + '</div>' : '');
+        return '<div class="msg ' + (t.speaker === 'student' ? 'me' : 'agent') + '">' +
+          (t.speaker === 'agent' ? '<b>' + esc(cond.name) + '</b>' : '') + esc(t.text) + meta + '</div>';
+      }).join('') +
+    '</div>' +
+    '<p class="muted small" style="margin-top:8px">灰字是系統的編碼，學生當時看不到。' +
+    '相對歷程以這一題官方標定的歷程為基準。</p>' +
+    '</div></div>';
+}
+
+function inspectNotePane(sid, aid, it, cond){
+  const notes = allLogs().filter(function(e){
+    return e.sid === sid && e.aid === aid && e.iid === it.id && e.code === 'N'; });
+  const isControl = cond && cond.id === 'control';
+  return '<div class="card aal-chat"><div class="card-h"><h3>' +
+    (isControl ? '他的筆記' : '這一題沒有對話') + '</h3>' +
+    '<span class="muted small">' + (isControl ? '對照組沒有 AI 夥伴' : '') + '</span></div>' +
+    '<div class="card-p">' +
+    (notes.length
+      ? notes.map(function(e){ return '<div class="note-full" style="white-space:pre-wrap">' +
+          esc(e.text || '') + '</div>'; }).join('')
+      : '<p class="muted small">這一題沒有留下' + (isControl ? '筆記' : '對話') + '記錄。</p>') +
+    (isControl ? '<p class="muted small" style="margin-top:8px">對照組的版面與其他三班完全一樣，' +
+      '只是把對話區換成同樣大小的筆記區——版面幾何恆定，避免介面差異混進依變項。</p>' : '') +
+    '</div></div>';
+}

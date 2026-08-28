@@ -115,7 +115,7 @@ function viewSettings(){
     '<div class="card"><div class="card-h"><h3>診斷門檻</h3></div><div class="card-p col">' +
       '<div class="field"><label for="thr">迷思橋接門檻（%）</label>' +
       '<input id="thr" type="number" min="1" max="60" value="' + s.misThreshold + '" data-act="set-thr">' +
-      '<span class="muted small">一題的迷思(II)比例達到這個值，就會出現在「迷思橋接」清單裡。國中課堂常用 15%–20%。</span></div>' +
+      '<span class="muted small">一題的迷思(II)比例達到這個值，就會出現在「迷思橋接」清單裡。出廠預設 12%；門檻越低，被標出來一起討論的題目越多。</span></div>' +
       '<div class="field"><label for="minn">KIDMAP 最低樣本數</label>' +
       '<input id="minn" type="number" min="3" max="40" value="' + s.minN + '" data-act="set-minn">' +
       '<span class="muted small">低於這個人數不執行 Rasch 估計。人數太少時難度與能力的估計會非常不穩定。</span></div>' +
@@ -143,8 +143,12 @@ function viewSettings(){
     '</div></div>' +
   '</div>' +
   '<div class="card" style="margin-top:16px"><div class="card-h"><h3>研究資料</h3></div><div class="card-p">' +
-    '<p class="small">匯出的 JSON 包含：使用者、班級、題庫、作答矩陣、Rasch 估計值、四象限判定、' +
-    '所有貼文與其支架／延伸／引用結構、論述指標與雙軌分區。可直接讀進 R 或 Python 做後續分析。</p>' +
+    '<p class="small">匯出的 JSON 共 26 個頂層鍵，包含：使用者、班級、文本與題庫、作答矩陣、' +
+    'Rasch 估計值與四象限判定、所有貼文與其支架／延伸／引用結構、論述指標與雙軌分區，' +
+    '以及評量即學習的完整設計與歷程——四條件、PIRLS 四項理解歷程與 19 項子歷程、' +
+    '<strong>8 個提示模組全文</strong>、事件日誌、對話逐字、問卷原始作答與構念分數、' +
+    'LSA／ENA／情感軌跡的分析結果、效果檢定與分析資料表。' +
+    '可直接讀進 R 或 Python 做後續分析。</p>' +
     '<div class="row" style="margin-top:10px">' +
     '<button class="btn primary" data-act="export-json">匯出研究資料（JSON）</button>' +
     '<button class="btn" data-act="export-csv">匯出作答矩陣（CSV）</button>' +
@@ -169,7 +173,7 @@ function viewAbout(){
     ['知識建構的論述', '論述層次由連接詞、反例、證據、修正語判定，讓「討論的品質」可被觀察。'],
     ['同步、內嵌、轉化的評量', '整個系統就是這一條：評量產生問題，討論改變理解，再評量檢核遷移。']
   ];
-  return sectionHead('系統說明與研究設計', 'KAIROS 如何把「會考派題 × KIDMAP」、「Knowledge Forum」與「評量即學習」接成一個系統。') +
+  return sectionHead('系統說明與研究設計', 'KAIROS 如何把「閱讀理解診斷 × KIDMAP」、「Knowledge Forum」與「評量即學習」接成一個系統。') +
 
   '<div class="card card-p" style="margin-bottom:16px;border-left:3px solid var(--accent)">' +
     '<div class="eyebrow">評量即學習（Assessment as Learning）</div>' +
@@ -189,7 +193,7 @@ function viewAbout(){
         '<p class="muted small">' + esc(c.mech) + '</p></div>';
     }).join('') + '</div>' +
     '<hr class="hr">' +
-    '<h4>三項與測量效度直接相關的規格</h4>' +
+    '<h4>四項與測量效度直接相關的規格</h4>' +
     '<div class="col" style="margin-top:8px">' +
     [['回應型態由回合排程決定',
       'AI 不讀取任何學生端的編碼函式，也不指定學生下一步該用什麼策略。學生的歷程轉移因此反映他自己的選擇，不含對 AI 指令的遵從成分。'],
@@ -217,7 +221,7 @@ function viewAbout(){
   '<div class="card card-p" style="margin-bottom:16px">' +
     '<h3>系統迴圈</h3>' +
     '<div class="col" style="margin-top:12px">' +
-    [['①','派題','照康軒單元挑會考題，含選擇題與非選題。'],
+    [['①','派題','從文本出發挑閱讀理解題，含選擇題與建構反應題。'],
      ['②','作答','學生線上作答，非選題可手寫。'],
      ['③','KIDMAP 診斷','簡化 Rasch 估出 δ 與 θ，把每個「人 × 題」分成四象限。'],
      ['④','迷思橋接','第二象限（能力足以答對卻答錯）的題目一鍵開成知識建構視圖，附誘答分析與知識資源人名單。'],
@@ -232,16 +236,16 @@ function viewAbout(){
     '⑧ 讓質性討論有了可檢核的證據。少掉任何一步，系統就退回原本的兩個平台。</p>' +
   '</div>' +
   '<div class="grid g2" style="margin-bottom:16px">' +
-    '<div class="card"><div class="card-h"><h3>來自「會考派題 × KIDMAP」的功能</h3></div><div class="card-p">' +
+    '<div class="card"><div class="card-h"><h3>來自「派題 × KIDMAP 診斷」的功能</h3></div><div class="card-p">' +
     '<ul class="small" style="padding-left:18px;line-height:1.9">' +
-    ['角色與班級（管理員／老師／學生、加入代碼）',
-     '按康軒單元派題的三步驟精靈',
-     '歷屆會考題庫、年份／難度／題型篩選',
+    ['角色與班級（研究者／老師／學生、加入代碼）',
+     '從文本出發的三步驟派題精靈（選文本 → 挑題目 → 派給學生）',
+     '自編閱讀理解題庫、理解歷程／題型／文本三欄篩選',
      '簡化 Rasch 模式估計難度與能力（含 SE、Infit／Outfit）',
      'KIDMAP 四象限：優勢／迷思／合理答錯／合理答對',
-     '每題四象限表與誘答分析',
-     '非選題手寫作答與逐生評閱',
-     'AI 評量規準、教學策略、相似題生成'].map(function(x){ return '<li>' + esc(x) + '</li>'; }).join('') +
+     '每題四象限表與誘答分析（誘答掛理解失誤代碼 E1–E8）',
+     '建構反應題作答與逐生評閱',
+     'AI 評量規準、教學策略、同歷程替代題'].map(function(x){ return '<li>' + esc(x) + '</li>'; }).join('') +
     '</ul></div></div>' +
     '<div class="card"><div class="card-h"><h3>來自 Knowledge Forum 的功能</h3></div><div class="card-p">' +
     '<ul class="small" style="padding-left:18px;line-height:1.9">' +
@@ -272,9 +276,12 @@ function viewAbout(){
         '<td class="small muted">' + esc(r[2]) + '</td><td class="small muted">' + esc(r[3]) + '</td></tr>';
     }).join('') + '</tbody></table></div>' +
     '<p class="muted small" style="margin-top:10px">研究構想原案為國小閱讀（PIRLS 四項理解歷程 × 19 子歷程、中英雙語軸）。' +
-    '本平台移植的是<strong>設計原則</strong>，領域換成國中數學，歷程架構改用同屬 IEA 家族的 ' +
-    'TIMSS 2019 數學三認知領域 × 15 子歷程。兩者結構完全對應，' +
-    '要換回閱讀只需替換 <code>PROCESSES</code>、<code>SUBPROCESSES</code> 與題目的歷程標定，程式碼不必更動。</p>' +
+    '本平台<strong>採用同一個領域與同一套架構</strong>：PIRLS 2011 四項理解歷程' +
+    '（直接提取 5、直接推論 5、詮釋整合 5、比較評估 4，共 19 項子歷程），' +
+    '示範題本為 2 篇自編文本、16 題。中英雙語軸尚未實作，' +
+    '<code>34-log.js</code> 的事件結構保留 <code>lang</code> 欄位備用。' +
+    '若要換到其他 IEA 架構（例如 TIMSS 數學認知領域），只需替換 <code>PROCESSES</code>、' +
+    '<code>SUBPROCESSES</code> 與題目的歷程標定，分析程式不必更動。</p>' +
   '</div>' +
 
   '<div class="card card-p" style="margin-bottom:16px">' +
@@ -323,7 +330,7 @@ function viewAbout(){
     '<h3>使用與研究上的限制</h3>' +
     '<ul class="small" style="padding-left:18px;line-height:1.95;max-width:74ch">' +
     ['本頁的班級、學生、作答與貼文<strong>全部是模擬資料</strong>，由固定亂數種子產生，每次載入結果一致，僅供展示與方法討論，不得當成實徵結果引用。',
-     '題目為仿會考題型的自編題，不是官方原題。',
+     '文本與題目是仿 PIRLS 題型的自編示範素材，不是官方釋出文本或原題。',
      '論述層次是規則判定，會低估口語表達好但書寫少的學生；也會被刻意堆砌連接詞的貼文抬高。任何用於成績的用途都必須有人工複核。',
      '簡化 Rasch 模式假設題目等鑑別度、單一向度，且未處理題組的局部相依。樣本小時估計不穩。',
      'KB 指數的權重是本系統的設定值，不是既有文獻的標準，請在研究中明確說明並做敏感度分析。',
@@ -343,12 +350,13 @@ function viewAbout(){
     '<li>Vygotsky, L. S. (1978) — 社會建構論，同儕角色的理論依據。</li>' +
     '<li>Bakeman, R., &amp; Gottman, J. M. (1997) — 延宕序列分析與調整殘差。</li>' +
     '<li>Shaffer, D. W. (2017) — 認知網絡分析（Epistemic Network Analysis）。</li>' +
-    '<li>Mullis, I. V. S., &amp; Martin, M. O. — TIMSS 數學認知領域架構（本平台的歷程架構）；' +
-    'PIRLS 閱讀理解歷程架構（研究構想原案）。</li>' +
+    '<li>Mullis, I. V. S., &amp; Martin, M. O. — PIRLS 2011 閱讀理解歷程架構（本平台的歷程架構）。</li>' +
     '<li>Scardamalia, M., &amp; Bereiter, C. — 知識建構理論與 Knowledge Forum；十二項知識建構原則。</li>' +
     '<li>Wright, B. D., &amp; Stone, M. H. (1979). <em>Best Test Design</em> — Rasch 模式與 JMLE 估計。</li>' +
-    '<li>KIDMAP 四象限診斷表徵——國中教育會考成績診斷的常見呈現方式。</li>' +
-    '<li>介面詞彙參考自「會考派題 · 國中數學」平台與 knowledgeforum.org 的 KF6 介面。</li>' +
+    '<li>Earl, L.、Leppink, J. et al.、Fredricks, J. A. et al.、Pintrich, P. R. et al. — 問卷構念的來源量表。</li>' +
+    '<li>KIDMAP 四象限診斷表徵——測驗成績診斷的常見呈現方式。</li>' +
+    '<li>介面詞彙參考自前身平台「會考派題 · 國中數學」與 knowledgeforum.org 的 KF6 介面；' +
+    '本版領域已改為國小閱讀理解，部分用語（「單元」「迷思」）是那個階段留下的。</li>' +
     '</ul>' +
     '<p class="muted small" style="margin-top:10px">KAIROS 是研究用的整合原型，與上述任何平台或機構均無隸屬關係。</p>' +
   '</div>';
