@@ -409,7 +409,10 @@ input[type=checkbox],input[type=radio]{ width:1.15em; height:1.15em; accent-colo
 /* ---------- 評量即學習事件 ----------
    四條件共用同一份版面幾何：對照組只是把對話卡換成同尺寸的筆記卡，
    使外在認知負荷、捲動深度與畫面留白在條件之間保持一致。 */
-.aal{display:grid; grid-template-columns:minmax(0,1.05fr) minmax(330px,.95fr); gap:16px; align-items:start}
+/* 四條件共用同一份版面幾何。--pane-h 讓對話區與筆記區等高——
+   對照組矮一截的話，介面差異會以條件為單位打進外在認知負荷這個依變項。 */
+.aal{display:grid; grid-template-columns:minmax(0,1.05fr) minmax(330px,.95fr); gap:16px; align-items:start;
+  --pane-h:15rem}
 /* 左欄文章：sticky 但要有自己的捲動區，否則文章比視窗高時後半段永遠捲不到。
    card-h（標題與「已標記 N 句」）不捲，只捲 card-p。 */
 .aal-text{position:sticky; top:calc(var(--topbar-h) + 2px);
@@ -423,7 +426,11 @@ input[type=checkbox],input[type=radio]{ width:1.15em; height:1.15em; accent-colo
 .sent.on{background:var(--q4-bg); border-bottom:3px solid var(--q4); color:var(--ink); font-weight:600}
 /* 不以顏色單獨傳達訊息（1.4.1）：這一組規則沒有 .passage 前綴，也要帶記號 */
 .sent.on::after{content:"�08D"; color:var(--q4); font-weight:700}
-.chat{display:flex; flex-direction:column; gap:8px; height:300px; overflow-y:auto; padding-right:4px}
+/* 對話卡與筆記卡要逐層等高：內容區、工具列、說明文字三段都鎖住最小高度。
+   用 rem 是為了讓字級放大時兩邊一起長，不會在 175% 又拉開差距。 */
+.aal-chat .pane-bar{min-height:2.35rem; align-items:center}
+.aal-chat .pane-foot{min-height:4.2rem}
+.chat{display:flex; flex-direction:column; gap:8px; height:var(--pane-h); overflow-y:auto; padding-right:4px}
 .msg{max-width:88%; padding:8px 12px; border-radius:12px; font-size:1rem; line-height:1.6}
 .msg b{display:block; font-size:0.8rem; letter-spacing:.04em; color:var(--ink-4); font-weight:600; margin-bottom:2px}
 .msg.agent{align-self:flex-start; background:var(--shade); border:1px solid var(--rule-soft); border-bottom-left-radius:3px}
@@ -861,7 +868,7 @@ function buildSeedState(){
   };
   const post = {
     id:'a-post', title:'閱讀理解 評量即學習事件（後測）',
-    desc:'這一節你會一邊作答一邊跟你的夥伴討論。答錯沒關係，重點是把你怎麼讀的說出來。',
+    desc:'這一節你會一邊讀一邊回答問題。答錯沒關係，重點是把你怎麼讀的說出來。',
     classIds: allClassIds, teacherId:'u-t1', itemIds: allIds, phase:'post', linkedTo:'a-pre',
     aal: true, createdAt: now - 1 * DAY, due: now + 3 * DAY
   };
@@ -1149,17 +1156,17 @@ function genName(rnd){
 
 /* --- 四條件 --- */
 const CONDITIONS = [
-  {id:'tutor',   name:'導師',   en:'AI-as-Tutor',  cls:'sc1', mark:'▲',
+  {id:'tutor',   name:'老師小葵', en:'AI-as-Tutor',  cls:'sc1', mark:'▲',
    tradition:'智慧型教學系統／蘇格拉底式鷹架',
    frame:'我是陪你讀的老師。我不會告訴你答案，只會一直問你「你是從哪裡看出來的」。',
    mech:'適性鷹架與形成性提問',
    note:'指導性鷹架可能壓縮學習者自主性，故本平台限制其僅能提問、不得評價。'},
-  {id:'tutee',   name:'學生',   en:'AI-as-Tutee',  cls:'sc3', mark:'●',
+  {id:'tutee',   name:'同學小葉', en:'AI-as-Tutee',  cls:'sc3', mark:'●',
    tradition:'可教代理人／以教代學（門生效應）',
    frame:'我是剛讀完這篇、但很多地方沒看懂的同學。你可以講給我聽嗎？',
    mech:'學習者翻轉為施教者，須為代理人的理解負責',
    note:'評量事件中最徹底的「主動行動者」姿態。'},
-  {id:'peer',    name:'同儕',   en:'AI-as-Peer',   cls:'sc5', mark:'■',
+  {id:'peer',    name:'同學小森', en:'AI-as-Peer',   cls:'sc5', mark:'■',
    tradition:'社會建構論／對等協作',
    frame:'我也在讀這一篇。我先說我讀到哪裡，你再說你的，我們對一下。',
    mech:'分享觀點、共構理解',
@@ -1324,13 +1331,36 @@ function composePrompt(conditionId, processId, qfnId){
    因此不需要語言模型也能忠實產生三條件的對話。
    ========================================================================== */
 
+/* 開場白分兩池：turn 0 時學生還沒說過任何話，也還沒作答，
+   所以「你這樣說我有一點懂了」「先不要急著選」這類句子在第一回合是假的
+   ——後者更糟，它暗示 AI 看得到學生正要選，違反「AI 不讀作答欄位」的設定。 */
+/* 三個角色一律「一句社會框架 + 一句提問」，句數與字數刻意對齊。
+   話量若不相等，三個實驗組就從「三種社會框架」變成「三種資訊量」，
+   RQ1 的組間比較會失效。
+
+   同儕的開場白本身就是「我先講我讀到哪裡」——所以 peer 的 opener 池
+   直接放那些句子，不再額外多一句。內容只能關於**閱讀動作**，
+   絕不碰文本內容或選項，碰了就是給提示。 */
+const PEER_SHARE = [
+  '我剛剛在第二段停了一下，想了想才往下讀。',
+  '我第一次讀的時候，好像把這裡看漏了。',
+  '我是讀到後面，才想通前面在講什麼。',
+  '我這一題也想了一下下，沒有很快。'
+];
+
 const ROLE_OPENER = {
-  tutor: ['這一題我們一起看。', '好，我聽你說。', '我想確認你是怎麼看的。', '先不要急著選。'],
-  tutee: ['我也在讀這一段，可是我卡住了。', '這裡我不太懂耶。', '我剛剛好像讀錯了。', '你這樣說我有一點懂了。'],
-  peer:  ['我先講我讀到哪裡。', '我也在看這一題。', '我的想法跟你可能不一樣。', '欸我們對一下。']
+  tutor: {first: ['這一題我們一起看，我想知道你怎麼讀。', '我想聽聽你是怎麼看這一題的。'],
+          later: ['好，我聽你說，我想確認你是怎麼想的。', '嗯，你再多說一點，我想聽清楚。',
+                  '我想確認我有聽懂你的意思。', '先不要急著選，我們再想一下。']},
+  tutee: {first: ['我也在讀這一段，可是我卡住了。', '這裡我不太懂耶。'],
+          later: ['我剛剛好像讀錯了。', '你這樣說我有一點懂了。',
+                  '所以你的意思是……', '等一下，我想再確認一次。']},
+  peer:  {first: PEER_SHARE.slice(0, 2),
+          later: PEER_SHARE.concat(['我的想法跟你可能不一樣。', '我剛剛也在想這個。'])}
 };
+
 const ROLE_STEM = {
-  tutor: function(q){ return q; },
+  tutor: function(q){ return '你先說說看——' + q; },
   tutee: function(q){ return '你可以說給我聽嗎——' + q; },
   peer:  function(q){ return '那你呢？' + q; }
 };
@@ -1371,9 +1401,11 @@ function agentTurn(conditionId, item, turn, rnd){
     body = '現在如果只能講一句話說你的想法，你會怎麼說？';
   }
 
-  const openers = ROLE_OPENER[conditionId] || [''];
+  const pool = ROLE_OPENER[conditionId];
+  const openers = pool ? (turn === 0 ? pool.first : pool.later) : [''];
   const opener = openers[Math.floor(r() * openers.length)];
-  const text = (opener ? opener + ' ' : '') + (ROLE_STEM[conditionId] || function(q){ return q; })(body);
+  const text = (opener ? opener + ' ' : '') +
+    (ROLE_STEM[conditionId] || function(q){ return q; })(body);
 
   return {
     text: leakGuard(text, item).text,
@@ -2294,6 +2326,9 @@ function pendingAssignments(sid){
    理由是系統迴圈的次序：先作答 → 才有 KIDMAP 診斷 → 才有值得討論的共同問題。
    若在作答前就看得到別人的討論，等於先看到答案，前測也就不成立了。
    教師與研究者不受此限（他們要在課前備課、課後分析）。 */
+/* 注意：不分相位是刻意的——**任何**未交作業都鎖。
+   因此同時派出前測與後測，會讓共構空間從前測交卷起一直鎖到後測交卷，
+   等於把中間的共構階段整段關掉。派題時前後測要分兩次派。 */
 function kbLocked(u){
   const me = u || currentUser();
   if (me.role !== 'student') return false;
@@ -4075,12 +4110,19 @@ function procPill(pid){
   return '<span class="pill ' + p.cls + '"><span aria-hidden="true">' + p.mark + '</span>' +
     esc(p.name) + '</span>';
 }
-/* 一道題目的識別標籤：文本 · 理解歷程 · 難度 */
+/* 一道題目的識別標籤：文本 · 理解歷程 · 難度。教師與研究端專用。 */
 function itemPills(it){
   if (!it) return '';
   return '<span class="pill">' + esc(textTitle(it.unit)) + '</span>' +
     procPill(it.process) +
     '<span class="pill">' + esc(it.diff) + '</span>';
+}
+/* 學生看得到的版本：只有文本名。
+   歷程標定是相對歷程編碼（RQ4）的判定基準，受試者不該看到基準；
+   難度標籤則等於直接告訴學生「這題你大概答不出來」。 */
+function itemPillsStudent(it){
+  if (!it) return '';
+  return '<span class="pill">' + esc(textTitle(it.unit)) + '</span>';
 }
 
 function qpill(q, n){
@@ -4105,7 +4147,23 @@ function quadLegend(){
 }
 
 /* --- KIDMAP：個別學生四象限圖 --- */
-function kidmapSVG(diag, ps){
+/* 學生版的四象限用語。同一份資料、同一個幾何，只換說法——
+   十歲孩子看不懂 θ、δ (logit)、「迷思象限」，而且「迷思」是個標籤。
+   教師端與研究端一律走預設（student=false），計算與匯出一個字不動。 */
+const QUAD_STUDENT = {
+  1: '比較難，你答對了',
+  2: '可惜，你其實讀得懂',
+  3: '比較難，這次沒答對',
+  4: '你穩穩答對'
+};
+function quadLegendStudent(){
+  return '<div class="legend">' + [1,2,3,4].map(function(q){
+    return '<span><i class="swatch" style="background:var(--' + QUAD[q].key + ')"></i>' +
+      esc(QUAD_STUDENT[q]) + '</span>';
+  }).join('') + '</div>';
+}
+
+function kidmapSVG(diag, ps, student){
   const W = 620, H = 400, m = {t:26, r:18, b:34, l:52};
   const iw = W - m.l - m.r, ih = H - m.t - m.b;
   const ds = diag.perItem.map(function(p){ return p.delta; });
@@ -4117,28 +4175,28 @@ function kidmapSVG(diag, ps){
   const xW = m.l + iw * 0.27, xR = m.l + iw * 0.73;
 
   const parts = [];
-  parts.push('<svg class="kidmap" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="KIDMAP 四象限圖">');
+  parts.push('<svg class="kidmap" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="' + (student ? '你這次的閱讀地圖' : 'KIDMAP 四象限圖') + '">');
   // 四個象限底色
   parts.push('<rect x="' + m.l + '" y="' + m.t + '" width="' + (iw / 2) + '" height="' + (yTheta - m.t) + '" fill="var(--q3-bg)"/>');
   parts.push('<rect x="' + (m.l + iw / 2) + '" y="' + m.t + '" width="' + (iw / 2) + '" height="' + (yTheta - m.t) + '" fill="var(--q1-bg)"/>');
   parts.push('<rect x="' + m.l + '" y="' + yTheta + '" width="' + (iw / 2) + '" height="' + (m.t + ih - yTheta) + '" fill="var(--q2-bg)"/>');
   parts.push('<rect x="' + (m.l + iw / 2) + '" y="' + yTheta + '" width="' + (iw / 2) + '" height="' + (m.t + ih - yTheta) + '" fill="var(--q4-bg)"/>');
   // 象限標籤
-  parts.push('<text class="qlabel" x="' + (m.l + 8) + '" y="' + (m.t + 14) + '" fill="var(--q3)">III 合理答錯</text>');
-  parts.push('<text class="qlabel" x="' + (m.l + iw - 8) + '" y="' + (m.t + 14) + '" text-anchor="end" fill="var(--q1)">I 優勢概念</text>');
-  parts.push('<text class="qlabel" x="' + (m.l + 8) + '" y="' + (m.t + ih - 8) + '" fill="var(--q2)">II 迷思概念</text>');
-  parts.push('<text class="qlabel" x="' + (m.l + iw - 8) + '" y="' + (m.t + ih - 8) + '" text-anchor="end" fill="var(--q4)">IV 合理答對</text>');
+  parts.push('<text class="qlabel" x="' + (m.l + 8) + '" y="' + (m.t + 14) + '" fill="var(--q3)">' + (student ? QUAD_STUDENT[3] : 'III 合理答錯') + '</text>');
+  parts.push('<text class="qlabel" x="' + (m.l + iw - 8) + '" y="' + (m.t + 14) + '" text-anchor="end" fill="var(--q1)">' + (student ? QUAD_STUDENT[1] : 'I 優勢概念') + '</text>');
+  parts.push('<text class="qlabel" x="' + (m.l + 8) + '" y="' + (m.t + ih - 8) + '" fill="var(--q2)">' + (student ? QUAD_STUDENT[2] : 'II 迷思概念') + '</text>');
+  parts.push('<text class="qlabel" x="' + (m.l + iw - 8) + '" y="' + (m.t + ih - 8) + '" text-anchor="end" fill="var(--q4)">' + (student ? QUAD_STUDENT[4] : 'IV 合理答對') + '</text>');
   // 框線與分隔
   parts.push('<rect class="axis" x="' + m.l + '" y="' + m.t + '" width="' + iw + '" height="' + ih + '" fill="none"/>');
   parts.push('<line class="axis" x1="' + (m.l + iw / 2) + '" y1="' + m.t + '" x2="' + (m.l + iw / 2) + '" y2="' + (m.t + ih) + '"/>');
   parts.push('<line class="theta" x1="' + m.l + '" y1="' + yTheta + '" x2="' + (m.l + iw) + '" y2="' + yTheta + '"/>');
-  parts.push('<text x="' + (m.l + iw + 4) + '" y="' + (yTheta + 4) + '" fill="var(--accent)">θ</text>');
+  parts.push('<text x="' + (m.l + iw + 4) + '" y="' + (yTheta + 4) + '" fill="var(--accent)">' + (student ? '你' : 'θ') + '</text>');
   // δ 刻度
   for (let v = Math.ceil(lo); v <= Math.floor(hi); v++){
     parts.push('<line class="axis" x1="' + (m.l - 4) + '" y1="' + Y(v) + '" x2="' + m.l + '" y2="' + Y(v) + '"/>');
-    parts.push('<text x="' + (m.l - 8) + '" y="' + (Y(v) + 3) + '" text-anchor="end">' + v + '</text>');
+    if (!student) parts.push('<text x="' + (m.l - 8) + '" y="' + (Y(v) + 3) + '" text-anchor="end">' + v + '</text>');
   }
-  parts.push('<text x="' + (m.l - 40) + '" y="' + (m.t + ih / 2) + '" transform="rotate(-90 ' + (m.l - 40) + ' ' + (m.t + ih / 2) + ')" text-anchor="middle">試題難度 δ (logit)</text>');
+  parts.push('<text x="' + (m.l - 40) + '" y="' + (m.t + ih / 2) + '" transform="rotate(-90 ' + (m.l - 40) + ' ' + (m.t + ih / 2) + ')" text-anchor="middle">' + (student ? '題目的難度（上面比較難）' : '試題難度 δ (logit)') + '</text>');
   parts.push('<text x="' + xW + '" y="' + (H - 12) + '" text-anchor="middle">答錯</text>');
   parts.push('<text x="' + xR + '" y="' + (H - 12) + '" text-anchor="middle">答對</text>');
   // 資料點
@@ -4152,7 +4210,8 @@ function kidmapSVG(diag, ps){
     const cx = base + off, cy = Y(c.delta);
     const col = 'var(--' + QUAD[c.q].key + ')';
     parts.push('<circle cx="' + cx + '" cy="' + cy + '" r="9" fill="' + col + '" fill-opacity="0.9" stroke="var(--card)" stroke-width="1.5"><title>第 ' +
-      getItem(c.iid).no + ' 題 · ' + QUAD[c.q].name + ' · δ=' + fx(c.delta) + ' · 預期答對率 ' + pct(c.p) + '</title></circle>');
+      getItem(c.iid).no + ' 題 · ' + (student ? QUAD_STUDENT[c.q]
+        : QUAD[c.q].name + ' · δ=' + fx(c.delta) + ' · 預期答對率 ' + pct(c.p)) + '</title></circle>');
     parts.push('<text x="' + cx + '" y="' + (cy + 3.2) + '" text-anchor="middle" fill="var(--card)" style="font-size:9px;font-weight:600">' +
       getItem(c.iid).no + '</text>');
   });
@@ -4893,21 +4952,24 @@ let KBSEARCH = {field:'content', q:''};
 let EDIT = null;                // 編輯中的貼文草稿
 
 /* 測驗還沒交完的學生看到的門檻畫面。四個 KB 入口都先過這一關。 */
+/* 測驗還沒交完的學生看到的門檻畫面。四個 KB 入口都先過這一關。
+   文案依「實際擋住你的那一份作業」說話——寫死「前測」會在後測派出後變成謊話。 */
 function kbGate(){
   const me = currentUser();
   if (!kbLocked(me)) return '';
   const pend = pendingAssignments(me.id);
-  return '<div class="empty"><h3>知識建構空間會在測驗之後開放</h3>' +
-    '<p style="max-width:62ch">這裡放的是全班一起討論的共同問題，而那些問題是從大家的作答裡整理出來的。' +
-    '如果先看到別人怎麼說，你自己的讀法就被影響了，前測也就測不到你原本的想法。' +
-    '交卷之後，這個空間就會打開。</p>' +
-    '<div class="col" style="margin-top:14px;align-items:flex-start">' +
+  const blocking = pend[0];
+  return '<div class="empty">' +
+    '<h3>先把「' + esc(blocking.title) + '」交出來，這裡就會打開</h3>' +
+    '<p style="max-width:62ch">這個地方放的是全班一起想的問題，那些問題是從大家的作答整理出來的。' +
+    '如果你先看到別人怎麼想，就很難知道自己本來會怎麼讀了。</p>' +
+    '<p class="muted small">還沒交的有 ' + pend.length + ' 份。</p>' +
+    '<div class="row" style="margin-top:14px">' +
     pend.map(function(a){
       return '<a class="btn primary" href="#/' + (a.aal ? 'aal' : 'quiz') + '/' + a.id + '">' +
         esc(a.title) + '　' + (a.aal ? '開始這節課 →' : '開始作答 →') + '</a>';
-    }).join('') + '</div>' +
-    '<p class="muted small" style="margin-top:14px">還沒交的有 ' + pend.length + ' 份。</p>' +
-    '<a class="lk" href="#/student" style="margin-top:10px;display:inline-block">回我的作業</a></div>';
+    }).join('') +
+    '<a class="btn" href="#/student">回我的作業</a></div></div>';
 }
 
 function viewKBList(){
@@ -5589,11 +5651,16 @@ function viewStudent(){
     (needPre ? '<div class="card card-p" style="margin-bottom:16px;border-left:3px solid var(--warn)">' +
       '<div class="row" style="justify-content:space-between"><span class="small">還沒填課前問卷。</span>' +
       '<a class="btn sm primary" href="#/survey/pre">去填課前問卷</a></div></div>' : '') +
+    /* 知識建構空間鎖著的時候，首頁不要用橘色卡片催他去一個進不去的地方。
+       卡片數維持四張，只換內容與樣式。 */
     '<div class="grid g4" style="margin-bottom:16px">' +
       statCard('待作答', asgs.filter(function(a){ return !submitted(a.id, me.id); }).length, '') +
       statCard('已完成', asgs.filter(function(a){ return submitted(a.id, me.id); }).length, '') +
-      statCard('我貼的想法', myNotes, '在知識建構空間') +
-      statCard('未讀貼文', unread, '同學的新想法', unread ? 'warn' : '') +
+      (kbLocked(me)
+        ? statCard('我貼的想法', myNotes, '交完卷就可以繼續') +
+          statCard('知識建構空間', '測驗後開放', '交完卷就會打開')
+        : statCard('我貼的想法', myNotes, '在知識建構空間') +
+          statCard('未讀貼文', unread, '同學的新想法', unread ? 'warn' : '')) +
     '</div>' +
     '<div class="col">' + asgs.map(function(a){
       const done = submitted(a.id, me.id);
@@ -5647,7 +5714,7 @@ function viewQuiz(aid){
         return '<div class="card"><div class="card-p">' +
           '<div class="row" style="justify-content:space-between;margin-bottom:6px">' +
           '<b>第 ' + (idx + 1) + ' 題　非選題</b>' +
-          '<span class="row">' + itemPills(it) + '</span></div>' +
+          '<span class="row">' + itemPillsStudent(it) + '</span></div>' +
           '<div class="stem">' + esc(it.stem) + '</div>' +
           '<div class="field"><label>請寫出你的解題過程與說明</label>' +
           '<textarea style="min-height:120px" data-act="quiz-text" data-id="' + it.id + '">' + esc(QUIZ.texts[it.id] || '') + '</textarea></div>' +
@@ -5665,7 +5732,7 @@ function viewQuiz(aid){
       return '<div class="card"><div class="card-p">' +
         '<div class="row" style="justify-content:space-between;margin-bottom:6px">' +
         '<b>第 ' + (idx + 1) + ' 題</b>' +
-        '<span class="row">' + itemPills(it) + '</span></div>' +
+        '<span class="row">' + itemPillsStudent(it) + '</span></div>' +
         '<div class="stem">' + esc(it.stem) + '</div>' +
         '<div class="opts">' + it.options.map(function(o, k){
           return '<label class="opt' + (chosen === k ? ' chosen' : '') + '">' +
@@ -5676,6 +5743,15 @@ function viewQuiz(aid){
     }).join('') + '</div>' +
     '<div class="row" style="margin-top:16px;justify-content:flex-end">' +
     '<button class="btn primary" data-act="quiz-submit" data-id="' + aid + '">交卷</button></div>';
+}
+
+/* θ 是 logit，對十歲孩子沒有意義。轉成「和班上比起來」的五顆星，
+   純呈現層——原始 θ 只留在 data-theta 與匯出裡，計算完全不動。 */
+function readingStars(theta, mean){
+  const d = theta - (mean || 0);
+  const n = d >= 1 ? 5 : d >= 0.35 ? 4 : d >= -0.35 ? 3 : d >= -1 ? 2 : 1;
+  return '<span data-theta="' + fx(theta) + '" aria-label="五顆星裡的第 ' + n + ' 顆">' +
+    '★★★★★'.slice(0, n) + '<span style="opacity:.25">' + '★★★★★'.slice(n) + '</span></span>';
 }
 
 /* --- 個人診斷 --- */
@@ -5690,35 +5766,43 @@ function viewResult(aid){
   const ps = diag && diag.ready ? diag.perStudent.find(function(p){ return p.sid === me.id; }) : null;
 
   return sectionHead('個人診斷', a.title, '<a class="btn" href="#/student">← 回我的作業</a>') +
+    /* 學生端不出現 θ、δ (logit)、KIDMAP、迷思象限——十歲孩子看不懂，
+       而且「迷思」是個標籤。同一份資料，換一套對他說話的說法；
+       底層的 ps.theta、ps.cells 與所有匯出一個字不動。 */
     '<div class="grid g4" style="margin-bottom:16px">' +
       statCard('選擇題答對', right + ' / ' + mc.length, pct(right / Math.max(1, mc.length))) +
-      statCard('能力估計 θ', ps ? fx(ps.theta) : '—', ps ? '班級平均 ' + fx(diag.meanTheta) : '需要更多人完成') +
-      statCard('迷思題', ps ? ps.q[2] : '—', '能力足以答對卻答錯', ps && ps.q[2] ? 'crit' : '') +
-      statCard('優勢題', ps ? ps.q[1] : '—', '難題卻答對了', 'good') +
+      statCard('我這次的閱讀力', ps ? readingStars(ps.theta, diag.meanTheta) : '—',
+        ps ? '和班上比起來的位置' : '需要更多人完成') +
+      statCard('可惜的題目', ps ? ps.q[2] : '—', '這幾題你其實讀得懂，只是這次沒答對') +
+      statCard('厲害的題目', ps ? ps.q[1] : '—', '這幾題比較難，你答對了', 'good') +
     '</div>' +
-    (ps ? '<div class="card" style="margin-bottom:16px"><div class="card-h"><h3>你的 KIDMAP</h3>' +
-      '<span class="pill">θ = ' + fx(ps.theta) + '</span></div><div class="card-p">' +
-      kidmapSVG(diag, ps) + '<div class="row" style="margin-top:10px">' + quadLegend() + '</div>' +
-      (ps.q[2] ? '<div class="ai-out" style="margin-top:12px"><p><strong>你有 ' + ps.q[2] +
-        ' 題落在迷思象限。</strong>照你在其他題目上的表現，這些題目本來應該答得出來。回頭看看題目、對照正解，找出思考卡在哪。</p>' +
+    (ps ? '<div class="card" style="margin-bottom:16px"><div class="card-h"><h3>你這次的閱讀地圖</h3>' +
+      '<span class="muted small">每一個圓點是一題</span></div><div class="card-p">' +
+      kidmapSVG(diag, ps, true) + '<div class="row" style="margin-top:10px">' + quadLegendStudent() + '</div>' +
+      (ps.q[2] ? '<div class="ai-out" style="margin-top:12px"><p><strong>有 ' + ps.q[2] +
+        ' 題很可惜。</strong>看你其他題的表現，這幾題你其實讀得懂。回去把題目再讀一次，' +
+        '找找看你當時是漏了哪一句。</p>' +
         '<ul>' + ps.cells.filter(function(c){ return c.q === 2; }).map(function(c){
           const it = getItem(c.iid);
           const v = state.views.find(function(v){ return v.origin && v.origin.iid === it.id; });
           return '<li>第 ' + it.no + ' 題：' + esc(shortStem(it.stem)) +
             (v ? '　<a href="#/kb/' + v.id + '">全班正在討論這題 →</a>' : '') + '</li>';
         }).join('') + '</ul></div>' : '') +
-      (ps.q[1] ? '<div class="ai-out" style="margin-top:10px"><p><strong>你有 ' + ps.q[1] +
-        ' 題屬於優勢概念。</strong>這些難題超出預期答對，代表你在這些單元有隱藏實力。' +
+      (ps.q[1] ? '<div class="ai-out" style="margin-top:10px"><p><strong>有 ' + ps.q[1] +
+        ' 題你很厲害。</strong>這幾題比較難，你答對了。' +
         '到知識建構空間把你的想法貼出來——班上有同學正卡在同一題。</p></div>' : '') +
       '</div></div>'
-      : '<div class="card card-p" style="margin-bottom:16px"><p class="muted small">目前完成人數不足 ' +
-        (diag ? diag.minN : 3) + ' 人，還不能產生個人 KIDMAP。KIDMAP 需要一定樣本量才能估出穩定的題目難度與能力值，稍後再回來看。</p></div>') +
+      : '<div class="card card-p" style="margin-bottom:16px"><p class="muted small">班上還沒有夠多人做完，' +
+        '所以還畫不出你的閱讀地圖。等大家都交了再回來看。</p></div>') +
     '<div class="card" style="margin-bottom:16px"><div class="card-h"><h3>逐題檢視</h3></div>' +
     '<div class="card-p col">' + a.itemIds.map(getItem).filter(function(i){ return i && i.type === 'mc'; }).map(function(it){
       const r = mine.find(function(x){ return x.iid === it.id; });
       const c = diag && diag.ready && ps ? ps.cells.find(function(x){ return x.iid === it.id; }) : null;
       return '<div class="item"><div class="row" style="justify-content:space-between">' +
-        '<b>第 ' + it.no + ' 題</b>' + (c ? qpill(c.q) : (r && r.correct ? '<span class="pill q1"><span class="dot"></span>答對</span>' :
+        '<b>第 ' + it.no + ' 題</b>' +
+        (c ? '<span class="pill ' + QUAD[c.q].key + '"><span class="dot"></span>' +
+             esc(QUAD_STUDENT[c.q]) + '</span>'
+           : (r && r.correct ? '<span class="pill q1"><span class="dot"></span>答對</span>' :
           '<span class="pill q2"><span class="dot"></span>答錯</span>')) + '</div>' +
         '<div class="stem">' + esc(it.stem) + '</div>' +
         '<div class="opts">' + it.options.map(function(o, k){
@@ -6326,8 +6410,12 @@ function viewAaL(aid){
 
   return '<div class="row" style="justify-content:space-between;align-items:flex-end;margin-bottom:12px">' +
       '<div><h2>' + esc(a.title) + '</h2>' +
-      '<div class="muted small">' + esc(me.name) + '　·　' + esc((classOfStudent(me.id) || {}).name || '') +
-      '　·　夥伴條件：<b>' + esc(cond.name) + '</b></div></div>' +
+      /* 不在學生畫面印出實驗條件名。條件資訊由畫面本身承載
+         （右欄卡片頭已經是「我的夥伴：…」或「我的筆記」），
+         印出「無對象」等於直接告訴對照組他被分到哪一組。
+         AAL.cond 與日誌的 cond 欄位照舊寫入，拿掉的只是畫面上的字。 */
+      '<div class="muted small">' + esc(me.name) + '　·　' +
+      esc((classOfStudent(me.id) || {}).name || '') + '</div></div>' +
       '<div class="row">' +
       '<a class="btn sm" href="#/student">← 先離開（進度會保留）</a>' +
       '<span class="pill">第 ' + (AAL.idx + 1) + ' / ' + AAL.items.length + ' 題</span>' +
@@ -6348,8 +6436,10 @@ function viewAaL(aid){
       '<span class="pill" id="markCount"' + (marks.length ? '' : ' hidden') + '>已標記 ' +
       '<span id="markCountN">' + marks.length + '</span> 句</span></div>' +
       '<div class="card-p">' +
-      '<p class="muted small" id="passageHelp">點一下任何一句，把它標記起來。標記不會影響分數，' +
-      '換題也不會消失；每一篇文章的標記分開記。</p>' +
+      /* 隱私要講實話：老師在唯讀重播裡看得到學生標了哪幾句。 */
+      '<p class="muted small" id="passageHelp">點一下任何一句，把它標記起來。' +
+      '標記不會影響你的分數，換題也不會消失；每一篇文章的標記分開記。' +
+      '老師之後可以看到你標了哪幾句，這是為了知道你怎麼讀。</p>' +
       '<div class="passage" role="group" aria-labelledby="passageTitle" aria-describedby="passageHelp">' +
         text.paras.map(function(_, pi){
           return '<p class="para">' + sents.filter(function(s){ return s.para === pi; }).map(function(s){
@@ -6364,7 +6454,9 @@ function viewAaL(aid){
 
     /* ---- 右欄：題目與作答 ＋ 對話／筆記 ---- */
     '<div class="aal-side">' +
-      '<div class="card" id="aalAnswer" tabindex="-1"><div class="card-h"><h3>第 ' + (AAL.idx + 1) + ' 題</h3>' + procPill(it.process) + '</div>' +
+      /* 不對學生顯示歷程標籤：那是相對歷程編碼的判定基準，
+         受試者看到基準等於拿到解題策略提示。 */
+      '<div class="card" id="aalAnswer" tabindex="-1"><div class="card-h"><h3>第 ' + (AAL.idx + 1) + ' 題</h3></div>' +
       '<div class="card-p">' +
       '<div class="stem">' + esc(it.stem) + '</div>' +
       (it.type === 'mc'
@@ -6408,26 +6500,34 @@ function aalDialogPane(it, cond, turns, used, maxT){
       }).join('') +
       (left <= 0 ? '<div class="msg sys">這一題的對話次數用完了。換下一題會重新計算。</div>' : '') +
     '</div>' +
-    '<div class="row" style="margin-top:10px;gap:6px">' +
+    '<div class="row pane-bar" style="margin-top:10px;gap:6px">' +
       '<input type="text" id="aalSay" placeholder="' + (left > 0 ? '說說你現在的想法…' : '這一題已經聊完了') +
       '"' + (left > 0 ? '' : ' disabled') + ' style="flex:1">' +
       '<button class="btn primary sm" data-act="aal-say"' + (left > 0 ? '' : ' disabled') + '>送出</button>' +
     '</div>' +
-    '<p class="muted small" style="margin-top:8px">陪你的這位夥伴是電腦程式，不是真的人。' +
-    '它不會告訴你答案，也不會說你對或錯——只會一直問你怎麼想的。' +
-    '你寫的字老師之後看得到，不會拿來打分數。</p>' +
+    '<p class="muted small pane-foot" style="margin-top:8px">陪你的這位夥伴是電腦程式，不是真的人。' +
+    '它不會告訴你答案，也不會說你對或錯。' +
+    '你跟它說的話老師之後看得到，不會拿來打分數。</p>' +
     '</div></div>';
 }
 
+/* 對照組的面板。結構刻意與 aalDialogPane 逐項對位：
+   卡片頭一個標題 + 一顆計數 pill、內容區高度同為 --pane-h、
+   下方一條同高的工具列、footer 說明同樣兩句。
+   任何一項不對等，介面差異就會以條件為單位混進依變項。 */
 function aalNotePane(it){
-  return '<div class="card aal-chat"><div class="card-h"><h3>我的筆記</h3>' +
-    '<span class="muted small">寫給自己看的</span></div><div class="card-p">' +
-    '<textarea data-act="aal-note" style="min-height:210px" placeholder="把你想到的、卡住的地方寫下來">' +
-    esc(AAL.notes[it.id] || '') + '</textarea>' +
-    /* 與對話卡的說明對稱：同樣三句、同樣的隱私描述，不提別班、不用否定句。
-       「只有你看得到」是不實的——老師在唯讀重播裡看得到筆記。 */
-    '<p class="muted small" style="margin-top:8px">這節課你自己讀、自己想。' +
-    '想到什麼、卡在哪裡，都可以寫下來。' +
+  const txt = AAL.notes[it.id] || '';
+  return '<div class="card aal-chat"><div class="card-h">' +
+    '<h3>我的筆記　·　第 ' + (AAL.idx + 1) + ' 題</h3>' +
+    '<span class="pill">已寫 ' + txt.length + ' 字</span></div>' +
+    '<div class="card-p">' +
+    '<textarea data-act="aal-note" style="height:var(--pane-h)" ' +
+    'placeholder="把你想到的、還沒想通的，寫在這裡">' + esc(txt) + '</textarea>' +
+    '<div class="row pane-bar" style="margin-top:10px;gap:6px">' +
+      '<button class="btn sm" data-act="aal-note-clear">清空</button>' +
+      '<span class="muted small" style="flex:1">這一題一份，換題會換成新的一頁。</span>' +
+    '</div>' +
+    '<p class="muted small pane-foot" style="margin-top:8px">把你想到的、還沒想通的，寫在這裡。' +
     '你寫的字老師之後看得到，不會拿來打分數。</p>' +
     '</div></div>';
 }
@@ -6566,6 +6666,17 @@ function aalSubmit(){
       iid:it.id, proc:it.process, type:'SUBMIT', code:'S', selfCheck:nC,
       draftFirst:(AAL.drafts[it.id] || {}).first, draftFinal:(AAL.drafts[it.id] || {}).final});
 
+    /* 對照組整節課唯一的產出就是筆記。存進獨立的 state.aalNotes——
+       不塞進 state.dialog，因為全站多處文案與分析建立在「對照組 dialog 為空」上。
+       欄位與 dialog 對齊，分析端要納入時自己 concat。 */
+    if (AAL.cond === 'control' && (AAL.notes[it.id] || '').trim()){
+      state.aalNotes = state.aalNotes || [];
+      state.aalNotes.push({t:Date.now(), rel:Date.now() - AAL.t0, sid:me.id,
+        cid:(classOfStudent(me.id) || {}).id, cond:AAL.cond, lang:'zh',
+        aid:AAL.aid, iid:it.id, proc:it.process, text:AAL.notes[it.id],
+        ucode:codeUtteranceProcess(AAL.notes[it.id]),
+        sent:sentimentOf(AAL.notes[it.id]).score});
+    }
     if (it.type === 'cr'){
       state.responses.push({aid:AAL.aid, sid:me.id, iid:it.id, text:AAL.texts[it.id] || '',
         strokes:(PADS['aal-' + it.id] && PADS['aal-' + it.id].strokes.length) ? PADS['aal-' + it.id].strokes : null,
@@ -6895,17 +7006,25 @@ function inspectDialogPane(cond, turns){
 }
 
 function inspectNotePane(sid, aid, it, cond){
-  const notes = allLogs().filter(function(e){
+  /* 優先讀交卷時存下的完整筆記（state.aalNotes）。
+     舊資料只有每 4 秒一次的 80 字 NOTE 事件尾巴，作為回退。 */
+  const full = (state.aalNotes || []).filter(function(n){
+    return n.sid === sid && n.aid === aid && n.iid === it.id; });
+  const tail = allLogs().filter(function(e){
     return e.sid === sid && e.aid === aid && e.iid === it.id && e.code === 'N'; });
   const isControl = cond && cond.id === 'control';
+  const body = full.length
+    ? full.map(function(n){ return '<div class="note-full" style="white-space:pre-wrap">' +
+        esc(n.text || '') + '</div>'; }).join('')
+    : (tail.length
+        ? '<p class="muted small">只有書寫過程的片段（舊資料沒有存完整筆記）：</p>' +
+          tail.map(function(e){ return '<div class="note-full" style="white-space:pre-wrap">' +
+            esc(e.text || '') + '</div>'; }).join('')
+        : '<p class="muted small">這一題沒有留下' + (isControl ? '筆記' : '對話') + '記錄。</p>');
   return '<div class="card aal-chat"><div class="card-h"><h3>' +
     (isControl ? '他的筆記' : '這一題沒有對話') + '</h3>' +
-    '<span class="muted small">' + (isControl ? '對照組沒有 AI 夥伴' : '') + '</span></div>' +
-    '<div class="card-p">' +
-    (notes.length
-      ? notes.map(function(e){ return '<div class="note-full" style="white-space:pre-wrap">' +
-          esc(e.text || '') + '</div>'; }).join('')
-      : '<p class="muted small">這一題沒有留下' + (isControl ? '筆記' : '對話') + '記錄。</p>') +
+    '<span class="muted small">' + (isControl ? '無對象條件' : '') + '</span></div>' +
+    '<div class="card-p">' + body +
     (isControl ? '<p class="muted small" style="margin-top:8px">對照組的版面與其他三班完全一樣，' +
       '只是把對話區換成同樣大小的筆記區——版面幾何恆定，避免介面差異混進依變項。</p>' : '') +
     '</div></div>';
@@ -7916,6 +8035,12 @@ function bindEvents(){
     if (act === 'inspect-prev'){ INSPECT.idx = Math.max(0, INSPECT.idx - 1); render(); return; }
     if (act === 'inspect-next'){ INSPECT.idx = Math.min(INSPECT.items.length - 1, INSPECT.idx + 1); render(); return; }
     if (act === 'aal-submit'){ aalSubmit(); return; }
+    if (act === 'aal-note-clear'){
+      const it = aalItem();
+      if ((AAL.notes[it.id] || '') && !confirm('清空這一題的筆記？')) return;
+      AAL.notes[it.id] = '';
+      aalSave(); render();
+      return; }
     if (act === 'aal-check'){
       const it = aalItem();
       const arr = AAL.checks[it.id] = AAL.checks[it.id] || [];

@@ -12,17 +12,17 @@
 
 /* --- 四條件 --- */
 const CONDITIONS = [
-  {id:'tutor',   name:'導師',   en:'AI-as-Tutor',  cls:'sc1', mark:'▲',
+  {id:'tutor',   name:'老師小葵', en:'AI-as-Tutor',  cls:'sc1', mark:'▲',
    tradition:'智慧型教學系統／蘇格拉底式鷹架',
    frame:'我是陪你讀的老師。我不會告訴你答案，只會一直問你「你是從哪裡看出來的」。',
    mech:'適性鷹架與形成性提問',
    note:'指導性鷹架可能壓縮學習者自主性，故本平台限制其僅能提問、不得評價。'},
-  {id:'tutee',   name:'學生',   en:'AI-as-Tutee',  cls:'sc3', mark:'●',
+  {id:'tutee',   name:'同學小葉', en:'AI-as-Tutee',  cls:'sc3', mark:'●',
    tradition:'可教代理人／以教代學（門生效應）',
    frame:'我是剛讀完這篇、但很多地方沒看懂的同學。你可以講給我聽嗎？',
    mech:'學習者翻轉為施教者，須為代理人的理解負責',
    note:'評量事件中最徹底的「主動行動者」姿態。'},
-  {id:'peer',    name:'同儕',   en:'AI-as-Peer',   cls:'sc5', mark:'■',
+  {id:'peer',    name:'同學小森', en:'AI-as-Peer',   cls:'sc5', mark:'■',
    tradition:'社會建構論／對等協作',
    frame:'我也在讀這一篇。我先說我讀到哪裡，你再說你的，我們對一下。',
    mech:'分享觀點、共構理解',
@@ -187,13 +187,36 @@ function composePrompt(conditionId, processId, qfnId){
    因此不需要語言模型也能忠實產生三條件的對話。
    ========================================================================== */
 
+/* 開場白分兩池：turn 0 時學生還沒說過任何話，也還沒作答，
+   所以「你這樣說我有一點懂了」「先不要急著選」這類句子在第一回合是假的
+   ——後者更糟，它暗示 AI 看得到學生正要選，違反「AI 不讀作答欄位」的設定。 */
+/* 三個角色一律「一句社會框架 + 一句提問」，句數與字數刻意對齊。
+   話量若不相等，三個實驗組就從「三種社會框架」變成「三種資訊量」，
+   RQ1 的組間比較會失效。
+
+   同儕的開場白本身就是「我先講我讀到哪裡」——所以 peer 的 opener 池
+   直接放那些句子，不再額外多一句。內容只能關於**閱讀動作**，
+   絕不碰文本內容或選項，碰了就是給提示。 */
+const PEER_SHARE = [
+  '我剛剛在第二段停了一下，想了想才往下讀。',
+  '我第一次讀的時候，好像把這裡看漏了。',
+  '我是讀到後面，才想通前面在講什麼。',
+  '我這一題也想了一下下，沒有很快。'
+];
+
 const ROLE_OPENER = {
-  tutor: ['這一題我們一起看。', '好，我聽你說。', '我想確認你是怎麼看的。', '先不要急著選。'],
-  tutee: ['我也在讀這一段，可是我卡住了。', '這裡我不太懂耶。', '我剛剛好像讀錯了。', '你這樣說我有一點懂了。'],
-  peer:  ['我先講我讀到哪裡。', '我也在看這一題。', '我的想法跟你可能不一樣。', '欸我們對一下。']
+  tutor: {first: ['這一題我們一起看，我想知道你怎麼讀。', '我想聽聽你是怎麼看這一題的。'],
+          later: ['好，我聽你說，我想確認你是怎麼想的。', '嗯，你再多說一點，我想聽清楚。',
+                  '我想確認我有聽懂你的意思。', '先不要急著選，我們再想一下。']},
+  tutee: {first: ['我也在讀這一段，可是我卡住了。', '這裡我不太懂耶。'],
+          later: ['我剛剛好像讀錯了。', '你這樣說我有一點懂了。',
+                  '所以你的意思是……', '等一下，我想再確認一次。']},
+  peer:  {first: PEER_SHARE.slice(0, 2),
+          later: PEER_SHARE.concat(['我的想法跟你可能不一樣。', '我剛剛也在想這個。'])}
 };
+
 const ROLE_STEM = {
-  tutor: function(q){ return q; },
+  tutor: function(q){ return '你先說說看——' + q; },
   tutee: function(q){ return '你可以說給我聽嗎——' + q; },
   peer:  function(q){ return '那你呢？' + q; }
 };
@@ -234,9 +257,11 @@ function agentTurn(conditionId, item, turn, rnd){
     body = '現在如果只能講一句話說你的想法，你會怎麼說？';
   }
 
-  const openers = ROLE_OPENER[conditionId] || [''];
+  const pool = ROLE_OPENER[conditionId];
+  const openers = pool ? (turn === 0 ? pool.first : pool.later) : [''];
   const opener = openers[Math.floor(r() * openers.length)];
-  const text = (opener ? opener + ' ' : '') + (ROLE_STEM[conditionId] || function(q){ return q; })(body);
+  const text = (opener ? opener + ' ' : '') +
+    (ROLE_STEM[conditionId] || function(q){ return q; })(body);
 
   return {
     text: leakGuard(text, item).text,

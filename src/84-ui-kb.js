@@ -9,21 +9,24 @@ let KBSEARCH = {field:'content', q:''};
 let EDIT = null;                // 編輯中的貼文草稿
 
 /* 測驗還沒交完的學生看到的門檻畫面。四個 KB 入口都先過這一關。 */
+/* 測驗還沒交完的學生看到的門檻畫面。四個 KB 入口都先過這一關。
+   文案依「實際擋住你的那一份作業」說話——寫死「前測」會在後測派出後變成謊話。 */
 function kbGate(){
   const me = currentUser();
   if (!kbLocked(me)) return '';
   const pend = pendingAssignments(me.id);
-  return '<div class="empty"><h3>知識建構空間會在測驗之後開放</h3>' +
-    '<p style="max-width:62ch">這裡放的是全班一起討論的共同問題，而那些問題是從大家的作答裡整理出來的。' +
-    '如果先看到別人怎麼說，你自己的讀法就被影響了，前測也就測不到你原本的想法。' +
-    '交卷之後，這個空間就會打開。</p>' +
-    '<div class="col" style="margin-top:14px;align-items:flex-start">' +
+  const blocking = pend[0];
+  return '<div class="empty">' +
+    '<h3>先把「' + esc(blocking.title) + '」交出來，這裡就會打開</h3>' +
+    '<p style="max-width:62ch">這個地方放的是全班一起想的問題，那些問題是從大家的作答整理出來的。' +
+    '如果你先看到別人怎麼想，就很難知道自己本來會怎麼讀了。</p>' +
+    '<p class="muted small">還沒交的有 ' + pend.length + ' 份。</p>' +
+    '<div class="row" style="margin-top:14px">' +
     pend.map(function(a){
       return '<a class="btn primary" href="#/' + (a.aal ? 'aal' : 'quiz') + '/' + a.id + '">' +
         esc(a.title) + '　' + (a.aal ? '開始這節課 →' : '開始作答 →') + '</a>';
-    }).join('') + '</div>' +
-    '<p class="muted small" style="margin-top:14px">還沒交的有 ' + pend.length + ' 份。</p>' +
-    '<a class="lk" href="#/student" style="margin-top:10px;display:inline-block">回我的作業</a></div>';
+    }).join('') +
+    '<a class="btn" href="#/student">回我的作業</a></div></div>';
 }
 
 function viewKBList(){

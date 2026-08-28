@@ -416,6 +416,12 @@ function bindEvents(){
     if (act === 'inspect-prev'){ INSPECT.idx = Math.max(0, INSPECT.idx - 1); render(); return; }
     if (act === 'inspect-next'){ INSPECT.idx = Math.min(INSPECT.items.length - 1, INSPECT.idx + 1); render(); return; }
     if (act === 'aal-submit'){ aalSubmit(); return; }
+    if (act === 'aal-note-clear'){
+      const it = aalItem();
+      if ((AAL.notes[it.id] || '') && !confirm('清空這一題的筆記？')) return;
+      AAL.notes[it.id] = '';
+      aalSave(); render();
+      return; }
     if (act === 'aal-check'){
       const it = aalItem();
       const arr = AAL.checks[it.id] = AAL.checks[it.id] || [];

@@ -77,6 +77,9 @@ function pendingAssignments(sid){
    理由是系統迴圈的次序：先作答 → 才有 KIDMAP 診斷 → 才有值得討論的共同問題。
    若在作答前就看得到別人的討論，等於先看到答案，前測也就不成立了。
    教師與研究者不受此限（他們要在課前備課、課後分析）。 */
+/* 注意：不分相位是刻意的——**任何**未交作業都鎖。
+   因此同時派出前測與後測，會讓共構空間從前測交卷起一直鎖到後測交卷，
+   等於把中間的共構階段整段關掉。派題時前後測要分兩次派。 */
 function kbLocked(u){
   const me = u || currentUser();
   if (me.role !== 'student') return false;

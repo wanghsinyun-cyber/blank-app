@@ -358,7 +358,7 @@ function buildSeedState(){
   };
   const post = {
     id:'a-post', title:'閱讀理解 評量即學習事件（後測）',
-    desc:'這一節你會一邊作答一邊跟你的夥伴討論。答錯沒關係，重點是把你怎麼讀的說出來。',
+    desc:'這一節你會一邊讀一邊回答問題。答錯沒關係，重點是把你怎麼讀的說出來。',
     classIds: allClassIds, teacherId:'u-t1', itemIds: allIds, phase:'post', linkedTo:'a-pre',
     aal: true, createdAt: now - 1 * DAY, due: now + 3 * DAY
   };

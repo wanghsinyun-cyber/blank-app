@@ -401,7 +401,10 @@ input[type=checkbox],input[type=radio]{ width:1.15em; height:1.15em; accent-colo
 /* ---------- 評量即學習事件 ----------
    四條件共用同一份版面幾何：對照組只是把對話卡換成同尺寸的筆記卡，
    使外在認知負荷、捲動深度與畫面留白在條件之間保持一致。 */
-.aal{display:grid; grid-template-columns:minmax(0,1.05fr) minmax(330px,.95fr); gap:16px; align-items:start}
+/* 四條件共用同一份版面幾何。--pane-h 讓對話區與筆記區等高——
+   對照組矮一截的話，介面差異會以條件為單位打進外在認知負荷這個依變項。 */
+.aal{display:grid; grid-template-columns:minmax(0,1.05fr) minmax(330px,.95fr); gap:16px; align-items:start;
+  --pane-h:15rem}
 /* 左欄文章：sticky 但要有自己的捲動區，否則文章比視窗高時後半段永遠捲不到。
    card-h（標題與「已標記 N 句」）不捲，只捲 card-p。 */
 .aal-text{position:sticky; top:calc(var(--topbar-h) + 2px);
@@ -415,7 +418,11 @@ input[type=checkbox],input[type=radio]{ width:1.15em; height:1.15em; accent-colo
 .sent.on{background:var(--q4-bg); border-bottom:3px solid var(--q4); color:var(--ink); font-weight:600}
 /* 不以顏色單獨傳達訊息（1.4.1）：這一組規則沒有 .passage 前綴，也要帶記號 */
 .sent.on::after{content:"�08D"; color:var(--q4); font-weight:700}
-.chat{display:flex; flex-direction:column; gap:8px; height:300px; overflow-y:auto; padding-right:4px}
+/* 對話卡與筆記卡要逐層等高：內容區、工具列、說明文字三段都鎖住最小高度。
+   用 rem 是為了讓字級放大時兩邊一起長，不會在 175% 又拉開差距。 */
+.aal-chat .pane-bar{min-height:2.35rem; align-items:center}
+.aal-chat .pane-foot{min-height:4.2rem}
+.chat{display:flex; flex-direction:column; gap:8px; height:var(--pane-h); overflow-y:auto; padding-right:4px}
 .msg{max-width:88%; padding:8px 12px; border-radius:12px; font-size:1rem; line-height:1.6}
 .msg b{display:block; font-size:0.8rem; letter-spacing:.04em; color:var(--ink-4); font-weight:600; margin-bottom:2px}
 .msg.agent{align-self:flex-start; background:var(--shade); border:1px solid var(--rule-soft); border-bottom-left-radius:3px}

@@ -102,8 +102,12 @@ function viewAaL(aid){
 
   return '<div class="row" style="justify-content:space-between;align-items:flex-end;margin-bottom:12px">' +
       '<div><h2>' + esc(a.title) + '</h2>' +
-      '<div class="muted small">' + esc(me.name) + '　·　' + esc((classOfStudent(me.id) || {}).name || '') +
-      '　·　夥伴條件：<b>' + esc(cond.name) + '</b></div></div>' +
+      /* 不在學生畫面印出實驗條件名。條件資訊由畫面本身承載
+         （右欄卡片頭已經是「我的夥伴：…」或「我的筆記」），
+         印出「無對象」等於直接告訴對照組他被分到哪一組。
+         AAL.cond 與日誌的 cond 欄位照舊寫入，拿掉的只是畫面上的字。 */
+      '<div class="muted small">' + esc(me.name) + '　·　' +
+      esc((classOfStudent(me.id) || {}).name || '') + '</div></div>' +
       '<div class="row">' +
       '<a class="btn sm" href="#/student">← 先離開（進度會保留）</a>' +
       '<span class="pill">第 ' + (AAL.idx + 1) + ' / ' + AAL.items.length + ' 題</span>' +
@@ -124,8 +128,10 @@ function viewAaL(aid){
       '<span class="pill" id="markCount"' + (marks.length ? '' : ' hidden') + '>已標記 ' +
       '<span id="markCountN">' + marks.length + '</span> 句</span></div>' +
       '<div class="card-p">' +
-      '<p class="muted small" id="passageHelp">點一下任何一句，把它標記起來。標記不會影響分數，' +
-      '換題也不會消失；每一篇文章的標記分開記。</p>' +
+      /* 隱私要講實話：老師在唯讀重播裡看得到學生標了哪幾句。 */
+      '<p class="muted small" id="passageHelp">點一下任何一句，把它標記起來。' +
+      '標記不會影響你的分數，換題也不會消失；每一篇文章的標記分開記。' +
+      '老師之後可以看到你標了哪幾句，這是為了知道你怎麼讀。</p>' +
       '<div class="passage" role="group" aria-labelledby="passageTitle" aria-describedby="passageHelp">' +
         text.paras.map(function(_, pi){
           return '<p class="para">' + sents.filter(function(s){ return s.para === pi; }).map(function(s){
@@ -140,7 +146,9 @@ function viewAaL(aid){
 
     /* ---- 右欄：題目與作答 ＋ 對話／筆記 ---- */
     '<div class="aal-side">' +
-      '<div class="card" id="aalAnswer" tabindex="-1"><div class="card-h"><h3>第 ' + (AAL.idx + 1) + ' 題</h3>' + procPill(it.process) + '</div>' +
+      /* 不對學生顯示歷程標籤：那是相對歷程編碼的判定基準，
+         受試者看到基準等於拿到解題策略提示。 */
+      '<div class="card" id="aalAnswer" tabindex="-1"><div class="card-h"><h3>第 ' + (AAL.idx + 1) + ' 題</h3></div>' +
       '<div class="card-p">' +
       '<div class="stem">' + esc(it.stem) + '</div>' +
       (it.type === 'mc'
@@ -184,26 +192,34 @@ function aalDialogPane(it, cond, turns, used, maxT){
       }).join('') +
       (left <= 0 ? '<div class="msg sys">這一題的對話次數用完了。換下一題會重新計算。</div>' : '') +
     '</div>' +
-    '<div class="row" style="margin-top:10px;gap:6px">' +
+    '<div class="row pane-bar" style="margin-top:10px;gap:6px">' +
       '<input type="text" id="aalSay" placeholder="' + (left > 0 ? '說說你現在的想法…' : '這一題已經聊完了') +
       '"' + (left > 0 ? '' : ' disabled') + ' style="flex:1">' +
       '<button class="btn primary sm" data-act="aal-say"' + (left > 0 ? '' : ' disabled') + '>送出</button>' +
     '</div>' +
-    '<p class="muted small" style="margin-top:8px">陪你的這位夥伴是電腦程式，不是真的人。' +
-    '它不會告訴你答案，也不會說你對或錯——只會一直問你怎麼想的。' +
-    '你寫的字老師之後看得到，不會拿來打分數。</p>' +
+    '<p class="muted small pane-foot" style="margin-top:8px">陪你的這位夥伴是電腦程式，不是真的人。' +
+    '它不會告訴你答案，也不會說你對或錯。' +
+    '你跟它說的話老師之後看得到，不會拿來打分數。</p>' +
     '</div></div>';
 }
 
+/* 對照組的面板。結構刻意與 aalDialogPane 逐項對位：
+   卡片頭一個標題 + 一顆計數 pill、內容區高度同為 --pane-h、
+   下方一條同高的工具列、footer 說明同樣兩句。
+   任何一項不對等，介面差異就會以條件為單位混進依變項。 */
 function aalNotePane(it){
-  return '<div class="card aal-chat"><div class="card-h"><h3>我的筆記</h3>' +
-    '<span class="muted small">寫給自己看的</span></div><div class="card-p">' +
-    '<textarea data-act="aal-note" style="min-height:210px" placeholder="把你想到的、卡住的地方寫下來">' +
-    esc(AAL.notes[it.id] || '') + '</textarea>' +
-    /* 與對話卡的說明對稱：同樣三句、同樣的隱私描述，不提別班、不用否定句。
-       「只有你看得到」是不實的——老師在唯讀重播裡看得到筆記。 */
-    '<p class="muted small" style="margin-top:8px">這節課你自己讀、自己想。' +
-    '想到什麼、卡在哪裡，都可以寫下來。' +
+  const txt = AAL.notes[it.id] || '';
+  return '<div class="card aal-chat"><div class="card-h">' +
+    '<h3>我的筆記　·　第 ' + (AAL.idx + 1) + ' 題</h3>' +
+    '<span class="pill">已寫 ' + txt.length + ' 字</span></div>' +
+    '<div class="card-p">' +
+    '<textarea data-act="aal-note" style="height:var(--pane-h)" ' +
+    'placeholder="把你想到的、還沒想通的，寫在這裡">' + esc(txt) + '</textarea>' +
+    '<div class="row pane-bar" style="margin-top:10px;gap:6px">' +
+      '<button class="btn sm" data-act="aal-note-clear">清空</button>' +
+      '<span class="muted small" style="flex:1">這一題一份，換題會換成新的一頁。</span>' +
+    '</div>' +
+    '<p class="muted small pane-foot" style="margin-top:8px">把你想到的、還沒想通的，寫在這裡。' +
     '你寫的字老師之後看得到，不會拿來打分數。</p>' +
     '</div></div>';
 }
@@ -342,6 +358,17 @@ function aalSubmit(){
       iid:it.id, proc:it.process, type:'SUBMIT', code:'S', selfCheck:nC,
       draftFirst:(AAL.drafts[it.id] || {}).first, draftFinal:(AAL.drafts[it.id] || {}).final});
 
+    /* 對照組整節課唯一的產出就是筆記。存進獨立的 state.aalNotes——
+       不塞進 state.dialog，因為全站多處文案與分析建立在「對照組 dialog 為空」上。
+       欄位與 dialog 對齊，分析端要納入時自己 concat。 */
+    if (AAL.cond === 'control' && (AAL.notes[it.id] || '').trim()){
+      state.aalNotes = state.aalNotes || [];
+      state.aalNotes.push({t:Date.now(), rel:Date.now() - AAL.t0, sid:me.id,
+        cid:(classOfStudent(me.id) || {}).id, cond:AAL.cond, lang:'zh',
+        aid:AAL.aid, iid:it.id, proc:it.process, text:AAL.notes[it.id],
+        ucode:codeUtteranceProcess(AAL.notes[it.id]),
+        sent:sentimentOf(AAL.notes[it.id]).score});
+    }
     if (it.type === 'cr'){
       state.responses.push({aid:AAL.aid, sid:me.id, iid:it.id, text:AAL.texts[it.id] || '',
         strokes:(PADS['aal-' + it.id] && PADS['aal-' + it.id].strokes.length) ? PADS['aal-' + it.id].strokes : null,
@@ -671,17 +698,25 @@ function inspectDialogPane(cond, turns){
 }
 
 function inspectNotePane(sid, aid, it, cond){
-  const notes = allLogs().filter(function(e){
+  /* 優先讀交卷時存下的完整筆記（state.aalNotes）。
+     舊資料只有每 4 秒一次的 80 字 NOTE 事件尾巴，作為回退。 */
+  const full = (state.aalNotes || []).filter(function(n){
+    return n.sid === sid && n.aid === aid && n.iid === it.id; });
+  const tail = allLogs().filter(function(e){
     return e.sid === sid && e.aid === aid && e.iid === it.id && e.code === 'N'; });
   const isControl = cond && cond.id === 'control';
+  const body = full.length
+    ? full.map(function(n){ return '<div class="note-full" style="white-space:pre-wrap">' +
+        esc(n.text || '') + '</div>'; }).join('')
+    : (tail.length
+        ? '<p class="muted small">只有書寫過程的片段（舊資料沒有存完整筆記）：</p>' +
+          tail.map(function(e){ return '<div class="note-full" style="white-space:pre-wrap">' +
+            esc(e.text || '') + '</div>'; }).join('')
+        : '<p class="muted small">這一題沒有留下' + (isControl ? '筆記' : '對話') + '記錄。</p>');
   return '<div class="card aal-chat"><div class="card-h"><h3>' +
     (isControl ? '他的筆記' : '這一題沒有對話') + '</h3>' +
-    '<span class="muted small">' + (isControl ? '對照組沒有 AI 夥伴' : '') + '</span></div>' +
-    '<div class="card-p">' +
-    (notes.length
-      ? notes.map(function(e){ return '<div class="note-full" style="white-space:pre-wrap">' +
-          esc(e.text || '') + '</div>'; }).join('')
-      : '<p class="muted small">這一題沒有留下' + (isControl ? '筆記' : '對話') + '記錄。</p>') +
+    '<span class="muted small">' + (isControl ? '無對象條件' : '') + '</span></div>' +
+    '<div class="card-p">' + body +
     (isControl ? '<p class="muted small" style="margin-top:8px">對照組的版面與其他三班完全一樣，' +
       '只是把對話區換成同樣大小的筆記區——版面幾何恆定，避免介面差異混進依變項。</p>' : '') +
     '</div></div>';

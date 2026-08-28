@@ -137,12 +137,19 @@ function procPill(pid){
   return '<span class="pill ' + p.cls + '"><span aria-hidden="true">' + p.mark + '</span>' +
     esc(p.name) + '</span>';
 }
-/* 一道題目的識別標籤：文本 · 理解歷程 · 難度 */
+/* 一道題目的識別標籤：文本 · 理解歷程 · 難度。教師與研究端專用。 */
 function itemPills(it){
   if (!it) return '';
   return '<span class="pill">' + esc(textTitle(it.unit)) + '</span>' +
     procPill(it.process) +
     '<span class="pill">' + esc(it.diff) + '</span>';
+}
+/* 學生看得到的版本：只有文本名。
+   歷程標定是相對歷程編碼（RQ4）的判定基準，受試者不該看到基準；
+   難度標籤則等於直接告訴學生「這題你大概答不出來」。 */
+function itemPillsStudent(it){
+  if (!it) return '';
+  return '<span class="pill">' + esc(textTitle(it.unit)) + '</span>';
 }
 
 function qpill(q, n){
@@ -167,7 +174,23 @@ function quadLegend(){
 }
 
 /* --- KIDMAP：個別學生四象限圖 --- */
-function kidmapSVG(diag, ps){
+/* 學生版的四象限用語。同一份資料、同一個幾何，只換說法——
+   十歲孩子看不懂 θ、δ (logit)、「迷思象限」，而且「迷思」是個標籤。
+   教師端與研究端一律走預設（student=false），計算與匯出一個字不動。 */
+const QUAD_STUDENT = {
+  1: '比較難，你答對了',
+  2: '可惜，你其實讀得懂',
+  3: '比較難，這次沒答對',
+  4: '你穩穩答對'
+};
+function quadLegendStudent(){
+  return '<div class="legend">' + [1,2,3,4].map(function(q){
+    return '<span><i class="swatch" style="background:var(--' + QUAD[q].key + ')"></i>' +
+      esc(QUAD_STUDENT[q]) + '</span>';
+  }).join('') + '</div>';
+}
+
+function kidmapSVG(diag, ps, student){
   const W = 620, H = 400, m = {t:26, r:18, b:34, l:52};
   const iw = W - m.l - m.r, ih = H - m.t - m.b;
   const ds = diag.perItem.map(function(p){ return p.delta; });
@@ -179,28 +202,28 @@ function kidmapSVG(diag, ps){
   const xW = m.l + iw * 0.27, xR = m.l + iw * 0.73;
 
   const parts = [];
-  parts.push('<svg class="kidmap" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="KIDMAP 四象限圖">');
+  parts.push('<svg class="kidmap" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="' + (student ? '你這次的閱讀地圖' : 'KIDMAP 四象限圖') + '">');
   // 四個象限底色
   parts.push('<rect x="' + m.l + '" y="' + m.t + '" width="' + (iw / 2) + '" height="' + (yTheta - m.t) + '" fill="var(--q3-bg)"/>');
   parts.push('<rect x="' + (m.l + iw / 2) + '" y="' + m.t + '" width="' + (iw / 2) + '" height="' + (yTheta - m.t) + '" fill="var(--q1-bg)"/>');
   parts.push('<rect x="' + m.l + '" y="' + yTheta + '" width="' + (iw / 2) + '" height="' + (m.t + ih - yTheta) + '" fill="var(--q2-bg)"/>');
   parts.push('<rect x="' + (m.l + iw / 2) + '" y="' + yTheta + '" width="' + (iw / 2) + '" height="' + (m.t + ih - yTheta) + '" fill="var(--q4-bg)"/>');
   // 象限標籤
-  parts.push('<text class="qlabel" x="' + (m.l + 8) + '" y="' + (m.t + 14) + '" fill="var(--q3)">III 合理答錯</text>');
-  parts.push('<text class="qlabel" x="' + (m.l + iw - 8) + '" y="' + (m.t + 14) + '" text-anchor="end" fill="var(--q1)">I 優勢概念</text>');
-  parts.push('<text class="qlabel" x="' + (m.l + 8) + '" y="' + (m.t + ih - 8) + '" fill="var(--q2)">II 迷思概念</text>');
-  parts.push('<text class="qlabel" x="' + (m.l + iw - 8) + '" y="' + (m.t + ih - 8) + '" text-anchor="end" fill="var(--q4)">IV 合理答對</text>');
+  parts.push('<text class="qlabel" x="' + (m.l + 8) + '" y="' + (m.t + 14) + '" fill="var(--q3)">' + (student ? QUAD_STUDENT[3] : 'III 合理答錯') + '</text>');
+  parts.push('<text class="qlabel" x="' + (m.l + iw - 8) + '" y="' + (m.t + 14) + '" text-anchor="end" fill="var(--q1)">' + (student ? QUAD_STUDENT[1] : 'I 優勢概念') + '</text>');
+  parts.push('<text class="qlabel" x="' + (m.l + 8) + '" y="' + (m.t + ih - 8) + '" fill="var(--q2)">' + (student ? QUAD_STUDENT[2] : 'II 迷思概念') + '</text>');
+  parts.push('<text class="qlabel" x="' + (m.l + iw - 8) + '" y="' + (m.t + ih - 8) + '" text-anchor="end" fill="var(--q4)">' + (student ? QUAD_STUDENT[4] : 'IV 合理答對') + '</text>');
   // 框線與分隔
   parts.push('<rect class="axis" x="' + m.l + '" y="' + m.t + '" width="' + iw + '" height="' + ih + '" fill="none"/>');
   parts.push('<line class="axis" x1="' + (m.l + iw / 2) + '" y1="' + m.t + '" x2="' + (m.l + iw / 2) + '" y2="' + (m.t + ih) + '"/>');
   parts.push('<line class="theta" x1="' + m.l + '" y1="' + yTheta + '" x2="' + (m.l + iw) + '" y2="' + yTheta + '"/>');
-  parts.push('<text x="' + (m.l + iw + 4) + '" y="' + (yTheta + 4) + '" fill="var(--accent)">θ</text>');
+  parts.push('<text x="' + (m.l + iw + 4) + '" y="' + (yTheta + 4) + '" fill="var(--accent)">' + (student ? '你' : 'θ') + '</text>');
   // δ 刻度
   for (let v = Math.ceil(lo); v <= Math.floor(hi); v++){
     parts.push('<line class="axis" x1="' + (m.l - 4) + '" y1="' + Y(v) + '" x2="' + m.l + '" y2="' + Y(v) + '"/>');
-    parts.push('<text x="' + (m.l - 8) + '" y="' + (Y(v) + 3) + '" text-anchor="end">' + v + '</text>');
+    if (!student) parts.push('<text x="' + (m.l - 8) + '" y="' + (Y(v) + 3) + '" text-anchor="end">' + v + '</text>');
   }
-  parts.push('<text x="' + (m.l - 40) + '" y="' + (m.t + ih / 2) + '" transform="rotate(-90 ' + (m.l - 40) + ' ' + (m.t + ih / 2) + ')" text-anchor="middle">試題難度 δ (logit)</text>');
+  parts.push('<text x="' + (m.l - 40) + '" y="' + (m.t + ih / 2) + '" transform="rotate(-90 ' + (m.l - 40) + ' ' + (m.t + ih / 2) + ')" text-anchor="middle">' + (student ? '題目的難度（上面比較難）' : '試題難度 δ (logit)') + '</text>');
   parts.push('<text x="' + xW + '" y="' + (H - 12) + '" text-anchor="middle">答錯</text>');
   parts.push('<text x="' + xR + '" y="' + (H - 12) + '" text-anchor="middle">答對</text>');
   // 資料點
@@ -214,7 +237,8 @@ function kidmapSVG(diag, ps){
     const cx = base + off, cy = Y(c.delta);
     const col = 'var(--' + QUAD[c.q].key + ')';
     parts.push('<circle cx="' + cx + '" cy="' + cy + '" r="9" fill="' + col + '" fill-opacity="0.9" stroke="var(--card)" stroke-width="1.5"><title>第 ' +
-      getItem(c.iid).no + ' 題 · ' + QUAD[c.q].name + ' · δ=' + fx(c.delta) + ' · 預期答對率 ' + pct(c.p) + '</title></circle>');
+      getItem(c.iid).no + ' 題 · ' + (student ? QUAD_STUDENT[c.q]
+        : QUAD[c.q].name + ' · δ=' + fx(c.delta) + ' · 預期答對率 ' + pct(c.p)) + '</title></circle>');
     parts.push('<text x="' + cx + '" y="' + (cy + 3.2) + '" text-anchor="middle" fill="var(--card)" style="font-size:9px;font-weight:600">' +
       getItem(c.iid).no + '</text>');
   });

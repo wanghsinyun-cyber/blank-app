@@ -35,11 +35,16 @@ function viewStudent(){
     (needPre ? '<div class="card card-p" style="margin-bottom:16px;border-left:3px solid var(--warn)">' +
       '<div class="row" style="justify-content:space-between"><span class="small">還沒填課前問卷。</span>' +
       '<a class="btn sm primary" href="#/survey/pre">去填課前問卷</a></div></div>' : '') +
+    /* 知識建構空間鎖著的時候，首頁不要用橘色卡片催他去一個進不去的地方。
+       卡片數維持四張，只換內容與樣式。 */
     '<div class="grid g4" style="margin-bottom:16px">' +
       statCard('待作答', asgs.filter(function(a){ return !submitted(a.id, me.id); }).length, '') +
       statCard('已完成', asgs.filter(function(a){ return submitted(a.id, me.id); }).length, '') +
-      statCard('我貼的想法', myNotes, '在知識建構空間') +
-      statCard('未讀貼文', unread, '同學的新想法', unread ? 'warn' : '') +
+      (kbLocked(me)
+        ? statCard('我貼的想法', myNotes, '交完卷就可以繼續') +
+          statCard('知識建構空間', '測驗後開放', '交完卷就會打開')
+        : statCard('我貼的想法', myNotes, '在知識建構空間') +
+          statCard('未讀貼文', unread, '同學的新想法', unread ? 'warn' : '')) +
     '</div>' +
     '<div class="col">' + asgs.map(function(a){
       const done = submitted(a.id, me.id);
@@ -93,7 +98,7 @@ function viewQuiz(aid){
         return '<div class="card"><div class="card-p">' +
           '<div class="row" style="justify-content:space-between;margin-bottom:6px">' +
           '<b>第 ' + (idx + 1) + ' 題　非選題</b>' +
-          '<span class="row">' + itemPills(it) + '</span></div>' +
+          '<span class="row">' + itemPillsStudent(it) + '</span></div>' +
           '<div class="stem">' + esc(it.stem) + '</div>' +
           '<div class="field"><label>請寫出你的解題過程與說明</label>' +
           '<textarea style="min-height:120px" data-act="quiz-text" data-id="' + it.id + '">' + esc(QUIZ.texts[it.id] || '') + '</textarea></div>' +
@@ -111,7 +116,7 @@ function viewQuiz(aid){
       return '<div class="card"><div class="card-p">' +
         '<div class="row" style="justify-content:space-between;margin-bottom:6px">' +
         '<b>第 ' + (idx + 1) + ' 題</b>' +
-        '<span class="row">' + itemPills(it) + '</span></div>' +
+        '<span class="row">' + itemPillsStudent(it) + '</span></div>' +
         '<div class="stem">' + esc(it.stem) + '</div>' +
         '<div class="opts">' + it.options.map(function(o, k){
           return '<label class="opt' + (chosen === k ? ' chosen' : '') + '">' +
@@ -122,6 +127,15 @@ function viewQuiz(aid){
     }).join('') + '</div>' +
     '<div class="row" style="margin-top:16px;justify-content:flex-end">' +
     '<button class="btn primary" data-act="quiz-submit" data-id="' + aid + '">交卷</button></div>';
+}
+
+/* θ 是 logit，對十歲孩子沒有意義。轉成「和班上比起來」的五顆星，
+   純呈現層——原始 θ 只留在 data-theta 與匯出裡，計算完全不動。 */
+function readingStars(theta, mean){
+  const d = theta - (mean || 0);
+  const n = d >= 1 ? 5 : d >= 0.35 ? 4 : d >= -0.35 ? 3 : d >= -1 ? 2 : 1;
+  return '<span data-theta="' + fx(theta) + '" aria-label="五顆星裡的第 ' + n + ' 顆">' +
+    '★★★★★'.slice(0, n) + '<span style="opacity:.25">' + '★★★★★'.slice(n) + '</span></span>';
 }
 
 /* --- 個人診斷 --- */
@@ -136,35 +150,43 @@ function viewResult(aid){
   const ps = diag && diag.ready ? diag.perStudent.find(function(p){ return p.sid === me.id; }) : null;
 
   return sectionHead('個人診斷', a.title, '<a class="btn" href="#/student">← 回我的作業</a>') +
+    /* 學生端不出現 θ、δ (logit)、KIDMAP、迷思象限——十歲孩子看不懂，
+       而且「迷思」是個標籤。同一份資料，換一套對他說話的說法；
+       底層的 ps.theta、ps.cells 與所有匯出一個字不動。 */
     '<div class="grid g4" style="margin-bottom:16px">' +
       statCard('選擇題答對', right + ' / ' + mc.length, pct(right / Math.max(1, mc.length))) +
-      statCard('能力估計 θ', ps ? fx(ps.theta) : '—', ps ? '班級平均 ' + fx(diag.meanTheta) : '需要更多人完成') +
-      statCard('迷思題', ps ? ps.q[2] : '—', '能力足以答對卻答錯', ps && ps.q[2] ? 'crit' : '') +
-      statCard('優勢題', ps ? ps.q[1] : '—', '難題卻答對了', 'good') +
+      statCard('我這次的閱讀力', ps ? readingStars(ps.theta, diag.meanTheta) : '—',
+        ps ? '和班上比起來的位置' : '需要更多人完成') +
+      statCard('可惜的題目', ps ? ps.q[2] : '—', '這幾題你其實讀得懂，只是這次沒答對') +
+      statCard('厲害的題目', ps ? ps.q[1] : '—', '這幾題比較難，你答對了', 'good') +
     '</div>' +
-    (ps ? '<div class="card" style="margin-bottom:16px"><div class="card-h"><h3>你的 KIDMAP</h3>' +
-      '<span class="pill">θ = ' + fx(ps.theta) + '</span></div><div class="card-p">' +
-      kidmapSVG(diag, ps) + '<div class="row" style="margin-top:10px">' + quadLegend() + '</div>' +
-      (ps.q[2] ? '<div class="ai-out" style="margin-top:12px"><p><strong>你有 ' + ps.q[2] +
-        ' 題落在迷思象限。</strong>照你在其他題目上的表現，這些題目本來應該答得出來。回頭看看題目、對照正解，找出思考卡在哪。</p>' +
+    (ps ? '<div class="card" style="margin-bottom:16px"><div class="card-h"><h3>你這次的閱讀地圖</h3>' +
+      '<span class="muted small">每一個圓點是一題</span></div><div class="card-p">' +
+      kidmapSVG(diag, ps, true) + '<div class="row" style="margin-top:10px">' + quadLegendStudent() + '</div>' +
+      (ps.q[2] ? '<div class="ai-out" style="margin-top:12px"><p><strong>有 ' + ps.q[2] +
+        ' 題很可惜。</strong>看你其他題的表現，這幾題你其實讀得懂。回去把題目再讀一次，' +
+        '找找看你當時是漏了哪一句。</p>' +
         '<ul>' + ps.cells.filter(function(c){ return c.q === 2; }).map(function(c){
           const it = getItem(c.iid);
           const v = state.views.find(function(v){ return v.origin && v.origin.iid === it.id; });
           return '<li>第 ' + it.no + ' 題：' + esc(shortStem(it.stem)) +
             (v ? '　<a href="#/kb/' + v.id + '">全班正在討論這題 →</a>' : '') + '</li>';
         }).join('') + '</ul></div>' : '') +
-      (ps.q[1] ? '<div class="ai-out" style="margin-top:10px"><p><strong>你有 ' + ps.q[1] +
-        ' 題屬於優勢概念。</strong>這些難題超出預期答對，代表你在這些單元有隱藏實力。' +
+      (ps.q[1] ? '<div class="ai-out" style="margin-top:10px"><p><strong>有 ' + ps.q[1] +
+        ' 題你很厲害。</strong>這幾題比較難，你答對了。' +
         '到知識建構空間把你的想法貼出來——班上有同學正卡在同一題。</p></div>' : '') +
       '</div></div>'
-      : '<div class="card card-p" style="margin-bottom:16px"><p class="muted small">目前完成人數不足 ' +
-        (diag ? diag.minN : 3) + ' 人，還不能產生個人 KIDMAP。KIDMAP 需要一定樣本量才能估出穩定的題目難度與能力值，稍後再回來看。</p></div>') +
+      : '<div class="card card-p" style="margin-bottom:16px"><p class="muted small">班上還沒有夠多人做完，' +
+        '所以還畫不出你的閱讀地圖。等大家都交了再回來看。</p></div>') +
     '<div class="card" style="margin-bottom:16px"><div class="card-h"><h3>逐題檢視</h3></div>' +
     '<div class="card-p col">' + a.itemIds.map(getItem).filter(function(i){ return i && i.type === 'mc'; }).map(function(it){
       const r = mine.find(function(x){ return x.iid === it.id; });
       const c = diag && diag.ready && ps ? ps.cells.find(function(x){ return x.iid === it.id; }) : null;
       return '<div class="item"><div class="row" style="justify-content:space-between">' +
-        '<b>第 ' + it.no + ' 題</b>' + (c ? qpill(c.q) : (r && r.correct ? '<span class="pill q1"><span class="dot"></span>答對</span>' :
+        '<b>第 ' + it.no + ' 題</b>' +
+        (c ? '<span class="pill ' + QUAD[c.q].key + '"><span class="dot"></span>' +
+             esc(QUAD_STUDENT[c.q]) + '</span>'
+           : (r && r.correct ? '<span class="pill q1"><span class="dot"></span>答對</span>' :
           '<span class="pill q2"><span class="dot"></span>答錯</span>')) + '</div>' +
         '<div class="stem">' + esc(it.stem) + '</div>' +
         '<div class="opts">' + it.options.map(function(o, k){
