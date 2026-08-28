@@ -13,6 +13,7 @@ const AAL_DRAFT_KEY = 'kairos-draft';
 function aalDraftId(){ return AAL.aid + '|' + AAL.me; }
 
 function aalSave(){
+  if (isImpersonating()) return;
   if (!AAL) return;
   try {
     const all = JSON.parse(localStorage.getItem(AAL_DRAFT_KEY) || '{}');
@@ -70,6 +71,8 @@ function aalTele(iid){
 }
 
 function aalLog(type, code, extra){
+  /* 代為檢視時一律不寫日誌：老師的操作不可以進到學生的歷程資料裡 */
+  if (isImpersonating()) return {};
   const it = aalItem();
   const k = classOfStudent(AAL.me);
   const e = {t:Date.now(), rel:Date.now() - AAL.t0, sid:AAL.me, cid:k ? k.id : null,
@@ -390,6 +393,7 @@ async function aalSay(){
 }
 
 function aalSubmit(){
+  if (isImpersonating()){ toast('代為檢視時不能替學生交卷。'); return; }
   const a = getAssignment(AAL.aid), me = currentUser();
   const mcs = AAL.items.filter(function(i){ return i.type === 'mc'; });
   const missing = mcs.filter(function(i){ return AAL.answers[i.id] === undefined; });
@@ -512,6 +516,7 @@ function surveySections(phase, cond){
 }
 
 function surveyDraftSave(){
+  if (isImpersonating()) return;
   if (!SURVEY) return;
   try {
     const all = JSON.parse(localStorage.getItem(SURVEY_DRAFT_KEY) || '{}');
@@ -623,6 +628,7 @@ function viewSurvey(phase, page){
 }
 
 function surveySubmit(phase){
+  if (isImpersonating()){ toast('代為檢視時不能替學生送出問卷。'); return; }
   const me = currentUser();
   const cond = conditionOfStudent(me.id);
   if (surveyGate(phase)){ toast('這節課還沒上完，問卷等一下再填。'); return; }

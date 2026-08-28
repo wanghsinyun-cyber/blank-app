@@ -750,6 +750,7 @@ async function showViewItems(vid){
 
 /* --- 交卷 --- */
 function submitQuiz(aid){
+  if (isImpersonating()){ toast('代為檢視時不能替學生交卷。'); return; }
   const a = getAssignment(aid), me = currentUser();
   const items = a.itemIds.map(getItem).filter(Boolean);
   const mcs = items.filter(function(i){ return i.type === 'mc'; });
