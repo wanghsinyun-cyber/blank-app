@@ -117,7 +117,7 @@ function initCanvasDrag(){
     if (!drag) return;
     const d = drag; drag = null;
     if (d.moved){
-      updateNote(d.n.id, {x: parseInt(d.el.style.left, 10), y: parseInt(d.el.style.top, 10)});
+      moveNote(d.n.id, parseInt(d.el.style.left, 10), parseInt(d.el.style.top, 10));
       render();
     } else if (KBSEL){
       if (KBPICK[d.n.id]) delete KBPICK[d.n.id]; else KBPICK[d.n.id] = true;
@@ -315,13 +315,13 @@ function bindEvents(){
     if (act === 'asrole'){
       e.preventDefault();
       if (!isImpersonating()) state.ui.impersonate = {realRole: state.ui.role, at: Date.now()};
-      state.ui.role = id; save(); renderShell();
+      state.ui.role = id; saveUiOnly(); renderShell();
       go('#/student'); render();
       toast('以 ' + userName(id) + ' 的視角檢視（唯讀）');
       return; }
     if (act === 'exit-impersonate'){
       const real = state.ui.impersonate ? state.ui.impersonate.realRole : 'u-t1';
-      state.ui.role = real; state.ui.impersonate = null; save(); renderShell();
+      state.ui.role = real; state.ui.impersonate = null; saveUiOnly(); renderShell();
       go('#/teacher'); render(); toast('已結束檢視');
       return; }
     if (act === 'dtab'){ DTAB = id; render(); return; }
@@ -393,8 +393,12 @@ function bindEvents(){
     if (act === 'quiz-submit'){ submitQuiz(id); return; }
     if (act === 'pad-undo'){ if (PADS[id]){ PADS[id].strokes.pop(); redraw(id); } return; }
     if (act === 'pad-clear'){ if (PADS[id]){ PADS[id].strokes = []; redraw(id); } return; }
-    if (act === 'similar' || act === 'similar-again'){ showSimilar(id); return; }
+    /* 相似題只給教師備課用。它原本印在學生的診斷頁上、四個條件都給、
+       不限次數、完全在 MAX_TURNS 之外——那會讓對照組拿到一顆無限次的 AI
+       按鈕，變成第四種處理，RQ1 的組間比較失去基準。 */
+    if (act === 'similar' || act === 'similar-again'){ if (!isTeacher()) return; showSimilar(id); return; }
     if (act === 'sim-pick'){
+      if (!isTeacher()) return;
       const ok = +t.dataset.k === +t.dataset.ans;
       const fb = document.getElementById('simfb-' + t.dataset.iid + '-' + t.dataset.i);
       if (fb) fb.innerHTML = ok ? '<span style="color:var(--good)">答對了。</span>'
@@ -416,6 +420,9 @@ function bindEvents(){
     /* 換題可能同時換掉左欄的文章（T1 十題、T2 六題）。
        文章無聲換掉會讓學生以為自己的標記不見了，所以要說一聲並把焦點帶過去。 */
     if (act === 'aal-prev' || act === 'aal-next'){
+      /* 先把待處理的去抖／節流結清，再換題：否則最後一次點選與最後一段
+         打字會被下一題的計時器取消，或被記到下一題的 iid 上。 */
+      flushPendingPicks();
       const oldUnit = aalItem().unit;
       AAL.idx = act === 'aal-prev' ? Math.max(0, AAL.idx - 1)
                                    : Math.min(AAL.items.length - 1, AAL.idx + 1);
@@ -478,6 +485,34 @@ function bindEvents(){
     if (act === 'export-csv'){ saveFile('kairos-responses.csv', responseCSV(), 'text/csv'); return; }
     if (act === 'reset'){ if (confirm('重設會清除你在這台瀏覽器上新增的所有貼文與作答，回到出廠的模擬班級。確定嗎？')){
       resetState(); renderShell(); render(); toast('已重設為示範資料。'); } return; }
+
+    /* 示範模式下讓自己重走一次這節課。只清掉「我自己」這一份後測作答，
+       全班的前測、Rasch 校準與其他人的資料都不動。 */
+    if (act === 'redo-demo'){
+      const aid = t.dataset.id, me = currentUser();
+      if (!confirm('這會清掉你自己在這份評量上的作答，重新走一次流程。班上其他人的資料不受影響。確定嗎？')) return;
+      state.submissions = state.submissions.filter(function(s){ return !(s.aid === aid && s.sid === me.id); });
+      state.responses   = state.responses.filter(function(r){ return !(r.aid === aid && r.sid === me.id); });
+      state.dialog      = (state.dialog || []).filter(function(d){ return !(d.aid === aid && d.sid === me.id); });
+      save(); go('#/aal/' + aid); return;
+    }
+
+    /* 施測前的清場。前測與 Rasch 校準保留——那是四班共用的同一次校準，
+       也是教師端所有畫面的來源；清掉的是示範的後測作答與示範問卷。 */
+    if (act === 'go-live'){
+      if (!isResearcher()) return;
+      if (!confirm('這會清空示範的後測作答與示範問卷，讓學生端回到「尚未作答」。\n\n前測資料與 Rasch 校準會保留。\n\n這一步不可復原（要回到示範資料需按「重設」）。確定嗎？')) return;
+      if (!confirm('再確認一次：清空之後，這台瀏覽器上的平台就是準備施測的狀態。')) return;
+      state.demoSeed  = false;
+      state.surveys   = (state.surveys || []).filter(function(s){ return !s.demo; });
+      state.submissions = state.submissions.filter(function(s){ return s.aid !== 'a-post'; });
+      state.responses   = state.responses.filter(function(r){ return r.aid !== 'a-post'; });
+      state.dialog = [];
+      DEMO_LOGS = []; DEMO_DIALOG = [];
+      save(); renderShell(); render();
+      toast('已清空示範作答與示範問卷，可以施測了。');
+      return;
+    }
   });
 
   /* change 事件 */
@@ -581,9 +616,15 @@ function bindEvents(){
       if (AAL.texts[it.id] === undefined) AAL.drafts[it.id] = {first: t.value, final: t.value};
       AAL.texts[it.id] = t.value;
       if (AAL.drafts[it.id]) AAL.drafts[it.id].final = t.value;
+      /* 4 秒節流。被節流掉的那一段字要記在 _pendingW，換題或交卷時由
+         flushTypeTelemetry() 補寫，否則每一題的最後一段打字都會漏。 */
       if (!aalTypeTelemetry._last || Date.now() - aalTypeTelemetry._last > 4000){
-        aalTypeTelemetry._last = Date.now(); aalLog('TYPE', 'W', {len:t.value.length});
+        aalTypeTelemetry._last = Date.now();
+        aalTypeTelemetry._pendingW = null;
+        aalLog('TYPE', 'W', {len:t.value.length}, it);
         aalSave();
+      } else {
+        aalTypeTelemetry._pendingW = {it:it, len:t.value.length, at:Date.now()};
       }
       return; }
     if (act === 'aal-note'){
@@ -591,9 +632,16 @@ function bindEvents(){
       AAL.notes[it.id] = t.value;
       if (!aalTypeTelemetry._lastN || Date.now() - aalTypeTelemetry._lastN > 4000){
         aalTypeTelemetry._lastN = Date.now();
-        aalLog('NOTE', 'N', {text:t.value.slice(-80)});
+        aalTypeTelemetry._pendingN = null;
+        aalLog('NOTE', 'N', {text:t.value.slice(-80)}, it);
         aalSave();
+      } else {
+        aalTypeTelemetry._pendingN = {it:it, text:t.value.slice(-80), at:Date.now()};
       }
+      /* 對照組的「已寫 N 字」照 turnLeft 的做法就地更新——
+         每打一個字重繪整個面板，會讓對照組的互動延遲曲線與三個 AI 組不同。 */
+      const nc = document.getElementById('noteCount');
+      if (nc) nc.textContent = t.value.length;
       return; }
     if (act === 'aalSay'){ return; }
     if (act === 'seg-text'){ EDIT.segs[+t.dataset.i].text = t.value; return; }
@@ -821,7 +869,10 @@ function boot(){
   state.logs = state.logs || [];
   state.dialog = state.dialog || [];
   applyItemProcesses();                 // 掛上逐題的官方歷程標定
-  if (!state.surveys || !state.surveys.length) state.surveys = buildDemoSurveys();
+  /* demoSeed 為 false 表示已經清空、準備施測：不可以再補示範問卷回來，
+     否則真的孩子進問卷會看到別人的模擬答案，按送出就變成他自己的作答。 */
+  if (state.demoSeed !== false && (!state.surveys || !state.surveys.length))
+    state.surveys = buildDemoSurveys();
   buildDemoLogs();                      // 示範日誌由種子重算，不占 localStorage
   if (state.unitOverrides){
     Object.keys(state.unitOverrides).forEach(function(k){

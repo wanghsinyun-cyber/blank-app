@@ -580,5 +580,25 @@ function rExport(){
   }).join('') + '</tbody></table></div>' +
   '<div class="card-p"><p class="muted small">示範資料是由固定種子產生的模擬資料——' +
   '每次載入結果一致，可重現，但<strong>不得當成實徵結果引用</strong>。' +
-  '你自己在平台上操作產生的事件會存進 localStorage 並一起匯出。</p></div></div>';
+  '你自己在平台上操作產生的事件會存進 localStorage 並一起匯出。</p></div></div>' +
+
+  /* 施測前的清場。不做這一步，真的孩子登入會看到「已完成」與別人的模擬答案。 */
+  '<div class="card" style="margin-top:16px;border-left:3px solid ' +
+    (state.demoSeed === false ? 'var(--ok)' : 'var(--warn)') + '">' +
+  '<div class="card-h"><h3>施測前的清場</h3>' +
+  '<span class="pill ' + (state.demoSeed === false ? 'q1' : 'q2') + '"><span class="dot"></span>' +
+    (state.demoSeed === false ? '已清空，可以施測' : '目前是示範模式') + '</span></div>' +
+  '<div class="card-p">' +
+  (state.demoSeed === false
+    ? '<p class="small" style="max-width:70ch;margin:0">示範的後測作答與示範問卷已經清空，' +
+      '學生端的後測回到「尚未作答」。前測資料與 Rasch 校準保留著。' +
+      '要回到示範資料，請用「設定」頁的「重設」。</p>'
+    : '<p class="small" style="max-width:70ch">現在四個班 96 位學生的<strong>後測都已經「交過」</strong>，' +
+      '而且前後測問卷都預先填好了模擬答案。這是為了讓儀表板有東西可看，' +
+      '但也表示<strong>真的孩子登入會看到「已完成」與別人的答案</strong>，按送出就會被當成他自己的作答。' +
+      '正式施測前請按下面這顆鈕。</p>' +
+      '<p class="small muted" style="max-width:70ch">會清掉：後測的作答與交卷紀錄、示範問卷、示範對話。<br>' +
+      '會保留：前測作答、Rasch 校準、班級名單、知識建構空間的貼文。</p>' +
+      '<button class="btn primary" data-act="go-live">清空示範作答與示範問卷，準備施測</button>') +
+  '</div></div>';
 }

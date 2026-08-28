@@ -65,8 +65,14 @@ function viewStudent(){
           (done ? '<span class="pill q1"><span class="dot"></span>已完成 · 選擇題答對 ' + right + '</span>'
                 : '<span class="pill">尚未作答</span>') +
         '</div></div>' +
+        /* 示範資料把 96 人的後測都交完了，於是沒有任何一條路徑走得到作答頁。
+           示範模式下補一顆「再走一次」，讓人看得到這套流程長什麼樣子；
+           正式施測時 demoSeed 為 false，這顆鈕不會出現。 */
         '<div class="row">' + (done
-          ? '<a class="btn" href="#/result/' + a.id + '">查看個人診斷</a>'
+          ? '<a class="btn" href="#/result/' + a.id + '">查看個人診斷</a>' +
+            (state.demoSeed !== false && a.aal
+              ? ' <button class="btn sm" data-act="redo-demo" data-id="' + a.id +
+                '">再走一次（示範）</button>' : '')
           : '<a class="btn primary" href="#/' + (a.aal ? 'aal' : 'quiz') + '/' + a.id + '">' +
             (a.aal ? '開始這節課 →' : '開始作答 →') + '</a>') + '</div>' +
         '</div></div></div>';
@@ -148,6 +154,10 @@ function viewResult(aid){
   const me = currentUser();
   const a = getAssignment(aid);
   if (!a) return '<div class="empty"><h3>找不到這份作業</h3></div>';
+  /* 前測診斷在後測交卷之前不給正解——後測用的是同一份題本。
+     四象限、星等與「可惜的題目 → 全班正在討論這題」都保留：
+     它們只需要題號，不洩題，而那正是讓孩子回去重讀的動機來源。 */
+  const keyLocked = (aid === 'a-pre' && !submitted('a-post', me.id));
   const diag = diagnose(state, aid);
   const mine = state.responses.filter(function(r){ return r.aid === aid && r.sid === me.id; });
   const mc = mine.filter(function(r){ return r.correct !== null && r.correct !== undefined; });
@@ -183,7 +193,11 @@ function viewResult(aid){
       '</div></div>'
       : '<div class="card card-p" style="margin-bottom:16px"><p class="muted small">班上還沒有夠多人做完，' +
         '所以還畫不出你的閱讀地圖。等大家都交了再回來看。</p></div>') +
-    '<div class="card" style="margin-bottom:16px"><div class="card-h"><h3>逐題檢視</h3></div>' +
+    '<div class="card" style="margin-bottom:16px"><div class="card-h"><h3>逐題檢視</h3>' +
+    (keyLocked ? '<span class="pill"><span class="dot"></span>答案還沒打開</span>' : '') + '</div>' +
+    (keyLocked ? '<div class="card-p"><p class="small" style="max-width:70ch;margin:0">' +
+      '這一節課上完之後，這裡會打開，讓你看到每一題的四個選項、正確答案和你當時選的。' +
+      '現在先看上面的閱讀地圖——它已經告訴你哪幾題值得回去重讀。</p></div>' : '') +
     '<div class="card-p col">' + a.itemIds.map(getItem).filter(function(i){ return i && i.type === 'mc'; }).map(function(it){
       const r = mine.find(function(x){ return x.iid === it.id; });
       const c = diag && diag.ready && ps ? ps.cells.find(function(x){ return x.iid === it.id; }) : null;
@@ -194,21 +208,23 @@ function viewResult(aid){
            : (r && r.correct ? '<span class="pill q1"><span class="dot"></span>答對</span>' :
           '<span class="pill q2"><span class="dot"></span>答錯</span>')) + '</div>' +
         '<div class="stem">' + esc(it.stem) + '</div>' +
+        /* 前測的正解在後測交卷之前不打開：兩次測量用的是同一份題本，
+           在中間逐題發答案卡，Δθ 就混入記憶效應，而記憶量與「有沒有來看
+           診斷頁」相關，也就與投入程度、進而與條件相關。 */
+        (keyLocked ? '' :
         '<div class="opts">' + it.options.map(function(o, k){
           const isAns = k === it.answer, isMine = r && r.choice === k;
           return '<div class="opt' + (isAns ? ' right' : (isMine ? ' wrong' : '')) + '"><b>' +
             String.fromCharCode(65 + k) + '</b><span>' + esc(o) +
             (isAns ? '　<span class="muted small">正解</span>' : '') +
             (isMine && !isAns ? '　<span class="muted small">你選的</span>' : '') + '</span></div>';
-        }).join('') + '</div>' +
-        '<div class="row" style="margin-top:8px"><button class="btn sm" data-act="similar" data-id="' + it.id + '">請 AI 出 3 道相似題</button></div>' +
-        '<div id="sim-' + it.id + '"></div>' +
+        }).join('') + '</div>') +
         '</div>';
     }).join('') + '</div></div>' +
-    crResultBlock(aid, me.id);
+    crResultBlock(aid, me.id, keyLocked);
 }
 
-function crResultBlock(aid, sid){
+function crResultBlock(aid, sid, keyLocked){
   const a = getAssignment(aid);
   const crs = a.itemIds.map(getItem).filter(function(i){ return i && i.type === 'cr'; });
   if (!crs.length) return '';
@@ -222,7 +238,8 @@ function crResultBlock(aid, sid){
         (r && r.score !== null && r.score !== undefined
           ? '<span class="pill q1"><span class="dot"></span>得分 ' + r.score + ' / 6</span>'
           : '<span class="pill">等待老師評閱</span>') +
-        (r && r.comment ? '<span class="small muted">老師評語：' + esc(r.comment) + '</span>' : '') +
+        /* 老師的評語可能寫著正確答案，前測鎖著的時候一併不顯示 */
+        (r && r.comment && !keyLocked ? '<span class="small muted">老師評語：' + esc(r.comment) + '</span>' : '') +
         '</div></div>';
     }).join('') + '</div></div>';
 }

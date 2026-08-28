@@ -6,9 +6,19 @@
 const STORE_KEY = 'kidforum.state.v1';
 let state = null;
 
+/* 代為檢視期間的落地一律擋在這裡，不再倚賴逐個呼叫點的 if。
+   逐點守門補了六處，第 2 輪還是漏了 aalSay，下一個新增的寫入點還會再漏。
+   守門下沉之後，逐點的 isImpersonating() 變成第二道保險而不是唯一防線。
+   唯一的例外是 state.ui 本身的變更（切換身分、結束檢視），
+   由 99-app.js 在呼叫前後掀開 _allowUiWrite。 */
 function save(){
+  if (isImpersonating() && !save._allowUiWrite){
+    if (typeof console !== 'undefined' && console.warn)
+      console.warn('[KAIROS] 代為檢視期間的落地被擋下', new Error().stack);
+    return;
+  }
   try {
-    /* 代為檢視是一個「模式」，不是身分變更：不能落地。
+    /* 代為檢視是一個「模式」，不是身分變更：模式本身不能落地。
        否則老師關掉分頁、隔天開機還是學生身分，而且不知道怎麼回來。 */
     const imp = state.ui && state.ui.impersonate;
     if (imp){
@@ -19,6 +29,11 @@ function save(){
     }
     localStorage.setItem(STORE_KEY, JSON.stringify(state));
   } catch (e) { /* 無痕模式等情況：僅存在記憶體 */ }
+}
+/* 只給「進入／離開代為檢視」這一種變更用。 */
+function saveUiOnly(){
+  save._allowUiWrite = true;
+  try { save(); } finally { save._allowUiWrite = false; }
 }
 /* 老師正在以某位學生的視角檢視。此時一律唯讀——
    他的閱讀、貼文、註記都不可以記到學生名下（reads 是 KB 指數的原料）。 */
@@ -144,13 +159,28 @@ function createNote(o){
   };
   state.notes.push(n); save(); return n;
 }
+/* 修訂次數在知識建構理論裡是想法精進（idea improvement）的指標，本研究把它
+   算進 KB 指數。只有真的改到內容才算一次修訂——按了更新但什麼都沒動不算，
+   拖曳版面更不算（走 moveNote）。 */
+const NOTE_TOUCH_KEYS = ['title','segs','keywords','authorIds','refs','buildOn','contains','itemRef'];
 function updateNote(id, patch){
   if (isImpersonating()) return null;
   const n = getNote(id); if (!n) return null;
+  const changed = Object.keys(patch).some(function(k){
+    return NOTE_TOUCH_KEYS.indexOf(k) >= 0 && JSON.stringify(n[k]) !== JSON.stringify(patch[k]);
+  });
   Object.keys(patch).forEach(function(k){ n[k] = patch[k]; });
-  n.editedAt = Date.now();
-  n.revisions = (n.revisions || 0) + 1;
+  if (changed){
+    n.editedAt = Date.now();
+    n.revisions = (n.revisions || 0) + 1;
+  }
   save(); return n;
+}
+/* 把畫布整理得整齊一點，不是想法精進。 */
+function moveNote(id, x, y){
+  if (isImpersonating()) return false;
+  const n = getNote(id); if (!n) return false;
+  n.x = x; n.y = y; save(); return true;
 }
 function deleteNote(id){
   if (isImpersonating()) return;

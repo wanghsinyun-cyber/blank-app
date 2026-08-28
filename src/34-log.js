@@ -35,9 +35,40 @@ let DEMO_DIALOG = [];    // 同上
 function allLogs(){ return DEMO_LOGS.concat(state.logs || []); }
 function allDialog(){ return DEMO_DIALOG.concat(state.dialog || []); }
 
+/* 歷程事件必須自己負責落地。
+   原本 logEvent 只 push 進記憶體，而作答期間唯一會 save() 的路徑是 aalSay()——
+   於是 tutor／tutee／peer 每講一句話就順帶把 MARK／OPTION／CHECK 存下來，
+   對照組整節課不觸發任何 save()，重整就全沒。歷程序列是依變項之一，
+   這個遺失與實驗條件共變，會直接污染四條件的序列分析。
+   尾緣節流（不可用前緣：前緣會掉最後一批），滿 20 筆或滿 2 秒就寫。 */
+let _logFlushT = null, _logPending = 0;
+
+function flushLogs(){
+  clearTimeout(_logFlushT); _logFlushT = null; _logPending = 0;
+  save();
+}
+
 function logEvent(o){
   state.logs = state.logs || [];
   state.logs.push(o);
+  _logPending++;
+  if (_logPending >= 20){ flushLogs(); return; }
+  clearTimeout(_logFlushT);
+  _logFlushT = setTimeout(flushLogs, 2000);
+}
+
+/* 切換型事件（MARK 的 on、CHECK 的 off）寫入端記的是「切換」，
+   讀取端要折疊成「現在是開還是關」。兩邊各寫一次就會出現
+   「勾了 7 / 5 項」這種數字。抽成共用工具，下一個切換型事件不會再犯。
+   allLogs() 依時間順序串接，最後一筆自然勝出。 */
+function foldToggleLog(logs, code, keyField){
+  const on = {};
+  logs.forEach(function(e){
+    if (e.code !== code) return;
+    if (e.off === true || e.on === false) delete on[e[keyField]];
+    else on[e[keyField]] = 1;
+  });
+  return Object.keys(on);
 }
 
 /* --- 條件查詢 --- */

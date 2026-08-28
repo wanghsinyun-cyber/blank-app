@@ -378,6 +378,13 @@ async function aiSimilarItems(item, force){
   } else {
     out = builtinSimilar(item);
   }
+  /* 相似題也要過洩答篩檢。這條通道原本一次都沒過，而 #/about 對老師寫著
+     「每一則回應送出前都會過一次篩檢，攔截次數本身即為忠實度指標」——
+     漏掉任何一條通道，那個計數就不是可報告的指標。 */
+  out = out.map(function(x){
+    const g = leakGuard(x.stem + ' ' + (x.hint || ''), item);
+    return g.blocked ? null : x;
+  }).filter(Boolean);
   cacheSet('similar', item.id, out);
   return out;
 }

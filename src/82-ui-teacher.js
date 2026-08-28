@@ -431,9 +431,16 @@ function tabItems(diag){
             (m ? '<div class="muted" style="font-size:11.5px">' + esc(m.name) + '</div>' : '')
           : '<span class="muted">—</span>') + '</td>' +
         '<td class="n">' + fx(pi.outfit) + '</td>' +
-        '<td><button class="btn sm" data-act="item-strategy" data-id="' + it.id + '">教學策略</button></td></tr>';
+        '<td><div class="row" style="gap:6px">' +
+          '<button class="btn sm" data-act="item-strategy" data-id="' + it.id + '">教學策略</button>' +
+          '<button class="btn sm" data-act="similar" data-id="' + it.id + '">相似題</button>' +
+        '</div><div id="sim-' + it.id + '"></div></td></tr>';
     }).join('') + '</tbody></table></div>' +
     '<div class="card-p"><div class="row">' + quadLegend() + '</div>' +
+    /* 相似題原本印在學生的診斷頁上，四個條件都拿得到、不限次數，
+       等於在 MAX_TURNS 之外多開一條鷹架通道。移到教師端備課用。 */
+    '<p class="muted small" style="margin-top:10px">「相似題」是給你備課用的，' +
+    '<strong>不計入學生的鷹架劑量</strong>——學生端看不到這顆按鈕。</p>' +
     '<p class="muted small" style="margin-top:10px">Outfit MNSQ 接近 1 代表該題與 Rasch 模式相符；明顯大於 1.3 表示有異常作答型態，' +
     '通常正是迷思或猜測造成的，值得優先檢視。</p></div></div>';
 }

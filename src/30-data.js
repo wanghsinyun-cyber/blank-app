@@ -595,6 +595,9 @@ function buildSeedState(){
 
   const st = {
     version: STATE_VERSION,
+    /* 示範資料旗標。研究控制台的「清空示範作答，準備施測」會把它設成 false，
+       之後開機不再補上示範問卷。前測與 Rasch 校準永遠保留。 */
+    demoSeed: true,
     users: users,
     classes: classes,
     assignments: [pre, post],

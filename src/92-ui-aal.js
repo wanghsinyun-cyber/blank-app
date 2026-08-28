@@ -17,10 +17,26 @@ function aalSave(){
   if (!AAL) return;
   try {
     const all = JSON.parse(localStorage.getItem(AAL_DRAFT_KEY) || '{}');
+    /* tele 與 drafts 要存（重整後遙測才接得起來），turns 不存——
+       對話回合是三個 AI 條件的劑量控制，放進 localStorage 等於把劑量
+       交給學生的瀏覽器：清掉網站資料就能重新領 6 次。額度改由已落地的
+       state.dialog 推導，見 aalStudentTurns()。 */
     all[aalDraftId()] = {idx:AAL.idx, answers:AAL.answers, texts:AAL.texts, notes:AAL.notes,
-                         marks:AAL.marks, checks:AAL.checks, savedAt:Date.now()};
+                         marks:AAL.marks, checks:AAL.checks,
+                         tele:AAL.tele, drafts:AAL.drafts, savedAt:Date.now()};
     localStorage.setItem(AAL_DRAFT_KEY, JSON.stringify(all));
-  } catch (e) { toast('這一題沒能存起來，先不要關掉分頁。'); }
+    aalSave._fails = 0;
+  } catch (e) {
+    /* 加了 tele/drafts 之後這個 key 會變大，配額問題不再是偶發。
+       連續兩次失敗就停掉自動存檔並常駐警示，不要只 toast 一次。 */
+    aalSave._fails = (aalSave._fails || 0) + 1;
+    if (aalSave._fails >= 2){
+      AAL._saveOff = true;
+      const b = document.getElementById('aalSaveWarn');
+      if (b) b.hidden = false;
+    }
+    toast('這一題沒能存起來，先不要關掉分頁。');
+  }
 }
 
 function aalDropDraft(){
@@ -54,26 +70,42 @@ function aalInit(aid){
       AAL.notes   = d.notes   || {};
       AAL.marks   = d.marks   || {};
       AAL.checks  = d.checks  || {};
+      AAL.tele    = d.tele    || {};
+      AAL.drafts  = d.drafts  || {};
+      /* 每一題的 enter 重設為現在。不重設的話，離線的那幾個小時會被
+         算進 firstKeyLatency，產生沒有意義的離群值。 */
+      Object.keys(AAL.tele).forEach(function(iid){ AAL.tele[iid].enter = Date.now(); });
       AAL.t0 = Date.now();
-      aalLog('RESUME', 'R', {resumed:true, savedAt:d.savedAt || null});
+      aalLog('RESUME', 'R', {resumed:true, via:'reload', savedAt:d.savedAt || null});
     }
   } catch (e) { /* 草稿壞掉就當作沒有，從頭開始 */ }
 }
 
 function aalItem(){ return AAL.items[AAL.idx]; }
 function aalTurns(iid){ return AAL.turns[iid] = AAL.turns[iid] || []; }
+/* 額度與語料是同一份帳：都以已落地的 state.dialog 為單一真相來源。
+   AAL.turns 只是本次工作階段的暫存，不能拿來判斷還剩幾次——
+   它住在記憶體裡，重整就歸零，等於誰按 F5 按得多誰就多拿鷹架。 */
+function aalDialogOf(iid){
+  return (state.dialog || []).filter(function(d){
+    return d.sid === AAL.me && d.aid === AAL.aid && d.iid === iid;
+  }).sort(function(a, b){ return (a.t || 0) - (b.t || 0); });
+}
 function aalStudentTurns(iid){
-  return aalTurns(iid).filter(function(t){ return t.speaker === 'student'; }).length;
+  return aalDialogOf(iid).filter(function(d){ return d.speaker === 'student'; }).length;
 }
 function aalTele(iid){
   return AAL.tele[iid] = AAL.tele[iid] || {firstKeyLatency:null, keystrokes:0, deletions:0,
     longPauses:0, lastKey:null, enter:Date.now(), prevLen:0};
 }
 
-function aalLog(type, code, extra){
+/* itemArg 是給去抖／節流回呼用的：回呼醒來時學生可能已經翻到下一題，
+   aalItem() 會抓到新題，把上一題的事件記到別題的 iid 與 proc 上。
+   末位參數，不影響既有呼叫端。 */
+function aalLog(type, code, extra, itemArg){
   /* 代為檢視時一律不寫日誌：老師的操作不可以進到學生的歷程資料裡 */
   if (isImpersonating()) return {};
-  const it = aalItem();
+  const it = itemArg || aalItem();
   const k = classOfStudent(AAL.me);
   const e = {t:Date.now(), rel:Date.now() - AAL.t0, sid:AAL.me, cid:k ? k.id : null,
              cond:AAL.cond, lang:'zh', aid:AAL.aid, iid:it.id, proc:it.process || 'FR',
@@ -202,11 +234,15 @@ function aalDialogPane(it, cond, turns, used, maxT){
       }).join('') +
       (left <= 0 ? '<div class="msg sys">這一題的對話次數用完了。換下一題會重新計算。</div>' : '') +
     '</div>' +
+    /* 代為檢視時輸入框也要鎖上。只在送出時擋的話，老師會打完一整段才被拒絕。 */
     '<label class="sr-only" for="aalSay">對夥伴說一句話</label>' +
     '<div class="row pane-bar" style="margin-top:10px;gap:6px">' +
-      '<input type="text" id="aalSay" placeholder="' + (left > 0 ? '說說你現在的想法…' : '這一題已經聊完了') +
-      '"' + (left > 0 ? '' : ' disabled') + ' style="flex:1">' +
-      '<button class="btn primary sm" data-act="aal-say"' + (left > 0 ? '' : ' disabled') + '>送出</button>' +
+      '<input type="text" id="aalSay" placeholder="' +
+        (isImpersonating() ? '代為檢視中，不能替學生說話'
+                           : (left > 0 ? '說說你現在的想法…' : '這一題已經聊完了')) +
+      '"' + (left > 0 && !isImpersonating() ? '' : ' disabled') + ' style="flex:1">' +
+      '<button class="btn primary sm" data-act="aal-say"' +
+        (left > 0 && !isImpersonating() ? '' : ' disabled') + '>送出</button>' +
     '</div>' +
     '<p class="muted small pane-foot" style="margin-top:8px">陪你的這位夥伴是電腦程式，不是真的人。' +
     '它不會告訴你答案，也不會說你對或錯。' +
@@ -222,11 +258,15 @@ function aalNotePane(it){
   const txt = AAL.notes[it.id] || '';
   return '<div class="card aal-chat"><div class="card-h">' +
     '<h3>我的筆記　·　第 ' + (AAL.idx + 1) + ' 題</h3>' +
-    '<span class="pill">已寫 ' + txt.length + ' 字</span></div>' +
+    /* 字數用 #noteCount 就地更新，與對話組的 #turnLeft 同一種做法。
+       每打一個字重繪整個面板，會讓對照組的互動延遲曲線與三個 AI 組不同。 */
+    '<span class="pill">已寫 <span id="noteCount">' + txt.length + '</span> 字</span></div>' +
     '<div class="card-p">' +
     '<label class="sr-only" for="aalNote">我的筆記</label>' +
-    '<textarea id="aalNote" data-act="aal-note" style="height:var(--pane-h)" ' +
-    'placeholder="把你想到的、還沒想通的，寫在這裡">' + esc(txt) + '</textarea>' +
+    '<textarea id="aalNote" data-act="aal-note" style="height:var(--pane-h)"' +
+    (isImpersonating() ? ' disabled' : '') + ' ' +
+    'placeholder="' + (isImpersonating() ? '代為檢視中，不能替學生寫筆記' : '把你想到的、還沒想通的，寫在這裡') +
+    '">' + esc(txt) + '</textarea>' +
     '<div class="row pane-bar" style="margin-top:10px;gap:6px">' +
       '<button class="btn sm" data-act="aal-note-clear">清空</button>' +
       '<span class="muted small" style="flex:1">這一題一份，換題會換成新的一頁。</span>' +
@@ -287,15 +327,51 @@ function aalPick(k){
     if (mark) mark.textContent = String.fromCharCode(65 + idx) + (idx === k ? '✓' : '');
   });
 
-  clearTimeout(aalPick._t);
-  aalPick._t = setTimeout(function(){
-    if (AAL.answers[it.id] !== k) return;     // 期間又改了，這一次不算
-    const first = !AAL.drafts[it.id];
-    if (first) AAL.drafts[it.id] = {first: k, final: k};
-    else AAL.drafts[it.id].final = k;
-    aalLog('OPTION', 'O', {choice:k, changed: !first});
-    aalSave();
-  }, OPTION_DEBOUNCE_MS);
+  /* 計時器以題目為鍵。共用單一變數的話，350ms 內翻到下一題再點，
+     clearTimeout 會把上一題的回呼整個取消——上一題永遠沒有 OPTION 事件，
+     drafts 不會建立，交卷時的 draftFirst／draftFinal 整批缺值。
+     手快的學生踩到機率最高，也就是遺失與能力共變。 */
+  aalPick._t = aalPick._t || {};
+  aalPick._pending = aalPick._pending || {};
+  clearTimeout(aalPick._t[it.id]);
+  /* 時間在使用者按下的當下就記，不能等回呼醒來才 Date.now()：
+     交卷前 flush 會把一整批間隔壓縮成同一毫秒。 */
+  const at = Date.now();
+  aalPick._pending[it.id] = {it:it, k:k, at:at};
+  aalPick._t[it.id] = setTimeout(function(){ commitPick(it.id); }, OPTION_DEBOUNCE_MS);
+}
+
+function commitPick(iid){
+  if (!AAL) return;                           // 已經交卷
+  const p = (aalPick._pending || {})[iid];
+  if (!p) return;
+  delete aalPick._pending[iid];
+  clearTimeout((aalPick._t || {})[iid]);
+  if (AAL.answers[iid] !== p.k) return;       // 期間又改了，這一次不算
+  const first = !AAL.drafts[iid];
+  if (first) AAL.drafts[iid] = {first: p.k, final: p.k};
+  else AAL.drafts[iid].final = p.k;
+  aalLog('OPTION', 'O', {choice:p.k, changed: !first, at:p.at}, p.it);
+  aalSave();
+}
+
+/* 換題與交卷之前一定要把待處理的去抖／節流結清，否則最後一次點選與
+   最後一段打字會憑空消失。打字節流（aalTypeTelemetry 的呼叫端）寫的是
+   TYPE／NOTE，不涉及題目歸屬，但同樣會漏最後一批。 */
+function flushPendingPicks(){
+  Object.keys(aalPick._pending || {}).forEach(commitPick);
+  flushTypeTelemetry();
+}
+
+/* 打字是 4 秒節流：節流視窗內的最後一段字沒有事件。換題或交卷時把它補上，
+   並帶著當初那一題的 it——4 秒視窗跨過換題的話，aalItem() 會抓到新題。 */
+function flushTypeTelemetry(){
+  if (!AAL) return;
+  const w = aalTypeTelemetry._pendingW;
+  if (w){ aalTypeTelemetry._pendingW = null; aalLog('TYPE', 'W', {len:w.len, at:w.at}, w.it); }
+  const n = aalTypeTelemetry._pendingN;
+  if (n){ aalTypeTelemetry._pendingN = null; aalLog('NOTE', 'N', {text:n.text, at:n.at}, n.it); }
+  if (w || n) aalSave();
 }
 
 function aalTypeTelemetry(iid, value){
@@ -310,11 +386,17 @@ function aalTypeTelemetry(iid, value){
 }
 
 async function aalSay(){
+  /* 必須是第一行。aalSay 是 async，等到 await 之後才擋的話，
+     state.dialog 那一筆已經以學生的名義寫進去了。 */
+  if (isImpersonating()){ toast('代為檢視時不能替學生跟夥伴說話。'); return; }
   const box = document.getElementById('aalSay');
   if (!box) return;
   const text = box.value.trim();
   if (!text) return;
   const it = aalItem();
+  /* 記下這一輪是在哪一題發起的。await 期間學生可能已經按了下一題，
+     it 是舊題、DOM 是新題的節點，寫回去就會出現「一句話沒講就剩 1 次」。 */
+  const myIid = it.id;
   const maxT = (state.settings && state.settings.maxTurns) || MAX_TURNS;
   const used = aalStudentTurns(it.id);
   if (used >= maxT){ toast('這一題的對話次數用完了。'); return; }
@@ -369,6 +451,10 @@ async function aalSay(){
   save();
   aalSave();
 
+  /* 守衛放在資料寫入之後、DOM 更新之前：回覆一定要進 state.dialog
+     （那是額度與語料的同一份帳），但學生已經翻頁的話就不碰畫面、不 toast。 */
+  if (!AAL || aalItem().id !== myIid) return;
+
   /* 拿掉「正在想…」、append 回覆、把輸入框交還給學生 */
   const think = document.getElementById('aalThinking');
   if (think) think.remove();
@@ -394,10 +480,22 @@ async function aalSay(){
 
 function aalSubmit(){
   if (isImpersonating()){ toast('代為檢視時不能替學生交卷。'); return; }
+  /* 待處理的去抖／節流先結清，再檢查與落地 */
+  flushPendingPicks();
+  flushLogs();
   const a = getAssignment(AAL.aid), me = currentUser();
+  /* 兩種題型分開數。只數選擇題的話，兩題作文整題空白會無聲送出，
+     而建構反應題是理解表現的另一半，也是論述層次評定的來源。 */
   const mcs = AAL.items.filter(function(i){ return i.type === 'mc'; });
-  const missing = mcs.filter(function(i){ return AAL.answers[i.id] === undefined; });
-  if (missing.length && !confirm('還有 ' + missing.length + ' 題沒作答，確定要交卷嗎？')) return;
+  const crs = AAL.items.filter(function(i){ return i.type === 'cr'; });
+  const missMc = mcs.filter(function(i){ return AAL.answers[i.id] === undefined; }).length;
+  const missCr = crs.filter(function(i){ return !(AAL.texts[i.id] || '').trim(); }).length;
+  if (missMc || missCr){
+    const parts = [];
+    if (missMc) parts.push('還有 ' + missMc + ' 題選擇題沒選');
+    if (missCr) parts.push(missCr + ' 題要打字的題目還是空白的');
+    if (!confirm(parts.join('、') + '，確定要交卷嗎？')) return;
+  }
 
   AAL.items.forEach(function(it){
     state.responses = state.responses.filter(function(r){
@@ -697,14 +795,12 @@ function inspectInit(aid, sid){
 
 /* 從事件日誌把這位學生在這篇文本上標記過的句子還原出來（MARK 事件是切換語意） */
 function inspectMarks(sid, aid, textId){
-  const on = {};
-  allLogs().forEach(function(e){
-    if (e.sid !== sid || e.aid !== aid || e.code !== 'M') return;
-    if (e.textId && e.textId !== textId) return;
-    if (e.sent == null) return;
-    if (e.on === false) delete on[e.sent]; else on[e.sent] = 1;
+  const mine = allLogs().filter(function(e){
+    if (e.sid !== sid || e.aid !== aid) return false;
+    if (e.textId && e.textId !== textId) return false;
+    return e.sent != null;
   });
-  return Object.keys(on).map(Number);
+  return foldToggleLog(mine, 'M', 'sent').map(Number);
 }
 
 function viewInspect(aid, sid){
@@ -729,8 +825,10 @@ function viewInspect(aid, sid){
   const turns = allDialog().filter(function(d){
     return d.sid === sid && d.aid === aid && d.iid === it.id; })
     .sort(function(x, y){ return x.t - y.t; });
-  const checks = allLogs().filter(function(e){
-    return e.sid === sid && e.aid === aid && e.iid === it.id && e.code === 'C'; });
+  /* 寫入端把 CHECK 記成切換事件（取消時帶 off:true），讀取端必須折疊。
+     不折疊的話老師會看到學生已經取消的勾選，還會出現「勾了 7 / 5 項」。 */
+  const checks = foldToggleLog(allLogs().filter(function(e){
+    return e.sid === sid && e.aid === aid && e.iid === it.id; }), 'C', 'idx').map(Number);
   const done = submitted(aid, sid);
 
   /* 全部學生的下拉，讓教師不必回上一頁就能換人 */
@@ -795,7 +893,7 @@ function viewInspect(aid, sid){
         '<span class="muted small">勾了 ' + checks.length + ' / ' + SELF_CHECKS.length + ' 項</span></div>' +
         '<div class="card-p col">' +
         SELF_CHECKS.map(function(c, i){
-          const on = checks.some(function(e){ return e.idx === i; });
+          const on = checks.indexOf(i) >= 0;
           return '<label class="opt" style="align-items:center"><input type="checkbox" disabled' +
             (on ? ' checked' : '') + '><span>' + esc(c) + '</span></label>';
         }).join('') +
