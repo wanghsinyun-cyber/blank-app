@@ -226,9 +226,33 @@ function addAnnotation(id, text){
   return true;
 }
 function createView(o){
+  /* 視圖一定屬於某一個班。條件是在班級層次操弄的，四個班共用一塊白板
+     等於讓對照組讀得到 tutor 班的全部討論——教科書式的擴散污染。 */
   const v = {id: uid('v'), title: o.title, desc: o.desc || '', createdAt: Date.now(),
+             classId: o.classId || (currentClass() || kbClass()).id,
              origin: o.origin || null, links: o.links || []};
   state.views.push(v); save(); return v;
+}
+
+/* 目前這位使用者看得到哪些視圖。
+   沒有 classId 的舊視圖視為示範班（相容改版前存下來的資料）。
+   教師與研究者看得到自己選定班級的；學生只看得到自己班的。 */
+function viewsForViewer(){
+  const me = currentUser();
+  const k = isTeacher() ? currentClass() : classOfStudent(me.id);
+  const kid = k ? k.id : null;
+  return state.views.filter(function(v){
+    return (v.classId || kbClass().id) === kid;
+  });
+}
+function viewVisible(vid){
+  return viewsForViewer().some(function(v){ return v.id === vid; });
+}
+/* 這位使用者看得到的貼文（用於未讀數與搜尋，兩者都不可以跨班） */
+function notesForViewer(){
+  const ok = {};
+  viewsForViewer().forEach(function(v){ ok[v.id] = 1; });
+  return state.notes.filter(function(n){ return ok[n.viewId]; });
 }
 
 /* ==========================================================================
@@ -247,11 +271,16 @@ function buildInquiryPrompt(pi, diag){
   const dis = pi.topDistractor != null ? it.options[pi.topDistractor] : null;
   const mis = pi.misCode ? MISCONCEPTIONS.find(function(m){ return m.id === pi.misCode; }) : null;
   const lines = [];
-  lines.push('前測第 ' + it.no + ' 題（' + textTitle(it.unit) + '）有 ' + n2 + ' 位同學落在「迷思」象限——'
-    + '照他們在其他題目上的表現，這一題本來應該答得出來，實際卻答錯了。');
+  /* 這段字是貼給全班讀的貼文本文，不是教師報表。
+     兩個必須避免的東西：
+     (1) 寫死「前測」——函式明明收到了 diag，卻在後測的橋接上印「前測」；
+     (2) 「落在迷思象限／本來應該答得出來」——那是當著全班的面
+         對特定幾個孩子貼缺陷標籤，跟這個平台自己寫的知識建構原則相反。 */
+  lines.push('「' + diag.assignment.title + '」第 ' + it.no + ' 題（' + textTitle(it.unit) + '）有 ' +
+    n2 + ' 位同學的讀法跟答案不一樣。我們一起看看，是哪一句話讓大家想得不同。');
   if (dis) lines.push('這些同學裡最多人選的是「' + dis + '」（' + pi.topDistractorN + ' 人）。');
-  if (mis) lines.push('這通常和「' + mis.name + '」有關：' + mis.desc);
-  if (n1) lines.push('另外有 ' + n1 + ' 位同學在這題超越預期答對，請他們先把自己的想法貼出來，讓大家看得到不同的思路。');
+  if (mis) lines.push('這常常跟「' + mis.name + '」有關：' + mis.desc);
+  if (n1) lines.push('另外有 ' + n1 + ' 位同學這一題讀得很穩，請他們先把自己的想法貼出來，讓大家看得到不同的思路。');
   lines.push('請大家不要只寫答案。先說你原本怎麼想，再說你現在覺得哪裡需要修正，並且盡量舉出一個能檢驗的例子。');
   return lines.join('\n');
 }
@@ -261,30 +290,42 @@ function createBridgeView(diag, pi){
   const exist = bridgeExists(diag.assignment.id, it.id);
   if (exist) return exist;
   const mis = pi.misCode ? MISCONCEPTIONS.find(function(m){ return m.id === pi.misCode; }) : null;
+  /* 視圖屬於老師目前帶的那一班，名單也只能是那一班的。
+     診斷是四班全樣本（共用同一次 Rasch 校準），但貼進單一班級白板的
+     點名清單如果橫跨四個班兩所學校，孩子會被一群他不認識的名字包圍，
+     而且那也是跨條件曝光。 */
+  const k = currentClass() || kbClass();
+  const inClass = {};
+  (k.studentIds || []).forEach(function(sid){ inClass[sid] = 1; });
+  const q1 = (pi.q1Students || []).filter(function(sid){ return inClass[sid]; });
+
   // 視圖標題刻意寫成一個「問題」而不是一個「主題」——知識建構的起點是問題。
   const v = createView({
     title: mis ? '「' + mis.name + '」什麼時候會出錯？' : ('第 ' + it.no + ' 題：我們卡在哪裡？'),
-    desc: '由 ' + diag.assignment.title + ' 第 ' + it.no + ' 題的 KIDMAP 迷思象限自動開啟。',
+    /* desc 是存下來的資料，學生在視圖列表與畫布抬頭都會直接讀到，
+       isTeacher() 分岔救不了。教師需要的溯源資訊已經結構化存在 v.origin，
+       顯示端要講 KIDMAP 就從 origin 現算。 */
+    desc: '從「' + diag.assignment.title + '」第 ' + it.no + ' 題長出來的共同問題。',
+    classId: k.id,
     origin: {aid: diag.assignment.id, iid: it.id, mis: pi.misCode || null}
   });
   createNote({
     viewId: v.id, kind: 'problem',
     title: '【全班共同問題】' + shortStem(it.stem),
-    authorIds: [kbClass().teacherId],
+    authorIds: [k.teacherId],
     keywords: it.tags || [],
     itemRef: {aid: diag.assignment.id, iid: it.id},
     segs: [{s: 's2', text: buildInquiryPrompt(pi, diag)}],
     x: 60, y: 40
   });
-  // 把「優勢概念」的同學標成知識資源人，貼一張邀請卡
-  if (pi.q1Students.length){
+  // 在這一題讀得比較穩的同學，請他們先說自己怎麼想
+  if (q1.length){
     createNote({
       viewId: v.id, kind: 'note',
       title: '這一題的知識資源人',
-      authorIds: [kbClass().teacherId],
+      authorIds: [k.teacherId],
       keywords: ['對稱知識進展'],
-      segs: [{s: 's3', text: '在這一題超越預期答對的同學：' +
-        pi.q1Students.map(userName).join('、') +
+      segs: [{s: 's3', text: '這一題讀得很穩的同學：' + q1.map(userName).join('、') +
         '。請你們先貼出「我當時是怎麼想的」，不要直接寫正確答案，讓大家有東西可以比較。'}],
       x: 330, y: 40
     });
@@ -302,7 +343,8 @@ function shortStem(s){
 function searchNotes(field, q){
   const s = String(q || '').trim().toLowerCase();
   if (!s) return [];
-  return state.notes.filter(function(n){
+  /* 搜尋也不可以跨班——列表過濾了、搜尋沒濾，那就是一條後門。 */
+  return notesForViewer().filter(function(n){
     if (field === 'title')   return n.title.toLowerCase().indexOf(s) >= 0;
     if (field === 'content') return noteText(n).toLowerCase().indexOf(s) >= 0;
     if (field === 'author')  return (n.authorIds || []).some(function(a){ return userName(a).toLowerCase().indexOf(s) >= 0; });

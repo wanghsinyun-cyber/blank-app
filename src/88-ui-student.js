@@ -12,7 +12,7 @@ function viewStudent(){
     '<p>請用右上角的身分選單切換成班上的學生。</p></div>';
   const asgs = state.assignments.slice().sort(function(a, b){ return b.createdAt - a.createdAt; });
   const myNotes = state.notes.filter(function(n){ return n.authorIds.indexOf(me.id) >= 0; }).length;
-  const unread = state.notes.filter(isUnread).length;
+  const unread = notesForViewer().filter(isUnread).length;
 
   const cond = condition(k.condition);
   const needPre = !surveyOf(me.id, 'pre');

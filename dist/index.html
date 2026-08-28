@@ -574,7 +574,7 @@ pre.prompt{
 /* 示範資料的結構版號。存檔的版號與這個值不符時就重建示範資料。
    改資料結構時要把它加一——loadState() 與 buildSeedState() 都讀同一個常數，
    不要在兩邊各寫一個字面量（曾經因此讓存檔永遠讀不回）。 */
-const STATE_VERSION = 4;
+const STATE_VERSION = 5;
 
 /* --- 固定種子亂數（mulberry32），確保示範資料可重現 --- */
 function mulberry32(a){
@@ -1002,17 +1002,17 @@ function buildSeedState(){
   kbStudents.forEach(function(s){ S[s.name] = s.id; });
 
   const v1 = {
-    id:'v-1', title:'那棵樹最後為什麼「正好」站在紅色鐵門旁邊？', createdAt: now - 8 * DAY,
+    id:'v-1', title:'那棵樹最後為什麼「正好」站在紅色鐵門旁邊？', createdAt: now - 8 * DAY, classId:'c-1',
     desc:'從前測第 8 題長出來的共同問題：這是巧合，還是作者早就安排好的？',
     origin:{aid:'a-pre', iid:'R08', mis:'E1'}, links:['v-2']
   };
   const v2 = {
-    id:'v-2', title:'什麼樣的答案才算「有根據」？', createdAt: now - 7 * DAY,
+    id:'v-2', title:'什麼樣的答案才算「有根據」？', createdAt: now - 7 * DAY, classId:'c-1',
     desc:'很多人答對了卻說不出理由。我們來討論：怎樣才算真的從文章裡讀出來的。',
     origin:{aid:'a-pre', iid:'R09', mis:'E1'}, links:['v-1']
   };
   const v3 = {
-    id:'v-3', title:'我們班的讀法工具箱', createdAt: now - 4 * DAY,
+    id:'v-3', title:'我們班的讀法工具箱', createdAt: now - 4 * DAY, classId:'c-1',
     desc:'把「找位置、連線索、想主題、評內容」四種讀法放在一起比較：什麼時候用哪一種？',
     origin:null, links:['v-1','v-2']
   };
@@ -1348,7 +1348,7 @@ const MAX_TURNS = 6;
 /* --- 系統骨幹提示模組（模組 0）：任務規則與防洩答機制 --- */
 const PROMPT_BACKBONE =
 '【任務規則】你是一個嵌在「評量即學習」平台中的對話夥伴，陪國小四到六年級學生一起讀一篇文章。\n' +
-'【嚴格禁止】(1) 說出或暗示答案；(2) 指名答案在哪一個選項或第幾句；(3) 判斷學生答對或答錯；\n' +
+'【嚴格禁止】(1) 說出或暗示答案；(2) 指名答案在哪一個選項、第幾段或第幾句；(3) 判斷學生答對或答錯；\n' +
 '(4) 說出學生缺漏了哪一個得分要素；(5) 直接把文章重點整理給他。\n' +
 '【你看不到的東西】你不會讀到學生的作答欄位，也不會知道他選了哪一個選項。\n' +
 '【每次回應】只做一件事：依系統指定的提問功能問一個問題。最多兩句話，' +
@@ -1362,7 +1362,7 @@ const PROMPT_ROLE = {
   tutee: '【社會框架】你是剛讀完這篇、但很多地方沒看懂的同學。你想請這位學生講給你聽，' +
          '所以你的問題都要像「我不太懂……你可以說給我聽嗎？」而不是像在考他。',
   peer:  '【社會框架】你是跟學生同時在讀這一篇的同學。先簡短說一句你自己讀到哪裡或卡在哪裡' +
-         '（不可以是答案），再把同一個問題拋回去問他，語氣是對等的討論。'
+         '（不可以是答案，也不可以說第幾段或第幾句），再把同一個問題拋回去問他，語氣是對等的討論。'
 };
 
 /* --- 歷程提示模組（模組 4–7）：提問功能與子歷程提問庫 --- */
@@ -1398,7 +1398,12 @@ function composePrompt(conditionId, processId, qfnId){
    直接放那些句子，不再額外多一句。內容只能關於**閱讀動作**，
    絕不碰文本內容或選項，碰了就是給提示。 */
 const PEER_SHARE = [
-  '我剛剛在第二段停了一下，想了想才往下讀。',
+  /* 這一句原本是「我剛剛在第二段停了一下」——那是位置線索，而且只有
+     peer 組拿得到（tutor 與 tutee 的開場池完全沒有任何段落或句次指涉）。
+     14 題選擇題裡有 3 題答案就在第二段，其餘 11 題則把孩子帶去錯的段落。
+     傷害不在「提示」而在「只有一個條件拿得到、且隨機出現的位置線索」：
+     RQ1 比的就不再是三種社會框架。改成不帶座標的閱讀動作句，字數維持。 */
+  '我讀到中間的時候停了一下，想了想才往下讀。',
   '我第一次讀的時候，好像把這裡看漏了。',
   '我是讀到後面，才想通前面在講什麼。',
   '我這一題也想了一下下，沒有很快。'
@@ -1476,6 +1481,13 @@ function agentTurn(conditionId, item, turn, rnd){
    規則引擎本來就不會產生答案，但外部語言模型會。輸出後一律過這一關，
    攔截次數本身就是一項可報告的實施忠實度指標。 */
 const VERDICT_WORDS = ['答對', '答錯', '正確答案', '你錯了', '你對了', '正解是', '應該選', '答案是', '選項是'];
+/* 「第 N 段」「第二段」都要認得。CN 只到十——文本沒有超過十段的。 */
+const CN_NUM = ['零','一','二','三','四','五','六','七','八','九','十'];
+function posRe(n, unit){
+  const cn = CN_NUM[n] ? '|' + CN_NUM[n] : '';
+  return new RegExp('第\\s*(' + n + cn + ')\\s*' + unit);
+}
+
 function leakGuard(text, item){
   let t = String(text), hits = [];
   VERDICT_WORDS.forEach(function(w){ if (t.indexOf(w) >= 0) hits.push(w); });
@@ -1485,8 +1497,13 @@ function leakGuard(text, item){
     const letter = String.fromCharCode(65 + item.answer);
     if (new RegExp('(選|答案|正解)\\s*' + letter + '\\b').test(t)) hits.push('正解代號');
   }
-  if (item && item.answerSent != null && new RegExp('第\\s*' + (item.answerSent + 1) + '\\s*句').test(t)){
+  /* 句與段都要擋，而且要認中文數字——原本只有一條阿拉伯數字的句次規則，
+     於是「第二段」「第二句」都通過。 */
+  if (item && item.answerSent != null && posRe(item.answerSent + 1, '句').test(t)){
     hits.push('指名答案所在句次');
+  }
+  if (item && item.answerPara != null && posRe(item.answerPara + 1, '段').test(t)){
+    hits.push('指名答案所在段落');
   }
   if (hits.length){
     return {text:'這個我不能說喔。換個方式問你：你剛剛是從文章的哪一句得到這個想法的？',
@@ -2562,9 +2579,33 @@ function addAnnotation(id, text){
   return true;
 }
 function createView(o){
+  /* 視圖一定屬於某一個班。條件是在班級層次操弄的，四個班共用一塊白板
+     等於讓對照組讀得到 tutor 班的全部討論——教科書式的擴散污染。 */
   const v = {id: uid('v'), title: o.title, desc: o.desc || '', createdAt: Date.now(),
+             classId: o.classId || (currentClass() || kbClass()).id,
              origin: o.origin || null, links: o.links || []};
   state.views.push(v); save(); return v;
+}
+
+/* 目前這位使用者看得到哪些視圖。
+   沒有 classId 的舊視圖視為示範班（相容改版前存下來的資料）。
+   教師與研究者看得到自己選定班級的；學生只看得到自己班的。 */
+function viewsForViewer(){
+  const me = currentUser();
+  const k = isTeacher() ? currentClass() : classOfStudent(me.id);
+  const kid = k ? k.id : null;
+  return state.views.filter(function(v){
+    return (v.classId || kbClass().id) === kid;
+  });
+}
+function viewVisible(vid){
+  return viewsForViewer().some(function(v){ return v.id === vid; });
+}
+/* 這位使用者看得到的貼文（用於未讀數與搜尋，兩者都不可以跨班） */
+function notesForViewer(){
+  const ok = {};
+  viewsForViewer().forEach(function(v){ ok[v.id] = 1; });
+  return state.notes.filter(function(n){ return ok[n.viewId]; });
 }
 
 /* ==========================================================================
@@ -2583,11 +2624,16 @@ function buildInquiryPrompt(pi, diag){
   const dis = pi.topDistractor != null ? it.options[pi.topDistractor] : null;
   const mis = pi.misCode ? MISCONCEPTIONS.find(function(m){ return m.id === pi.misCode; }) : null;
   const lines = [];
-  lines.push('前測第 ' + it.no + ' 題（' + textTitle(it.unit) + '）有 ' + n2 + ' 位同學落在「迷思」象限——'
-    + '照他們在其他題目上的表現，這一題本來應該答得出來，實際卻答錯了。');
+  /* 這段字是貼給全班讀的貼文本文，不是教師報表。
+     兩個必須避免的東西：
+     (1) 寫死「前測」——函式明明收到了 diag，卻在後測的橋接上印「前測」；
+     (2) 「落在迷思象限／本來應該答得出來」——那是當著全班的面
+         對特定幾個孩子貼缺陷標籤，跟這個平台自己寫的知識建構原則相反。 */
+  lines.push('「' + diag.assignment.title + '」第 ' + it.no + ' 題（' + textTitle(it.unit) + '）有 ' +
+    n2 + ' 位同學的讀法跟答案不一樣。我們一起看看，是哪一句話讓大家想得不同。');
   if (dis) lines.push('這些同學裡最多人選的是「' + dis + '」（' + pi.topDistractorN + ' 人）。');
-  if (mis) lines.push('這通常和「' + mis.name + '」有關：' + mis.desc);
-  if (n1) lines.push('另外有 ' + n1 + ' 位同學在這題超越預期答對，請他們先把自己的想法貼出來，讓大家看得到不同的思路。');
+  if (mis) lines.push('這常常跟「' + mis.name + '」有關：' + mis.desc);
+  if (n1) lines.push('另外有 ' + n1 + ' 位同學這一題讀得很穩，請他們先把自己的想法貼出來，讓大家看得到不同的思路。');
   lines.push('請大家不要只寫答案。先說你原本怎麼想，再說你現在覺得哪裡需要修正，並且盡量舉出一個能檢驗的例子。');
   return lines.join('\n');
 }
@@ -2597,30 +2643,42 @@ function createBridgeView(diag, pi){
   const exist = bridgeExists(diag.assignment.id, it.id);
   if (exist) return exist;
   const mis = pi.misCode ? MISCONCEPTIONS.find(function(m){ return m.id === pi.misCode; }) : null;
+  /* 視圖屬於老師目前帶的那一班，名單也只能是那一班的。
+     診斷是四班全樣本（共用同一次 Rasch 校準），但貼進單一班級白板的
+     點名清單如果橫跨四個班兩所學校，孩子會被一群他不認識的名字包圍，
+     而且那也是跨條件曝光。 */
+  const k = currentClass() || kbClass();
+  const inClass = {};
+  (k.studentIds || []).forEach(function(sid){ inClass[sid] = 1; });
+  const q1 = (pi.q1Students || []).filter(function(sid){ return inClass[sid]; });
+
   // 視圖標題刻意寫成一個「問題」而不是一個「主題」——知識建構的起點是問題。
   const v = createView({
     title: mis ? '「' + mis.name + '」什麼時候會出錯？' : ('第 ' + it.no + ' 題：我們卡在哪裡？'),
-    desc: '由 ' + diag.assignment.title + ' 第 ' + it.no + ' 題的 KIDMAP 迷思象限自動開啟。',
+    /* desc 是存下來的資料，學生在視圖列表與畫布抬頭都會直接讀到，
+       isTeacher() 分岔救不了。教師需要的溯源資訊已經結構化存在 v.origin，
+       顯示端要講 KIDMAP 就從 origin 現算。 */
+    desc: '從「' + diag.assignment.title + '」第 ' + it.no + ' 題長出來的共同問題。',
+    classId: k.id,
     origin: {aid: diag.assignment.id, iid: it.id, mis: pi.misCode || null}
   });
   createNote({
     viewId: v.id, kind: 'problem',
     title: '【全班共同問題】' + shortStem(it.stem),
-    authorIds: [kbClass().teacherId],
+    authorIds: [k.teacherId],
     keywords: it.tags || [],
     itemRef: {aid: diag.assignment.id, iid: it.id},
     segs: [{s: 's2', text: buildInquiryPrompt(pi, diag)}],
     x: 60, y: 40
   });
-  // 把「優勢概念」的同學標成知識資源人，貼一張邀請卡
-  if (pi.q1Students.length){
+  // 在這一題讀得比較穩的同學，請他們先說自己怎麼想
+  if (q1.length){
     createNote({
       viewId: v.id, kind: 'note',
       title: '這一題的知識資源人',
-      authorIds: [kbClass().teacherId],
+      authorIds: [k.teacherId],
       keywords: ['對稱知識進展'],
-      segs: [{s: 's3', text: '在這一題超越預期答對的同學：' +
-        pi.q1Students.map(userName).join('、') +
+      segs: [{s: 's3', text: '這一題讀得很穩的同學：' + q1.map(userName).join('、') +
         '。請你們先貼出「我當時是怎麼想的」，不要直接寫正確答案，讓大家有東西可以比較。'}],
       x: 330, y: 40
     });
@@ -2638,7 +2696,8 @@ function shortStem(s){
 function searchNotes(field, q){
   const s = String(q || '').trim().toLowerCase();
   if (!s) return [];
-  return state.notes.filter(function(n){
+  /* 搜尋也不可以跨班——列表過濾了、搜尋沒濾，那就是一條後門。 */
+  return notesForViewer().filter(function(n){
     if (field === 'title')   return n.title.toLowerCase().indexOf(s) >= 0;
     if (field === 'content') return noteText(n).toLowerCase().indexOf(s) >= 0;
     if (field === 'author')  return (n.authorIds || []).some(function(a){ return userName(a).toLowerCase().indexOf(s) >= 0; });
@@ -4250,7 +4309,11 @@ function renderShell(){
   sel.innerHTML = groups.map(function(g){
     if (g.byClass){
       return state.classes.map(function(k){
-        return '<optgroup label="' + esc(k.name) + '（' + esc(condition(k.condition).name) + '）">' +
+        /* 條件名只給教師與研究者看。對學生印出來，等於在身分下拉裡
+           把四個班的分組全部攤開——對照組會直接讀到自己是「無對象」。
+           同一支函式已經把 #classWrap 對學生隱藏了，這裡是漏網的那一處。 */
+        return '<optgroup label="' + esc(k.name) +
+          (isTeacher() ? '（' + esc(condition(k.condition).name) + '）' : '') + '">' +
           k.studentIds.map(function(sid){
             const u = getUser(sid);
             return '<option value="' + u.id + '"' + (u.id === state.ui.role ? ' selected' : '') + '>' +
@@ -4314,7 +4377,7 @@ function latestAssignmentId(){
 }
 
 function renderRail(){
-  const unread = state.notes.filter(isUnread).length;
+  const unread = notesForViewer().filter(isUnread).length;
   const me = currentUser();
 
   /* 雙軌儀表板永遠只涵蓋知識建構示範班，班級選單在那一頁不作用。
@@ -4333,7 +4396,9 @@ function renderRail(){
     csel.title = live ? ''
       : (ROUTE.name === 'dash'
           ? '這一頁只涵蓋知識建構示範班，班級選單在這裡不作用'
-          : '這一頁涵蓋四個班共 ' + nAll + ' 人，班級選單在這裡不作用');
+          : (ROUTE.name === 'kb' || ROUTE.name === 'note' || ROUTE.name === 'synth'
+          ? '這一頁只涵蓋你自己的班'
+          : '這一頁涵蓋四個班共 ' + nAll + ' 人，班級選單在這裡不作用'));
   }
 
   /* 三種導覽：研究者（super user，看得到全部）、教師（只看教學會用到的四項）、學生。
@@ -5352,6 +5417,15 @@ function kbGate(){
     '<a class="btn" href="#/student">回我的作業</a></div></div>';
 }
 
+/* 視圖不屬於你這一班時的空狀態。不要用「權限不足」那種說法——
+   對孩子而言那不是權限問題，是「這不是我們班的白板」。 */
+function kbScopeBlock(){
+  return '<div class="empty"><h3>這塊白板不是你們班的</h3>' +
+    '<p style="max-width:60ch">每一個班有自己的知識建構空間，' +
+    '你們班的討論在這裡。</p>' +
+    '<a class="btn" href="#/kb">回知識建構空間</a></div>';
+}
+
 function viewKBList(){
   const gate = kbGate(); if (gate) return gate;
   const res = KBSEARCH.q ? searchNotes(KBSEARCH.field, KBSEARCH.q) : null;
@@ -5365,12 +5439,19 @@ function viewKBList(){
     '</select>' +
     '<input type="text" id="sq" placeholder="輸入關鍵字…" value="' + esc(KBSEARCH.q) + '" style="max-width:260px" data-act="search-q">' +
     (KBSEARCH.q ? '<button class="btn sm" data-act="search-clear">清除</button>' : '') +
-    '<div class="spacer"></div><span class="muted small">未讀 ' + state.notes.filter(isUnread).length + ' 則</span>' +
+    '<div class="spacer"></div><span class="muted small">未讀 ' + notesForViewer().filter(isUnread).length + ' 則</span>' +
   '</div>' +
   (res ? '<div class="card" style="margin-bottom:16px"><div class="card-h"><h3>搜尋結果</h3>' +
       '<span class="muted small">' + res.length + ' 則貼文符合</span></div><div class="card-p col">' +
       (res.map(noteRow).join('') || '<div class="muted small">沒有符合的貼文。</div>') + '</div></div>' : '') +
-  '<div class="grid g2">' + state.views.map(function(v){
+  /* 白板依班級隔離之後，還沒有討論的班會拿到空清單。空的格線沒有任何說明，
+     孩子會以為壞掉了。示範資料只種了示範班，其餘三班在示範模式下本來就是空的。 */
+  (viewsForViewer().length ? '' :
+    '<div class="empty"><h3>你們班的討論還沒開始</h3>' +
+    '<p style="max-width:62ch">等老師把大家卡住的那一題整理出來，' +
+    '它就會出現在這裡，變成一塊你們班一起想的白板。</p>' +
+    '<a class="btn" href="#/student">回我的作業</a></div>') +
+  '<div class="grid g2">' + viewsForViewer().map(function(v){
     const ns = notesOfView(v.id);
     const un = ns.filter(isUnread).length;
     const it = v.origin ? getItem(v.origin.iid) : null;
@@ -5409,6 +5490,9 @@ function viewKBCanvas(vid){
   const gate = kbGate(); if (gate) return gate;
   const v = getView(vid);
   if (!v) return '<div class="empty"><h3>找不到這個視圖</h3><a class="btn" href="#/kb">回知識建構空間</a></div>';
+  /* 列表過濾擋不住直接打網址。條件是在班級層次操弄的，
+     讓對照組讀得到 tutor 班的討論就是擴散污染。 */
+  if (!viewVisible(vid)) return kbScopeBlock();
   /* 先清再組。選取模式綁在視圖上，換視圖就結束——否則工具列會寫著
      「選取中（2）」而畫布上沒有任何貼文帶外框，點貼文也打不開詳頁。 */
   if (KBSEL && KBSEL !== vid){ KBSEL = null; KBPICK = {}; }
@@ -5523,6 +5607,9 @@ function viewNote(nid){
   const gate = kbGate(); if (gate) return gate;
   const n = getNote(nid);
   if (!n) return '<div class="empty"><h3>找不到這則貼文</h3><a class="btn" href="#/kb">回知識建構空間</a></div>';
+  /* 直接打網址也要擋，而且要在 markRead 之前——否則光是打開別班的貼文，
+     就會把自己寫進那則貼文的 reads（那是 KB 指數的原料）。 */
+  if (!viewVisible(n.viewId)) return kbScopeBlock();
   markRead(nid);
   const v = getView(n.viewId);
   const root = threadRootOf(n);
@@ -6061,7 +6148,7 @@ function viewStudent(){
     '<p>請用右上角的身分選單切換成班上的學生。</p></div>';
   const asgs = state.assignments.slice().sort(function(a, b){ return b.createdAt - a.createdAt; });
   const myNotes = state.notes.filter(function(n){ return n.authorIds.indexOf(me.id) >= 0; }).length;
-  const unread = state.notes.filter(isUnread).length;
+  const unread = notesForViewer().filter(isUnread).length;
 
   const cond = condition(k.condition);
   const needPre = !surveyOf(me.id, 'pre');
@@ -8453,8 +8540,8 @@ function rExport(){
       '而且前後測問卷都預先填好了模擬答案。這是為了讓儀表板有東西可看，' +
       '但也表示<strong>真的孩子登入會看到「已完成」與別人的答案</strong>，按送出就會被當成他自己的作答。' +
       '正式施測前請按下面這顆鈕。</p>' +
-      '<p class="small muted" style="max-width:70ch">會清掉：後測的作答與交卷紀錄、示範問卷、示範對話。<br>' +
-      '會保留：前測作答、Rasch 校準、班級名單、知識建構空間的貼文。</p>' +
+      '<p class="small muted" style="max-width:70ch">會清掉：後測的作答與交卷紀錄、示範問卷、示範對話、示範的視圖與貼文。<br>' +
+      '會保留：前測作答、Rasch 校準、班級名單。</p>' +
       '<button class="btn primary" data-act="go-live">清空示範作答與示範問卷，準備施測</button>') +
   '</div></div>';
 }
@@ -9073,12 +9160,16 @@ function bindEvents(){
        也是教師端所有畫面的來源；清掉的是示範的後測作答與示範問卷。 */
     if (act === 'go-live'){
       if (!isResearcher()) return;
-      if (!confirm('這會清空示範的後測作答與示範問卷，讓學生端回到「尚未作答」。\n\n前測資料與 Rasch 校準會保留。\n\n這一步不可復原（要回到示範資料需按「重設」）。確定嗎？')) return;
+      if (!confirm('這會清空示範的後測作答、示範問卷，以及知識建構空間裡所有示範的視圖與貼文，讓學生端回到「尚未作答」。\n\n前測資料與 Rasch 校準會保留。\n\n這一步不可復原（要回到示範資料需按「重設」）。確定嗎？')) return;
       if (!confirm('再確認一次：清空之後，這台瀏覽器上的平台就是準備施測的狀態。')) return;
       state.demoSeed  = false;
       state.surveys   = (state.surveys || []).filter(function(s){ return !s.demo; });
       state.submissions = state.submissions.filter(function(s){ return s.aid !== 'a-post'; });
       state.responses   = state.responses.filter(function(r){ return r.aid !== 'a-post'; });
+      /* 白板也要清。不清的話，施測當天孩子一交卷就走進 21 則示範學童的
+         貼文裡——那既是別人的內容，也會直接污染知識建構參與度這個依變項。 */
+      state.views = [];
+      state.notes = [];
       state.dialog = [];
       DEMO_LOGS = []; DEMO_DIALOG = [];
       save(); renderShell(); render();

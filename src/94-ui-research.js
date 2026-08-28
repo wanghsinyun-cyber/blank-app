@@ -600,8 +600,8 @@ function rExport(){
       '而且前後測問卷都預先填好了模擬答案。這是為了讓儀表板有東西可看，' +
       '但也表示<strong>真的孩子登入會看到「已完成」與別人的答案</strong>，按送出就會被當成他自己的作答。' +
       '正式施測前請按下面這顆鈕。</p>' +
-      '<p class="small muted" style="max-width:70ch">會清掉：後測的作答與交卷紀錄、示範問卷、示範對話。<br>' +
-      '會保留：前測作答、Rasch 校準、班級名單、知識建構空間的貼文。</p>' +
+      '<p class="small muted" style="max-width:70ch">會清掉：後測的作答與交卷紀錄、示範問卷、示範對話、示範的視圖與貼文。<br>' +
+      '會保留：前測作答、Rasch 校準、班級名單。</p>' +
       '<button class="btn primary" data-act="go-live">清空示範作答與示範問卷，準備施測</button>') +
   '</div></div>';
 }

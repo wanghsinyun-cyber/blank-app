@@ -611,12 +611,16 @@ function bindEvents(){
        也是教師端所有畫面的來源；清掉的是示範的後測作答與示範問卷。 */
     if (act === 'go-live'){
       if (!isResearcher()) return;
-      if (!confirm('這會清空示範的後測作答與示範問卷，讓學生端回到「尚未作答」。\n\n前測資料與 Rasch 校準會保留。\n\n這一步不可復原（要回到示範資料需按「重設」）。確定嗎？')) return;
+      if (!confirm('這會清空示範的後測作答、示範問卷，以及知識建構空間裡所有示範的視圖與貼文，讓學生端回到「尚未作答」。\n\n前測資料與 Rasch 校準會保留。\n\n這一步不可復原（要回到示範資料需按「重設」）。確定嗎？')) return;
       if (!confirm('再確認一次：清空之後，這台瀏覽器上的平台就是準備施測的狀態。')) return;
       state.demoSeed  = false;
       state.surveys   = (state.surveys || []).filter(function(s){ return !s.demo; });
       state.submissions = state.submissions.filter(function(s){ return s.aid !== 'a-post'; });
       state.responses   = state.responses.filter(function(r){ return r.aid !== 'a-post'; });
+      /* 白板也要清。不清的話，施測當天孩子一交卷就走進 21 則示範學童的
+         貼文裡——那既是別人的內容，也會直接污染知識建構參與度這個依變項。 */
+      state.views = [];
+      state.notes = [];
       state.dialog = [];
       DEMO_LOGS = []; DEMO_DIALOG = [];
       save(); renderShell(); render();

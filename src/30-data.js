@@ -11,7 +11,7 @@
 /* 示範資料的結構版號。存檔的版號與這個值不符時就重建示範資料。
    改資料結構時要把它加一——loadState() 與 buildSeedState() 都讀同一個常數，
    不要在兩邊各寫一個字面量（曾經因此讓存檔永遠讀不回）。 */
-const STATE_VERSION = 4;
+const STATE_VERSION = 5;
 
 /* --- 固定種子亂數（mulberry32），確保示範資料可重現 --- */
 function mulberry32(a){
@@ -439,17 +439,17 @@ function buildSeedState(){
   kbStudents.forEach(function(s){ S[s.name] = s.id; });
 
   const v1 = {
-    id:'v-1', title:'那棵樹最後為什麼「正好」站在紅色鐵門旁邊？', createdAt: now - 8 * DAY,
+    id:'v-1', title:'那棵樹最後為什麼「正好」站在紅色鐵門旁邊？', createdAt: now - 8 * DAY, classId:'c-1',
     desc:'從前測第 8 題長出來的共同問題：這是巧合，還是作者早就安排好的？',
     origin:{aid:'a-pre', iid:'R08', mis:'E1'}, links:['v-2']
   };
   const v2 = {
-    id:'v-2', title:'什麼樣的答案才算「有根據」？', createdAt: now - 7 * DAY,
+    id:'v-2', title:'什麼樣的答案才算「有根據」？', createdAt: now - 7 * DAY, classId:'c-1',
     desc:'很多人答對了卻說不出理由。我們來討論：怎樣才算真的從文章裡讀出來的。',
     origin:{aid:'a-pre', iid:'R09', mis:'E1'}, links:['v-1']
   };
   const v3 = {
-    id:'v-3', title:'我們班的讀法工具箱', createdAt: now - 4 * DAY,
+    id:'v-3', title:'我們班的讀法工具箱', createdAt: now - 4 * DAY, classId:'c-1',
     desc:'把「找位置、連線索、想主題、評內容」四種讀法放在一起比較：什麼時候用哪一種？',
     origin:null, links:['v-1','v-2']
   };

@@ -117,7 +117,11 @@ function renderShell(){
   sel.innerHTML = groups.map(function(g){
     if (g.byClass){
       return state.classes.map(function(k){
-        return '<optgroup label="' + esc(k.name) + '（' + esc(condition(k.condition).name) + '）">' +
+        /* 條件名只給教師與研究者看。對學生印出來，等於在身分下拉裡
+           把四個班的分組全部攤開——對照組會直接讀到自己是「無對象」。
+           同一支函式已經把 #classWrap 對學生隱藏了，這裡是漏網的那一處。 */
+        return '<optgroup label="' + esc(k.name) +
+          (isTeacher() ? '（' + esc(condition(k.condition).name) + '）' : '') + '">' +
           k.studentIds.map(function(sid){
             const u = getUser(sid);
             return '<option value="' + u.id + '"' + (u.id === state.ui.role ? ' selected' : '') + '>' +
@@ -181,7 +185,7 @@ function latestAssignmentId(){
 }
 
 function renderRail(){
-  const unread = state.notes.filter(isUnread).length;
+  const unread = notesForViewer().filter(isUnread).length;
   const me = currentUser();
 
   /* 雙軌儀表板永遠只涵蓋知識建構示範班，班級選單在那一頁不作用。
@@ -200,7 +204,9 @@ function renderRail(){
     csel.title = live ? ''
       : (ROUTE.name === 'dash'
           ? '這一頁只涵蓋知識建構示範班，班級選單在這裡不作用'
-          : '這一頁涵蓋四個班共 ' + nAll + ' 人，班級選單在這裡不作用');
+          : (ROUTE.name === 'kb' || ROUTE.name === 'note' || ROUTE.name === 'synth'
+          ? '這一頁只涵蓋你自己的班'
+          : '這一頁涵蓋四個班共 ' + nAll + ' 人，班級選單在這裡不作用'));
   }
 
   /* 三種導覽：研究者（super user，看得到全部）、教師（只看教學會用到的四項）、學生。

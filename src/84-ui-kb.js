@@ -31,6 +31,15 @@ function kbGate(){
     '<a class="btn" href="#/student">回我的作業</a></div></div>';
 }
 
+/* 視圖不屬於你這一班時的空狀態。不要用「權限不足」那種說法——
+   對孩子而言那不是權限問題，是「這不是我們班的白板」。 */
+function kbScopeBlock(){
+  return '<div class="empty"><h3>這塊白板不是你們班的</h3>' +
+    '<p style="max-width:60ch">每一個班有自己的知識建構空間，' +
+    '你們班的討論在這裡。</p>' +
+    '<a class="btn" href="#/kb">回知識建構空間</a></div>';
+}
+
 function viewKBList(){
   const gate = kbGate(); if (gate) return gate;
   const res = KBSEARCH.q ? searchNotes(KBSEARCH.field, KBSEARCH.q) : null;
@@ -44,12 +53,19 @@ function viewKBList(){
     '</select>' +
     '<input type="text" id="sq" placeholder="輸入關鍵字…" value="' + esc(KBSEARCH.q) + '" style="max-width:260px" data-act="search-q">' +
     (KBSEARCH.q ? '<button class="btn sm" data-act="search-clear">清除</button>' : '') +
-    '<div class="spacer"></div><span class="muted small">未讀 ' + state.notes.filter(isUnread).length + ' 則</span>' +
+    '<div class="spacer"></div><span class="muted small">未讀 ' + notesForViewer().filter(isUnread).length + ' 則</span>' +
   '</div>' +
   (res ? '<div class="card" style="margin-bottom:16px"><div class="card-h"><h3>搜尋結果</h3>' +
       '<span class="muted small">' + res.length + ' 則貼文符合</span></div><div class="card-p col">' +
       (res.map(noteRow).join('') || '<div class="muted small">沒有符合的貼文。</div>') + '</div></div>' : '') +
-  '<div class="grid g2">' + state.views.map(function(v){
+  /* 白板依班級隔離之後，還沒有討論的班會拿到空清單。空的格線沒有任何說明，
+     孩子會以為壞掉了。示範資料只種了示範班，其餘三班在示範模式下本來就是空的。 */
+  (viewsForViewer().length ? '' :
+    '<div class="empty"><h3>你們班的討論還沒開始</h3>' +
+    '<p style="max-width:62ch">等老師把大家卡住的那一題整理出來，' +
+    '它就會出現在這裡，變成一塊你們班一起想的白板。</p>' +
+    '<a class="btn" href="#/student">回我的作業</a></div>') +
+  '<div class="grid g2">' + viewsForViewer().map(function(v){
     const ns = notesOfView(v.id);
     const un = ns.filter(isUnread).length;
     const it = v.origin ? getItem(v.origin.iid) : null;
@@ -88,6 +104,9 @@ function viewKBCanvas(vid){
   const gate = kbGate(); if (gate) return gate;
   const v = getView(vid);
   if (!v) return '<div class="empty"><h3>找不到這個視圖</h3><a class="btn" href="#/kb">回知識建構空間</a></div>';
+  /* 列表過濾擋不住直接打網址。條件是在班級層次操弄的，
+     讓對照組讀得到 tutor 班的討論就是擴散污染。 */
+  if (!viewVisible(vid)) return kbScopeBlock();
   /* 先清再組。選取模式綁在視圖上，換視圖就結束——否則工具列會寫著
      「選取中（2）」而畫布上沒有任何貼文帶外框，點貼文也打不開詳頁。 */
   if (KBSEL && KBSEL !== vid){ KBSEL = null; KBPICK = {}; }
@@ -202,6 +221,9 @@ function viewNote(nid){
   const gate = kbGate(); if (gate) return gate;
   const n = getNote(nid);
   if (!n) return '<div class="empty"><h3>找不到這則貼文</h3><a class="btn" href="#/kb">回知識建構空間</a></div>';
+  /* 直接打網址也要擋，而且要在 markRead 之前——否則光是打開別班的貼文，
+     就會把自己寫進那則貼文的 reads（那是 KB 指數的原料）。 */
+  if (!viewVisible(n.viewId)) return kbScopeBlock();
   markRead(nid);
   const v = getView(n.viewId);
   const root = threadRootOf(n);
