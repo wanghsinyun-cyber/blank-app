@@ -99,30 +99,40 @@ function viewKBCanvas(vid){
     const cls = ['note', n.kind === 'problem' ? 'problem' : '', n.kind === 'rise' ? 'rise' : '',
                  isUnread(n) ? 'unread' : '', KBPICK[n.id] ? 'sel' : ''].filter(Boolean).join(' ');
     const scls = scaf ? (scaffold(scaf.s) || {}).cls : '';
-    /* aria-label 會吞掉整張卡的內容（支架標籤、摘要、作者、回應數），
-       改用 labelledby + describedby 指向卡內真正的節點。 */
+    /* aria-label 會吞掉整張卡的內容，改用 labelledby + describedby。
+       但 role="button" 的 Children Presentational 為 true——卡內所有子節點的
+       語意都被移除，所以 .nf（未讀、作者、回應／閱讀／註記數）也必須被
+       describedby 明確參照，否則報讀器一律拿不到。 */
     return '<div class="' + cls + ' ' + (scls || '') + '" style="left:' + n.x + 'px;top:' + n.y + 'px"' +
       ' data-note="' + n.id + '" tabindex="0" role="button"' +
-      ' aria-labelledby="nt-' + n.id + '" aria-describedby="nb-' + n.id + '">' +
+      ' aria-labelledby="nt-' + n.id + '" aria-describedby="nb-' + n.id + ' nf-' + n.id + '">' +
       '<div class="nt" id="nt-' + n.id + '">' + esc(n.title) + '</div>' +
       (scaf ? '<div class="small" style="color:var(--' + ((scaffold(scaf.s) || {}).cls || '').replace('sc', 'sc-') +
         ');font-size:0.55rem;font-weight:600;margin-bottom:2px">' + esc(scaffoldLabel(scaf.s)) + '</div>' : '') +
       '<div class="nb" id="nb-' + n.id + '">' + esc((scaf ? scaf.text : '').slice(0, 90)) + '</div>' +
       /* 未讀原本只用一條顏色細線傳達（1.4.1），補一個記號與報讀器文字。
          放在 .nf 那一列，不要放標題前——卡片只有 13.2rem 寬，會提早折行。 */
-      '<div class="nf">' +
+      '<div class="nf" id="nf-' + n.id + '">' +
         (isUnread(n) ? '<span class="sr-only">未讀。</span>' +
                        '<span class="unread-dot" aria-hidden="true">●</span>' : '') +
         '<span>' + esc(noteAuthors(n)) + '</span>' +
-        (childrenOf(n.id).length ? '<span>↳' + childrenOf(n.id).length + '</span>' : '') +
-        ((n.reads || []).length ? '<span>👁' + n.reads.length + '</span>' : '') +
-        ((n.annotations || []).length ? '<span>✎' + n.annotations.length + '</span>' : '') +
+        /* 符號各補一段報讀器文字，否則會被唸成符號名 */
+        (childrenOf(n.id).length ? '<span><span aria-hidden="true">↳</span>' + childrenOf(n.id).length +
+          '<span class="sr-only"> 則回應</span></span>' : '') +
+        ((n.reads || []).length ? '<span><span aria-hidden="true">👁</span>' + n.reads.length +
+          '<span class="sr-only"> 人已讀</span></span>' : '') +
+        ((n.annotations || []).length ? '<span><span aria-hidden="true">✎</span>' + n.annotations.length +
+          '<span class="sr-only"> 則註記</span></span>' : '') +
       '</div></div>';
   }).join('');
 
   // 連線
   const pos = {};
-  ns.forEach(function(n){ pos[n.id] = {x: n.x + 108, y: n.y + 40}; });
+  /* 卡片寬度改成 13.2rem（會隨字級放大），錨點不能再寫死 108px——
+       108 ≒ 264/2 − 24，是 100% 字級下的值。 */
+  const rootFS = parseFloat(getComputedStyle(document.documentElement).fontSize) || 20;
+  const NOTE_W = 13.2 * rootFS;
+  ns.forEach(function(n){ pos[n.id] = {x: n.x + NOTE_W / 2 - 24, y: n.y + 40}; });
   const edges = [];
   ns.forEach(function(n){
     if (n.buildOn && pos[n.buildOn]) edges.push(curve(pos[n.buildOn], pos[n.id], 'build'));
@@ -305,7 +315,7 @@ function openNoteEditor(o){
   renderEditor();
 }
 
-function renderEditor(){
+function renderEditor(opts){
   const parent = EDIT.buildOn ? getNote(EDIT.buildOn) : null;
   const others = state.notes.filter(function(n){ return n.id !== EDIT.id; });
   modal(
@@ -344,7 +354,8 @@ function renderEditor(){
     '</div>' +
     '<div class="modal-f"><button class="btn" data-act="close-modal">取消</button>' +
     (EDIT.id ? '<button class="btn danger" data-act="del-note" data-id="' + EDIT.id + '">刪除這則</button>' : '') +
-    '<button class="btn primary" data-act="save-note">貼上去</button></div>', {wide:false});
+    '<button class="btn primary" data-act="save-note">貼上去</button></div>',
+    {wide:false, focus:(opts && opts.focus) || null});
 }
 
 function collectEditor(){

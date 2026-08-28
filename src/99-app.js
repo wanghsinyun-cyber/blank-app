@@ -14,6 +14,10 @@ const TEACHER_ONLY = {assign:1, dash:1, inspect:1, bank:1};
    否則學生每標一句話、每點一顆量尺都會被彈回頁首、焦點掉回 body。 */
 let LAST_ROUTE_KEY = null;
 
+/* 自己捲動的容器：重繪之後要把 scrollTop 放回去。
+   #aalChat 不在裡面——那一個要捲到底，不是原位。 */
+const SCROLL_KEEP = ['.aal-text > .card-p', '.canvas'];
+
 function render(){
   ROUTE = parseRoute();
   const stage = $('#stage');
@@ -71,23 +75,42 @@ function render(){
     case 'mygrowth':  html = viewMyGrowth(); break;
     default:          html = '<div class="empty"><h3>找不到這一頁</h3><a class="btn" href="#/teacher">回首頁</a></div>';
   }
-  /* 重繪之前先記下位置與焦點。焦點用 data-* 屬性組出選擇器再找回來——
-     aal-mark 的 data-i、sv-pick 的 data-k+data-v、aal-check 的 data-i
-     在同一頁內都唯一。 */
+  /* 重繪之前先記下位置與焦點。焦點用 data-* 屬性組出選擇器再找回來。
+     這套機制服務的是「同一條路由裡就地重繪」的按鈕群——分頁鈕（dtab、rtab）、
+     KIDMAP 的學生清單、非選題切換、派題精靈的題目勾選。它們全都靠 data-id
+     區分，少了那一段選擇器就只會回傳文件順序第一顆。
+     （aal-mark／aal-pick／aal-check 在第 1 輪之後改成就地更新、不再走 render，
+     不再是這裡的對象。） */
   const key = ROUTE.name + '/' + a.join('/');
   const samePage = (key === LAST_ROUTE_KEY);
   /* 離開知識建構空間就把選取模式與搜尋清掉。進 #/note、#/synth 再回來時
      殘留的狀態會與畫面脫節。 */
   if (ROUTE.name !== 'kb' && KBSEL){ KBSEL = null; KBPICK = {}; }
   if (ROUTE.name !== 'kb' && ROUTE.name !== 'note' && ROUTE.name !== 'synth') KBSEARCH.q = '';
+  /* 離開作答頁就釋放 AAL。順便修掉「換身分之後舊 AAL 還在」的隱患。
+     回來時會重跑 aalInit 並補寫一筆 RESUME——那是對的，確實是兩次入座。 */
+  if (AAL && ROUTE.name !== 'aal'){ AAL = null; AAL_LEFT_VIA = 'nav'; }
   const prevY = window.scrollY;
+  /* 內層捲動容器的位置。window.scrollY 還原不了它們——v.innerHTML 一換，
+     容器就被重建、scrollTop 歸零。同一篇文章換題時，學生每次都要重新捲回
+     剛讀的段落；實驗組觸發重繪的次數更多，等於把這份額外負荷不對等地
+     加在實驗組身上。新增捲動容器只要往這個陣列加一行。 */
+  const innerY = {};
+  SCROLL_KEEP.forEach(function(s){
+    const el = v.querySelector(s); if (el) innerY[s] = el.scrollTop;
+  });
   const ae = document.activeElement;
   let fk = null;
   if (samePage && ae && ae !== document.body && v.contains(ae) && ae.dataset && ae.dataset.act){
+    /* 這些 data-* 的值目前都是系統產生的 uid，只含 [A-Za-z0-9_-]，
+       所以不需要 CSS.escape。日後若其中任何一個可能含使用者輸入就要改。 */
     fk = '[data-act="' + ae.dataset.act + '"]' +
       (ae.dataset.i !== undefined ? '[data-i="' + ae.dataset.i + '"]' : '') +
       (ae.dataset.k !== undefined ? '[data-k="' + ae.dataset.k + '"]' : '') +
-      (ae.dataset.v !== undefined ? '[data-v="' + ae.dataset.v + '"]' : '');
+      (ae.dataset.v !== undefined ? '[data-v="' + ae.dataset.v + '"]' : '') +
+      (ae.dataset.id !== undefined ? '[data-id="' + ae.dataset.id + '"]' : '') +
+      (ae.dataset.sid !== undefined ? '[data-sid="' + ae.dataset.sid + '"]' : '') +
+      (ae.dataset.iid !== undefined ? '[data-iid="' + ae.dataset.iid + '"]' : '');
   }
 
   v.innerHTML = html;
@@ -103,7 +126,17 @@ function render(){
     try { window.scrollTo(0, 0); } catch (e) {}
     if (stage) stage.focus({preventScroll: true});
   } else {
-    if (fk){ const back = v.querySelector(fk); if (back) back.focus({preventScroll: true}); }
+    SCROLL_KEEP.forEach(function(s){
+      const el = v.querySelector(s); if (el && innerY[s] != null) el.scrollTop = innerY[s];
+    });
+    /* 還原目標剛好變 disabled（換到頭尾的上一題／下一題、上一位／下一位）時，
+       focus() 是 no-op，焦點會掉回 body——鍵盤使用者要從整頁最上面重來。
+       寧可退到 #stage。 */
+    if (fk){
+      const back = v.querySelector(fk);
+      if (back && !back.disabled) back.focus({preventScroll: true});
+      else if (stage) stage.focus({preventScroll: true});
+    }
     try { window.scrollTo(0, prevY); } catch (e) {}
   }
   LAST_ROUTE_KEY = key;
@@ -293,8 +326,12 @@ async function saveFile(filename, text, mime){
 /* --- 事件 --- */
 function bindEvents(){
   /* 作答到一半誤觸關閉／重整時攔一下。草稿已經落地，但還是要讓學生知道。 */
+  /* 守門條件必須是「真的有沒落地的東西」，不是「模組變數還活著」。
+     marks／checks／notes／texts／answers 都在草稿裡，正常狀況下關分頁
+     不會掉資料；只有 aalSave() 寫失敗（配額）時 dirty 才會留著。 */
   window.addEventListener('beforeunload', function(e){
-    if (AAL && Object.keys(AAL.answers).length){ e.preventDefault(); e.returnValue = ''; }
+    if (AAL) flushLogs();
+    if (AAL && AAL.dirty){ e.preventDefault(); e.returnValue = ''; }
   });
 
   /* 對話輸入框按 Enter 送出。
@@ -396,8 +433,10 @@ function bindEvents(){
       openNoteEditor({viewId:id, kind:'rise', contains:picks,
         title:'【躍升】', segs:[{s:'s6', text:''}], x:900, y:520});
       return; }
-    if (act === 'seg-add'){ collectEditor(); EDIT.segs.push({s:'s1', text:''}); renderEditor(); return; }
-    if (act === 'seg-del'){ collectEditor(); EDIT.segs.splice(+t.dataset.i, 1); renderEditor(); return; }
+    if (act === 'seg-add'){ collectEditor(); EDIT.segs.push({s:'s1', text:''});
+      renderEditor({focus:'[data-act="seg-text"][data-i="' + (EDIT.segs.length - 1) + '"]'}); return; }
+    if (act === 'seg-del'){ collectEditor(); const di = +t.dataset.i; EDIT.segs.splice(di, 1);
+      renderEditor({focus:'[data-act="seg-text"][data-i="' + Math.max(0, di - 1) + '"]'}); return; }
     if (act === 'save-note'){ saveEditor(); return; }
     if (act === 'del-note'){ if (confirm('刪除這則貼文？延伸它的貼文會失去連結，這個動作無法復原。')){
       if (!deleteNote(id)){ toast('代為檢視時不能替學生刪貼文。'); return; }
@@ -453,9 +492,30 @@ function bindEvents(){
       const nu = aalItem().unit;
       if (nu !== oldUnit){
         toast('第 ' + (AAL.idx + 1) + ' 題換了一篇文章：〈' + getText(nu).title + '〉，左邊已經換過來了。');
+        /* 換了文章，左欄要從頭開始——否則學生會在新文章的中段醒來 */
+        const p = document.querySelector('.aal-text > .card-p');
+        if (p) p.scrollTop = 0;
         const h = document.getElementById('passageTitle');
         if (h) h.focus();
+      } else {
+        /* 同一篇文章換題（T1 十題共用一篇，這是多數情況）：
+           不移焦點的話報讀器什麼都不會唸，題幹、選項、已選答案靜默替換；
+           窄版單欄的學生停在文章第 9 段，畫面看起來完全沒動，會以為按壞了
+           而連按，一次跳過兩三題——那會在歷程序列裡憑空多出 idx 跳躍。 */
+        const ans = document.getElementById('aalAnswer');
+        if (ans){ ans.focus({preventScroll:true}); ans.scrollIntoView({block:'start'}); }
       }
+      return; }
+
+    /* 學生按了系統自己寫的「進度會保留」，就要真的把 AAL 收乾淨——
+       否則 beforeunload 的守門條件（AAL 還活著）仍成立，他之後在任何一頁
+       關分頁都會被警告「變更可能不會被儲存」，與那顆鈕的承諾直接打架。 */
+    if (act === 'aal-leave'){
+      flushPendingPicks();
+      flushLogs();
+      aalSave();
+      AAL = null;
+      go('#/student'); render();
       return; }
 
     if (act === 'skip-passage'){
@@ -469,8 +529,16 @@ function bindEvents(){
 
     /* 教師／研究者的唯讀檢視：換題不寫任何日誌 */
     if (act === 'inspect-who-prev' || act === 'inspect-who-next'){ go('#/inspect/' + INSPECT.aid + '/' + id); return; }
-    if (act === 'inspect-prev'){ INSPECT.idx = Math.max(0, INSPECT.idx - 1); render(); return; }
-    if (act === 'inspect-next'){ INSPECT.idx = Math.min(INSPECT.items.length - 1, INSPECT.idx + 1); render(); return; }
+    /* 與學生端的換題同一套行為：焦點落到作答卡、捲到它，
+       否則教師端與學生端在同一個動作上分岔。 */
+    if (act === 'inspect-prev' || act === 'inspect-next'){
+      INSPECT.idx = act === 'inspect-prev'
+        ? Math.max(0, INSPECT.idx - 1)
+        : Math.min(INSPECT.items.length - 1, INSPECT.idx + 1);
+      render();
+      const ans = document.getElementById('aalAnswer');
+      if (ans){ ans.focus({preventScroll:true}); ans.scrollIntoView({block:'start'}); }
+      return; }
     if (act === 'aal-submit'){ aalSubmit(); return; }
     if (act === 'aal-note-clear'){
       const it = aalItem();
@@ -562,7 +630,8 @@ function bindEvents(){
     if (act === 'class-sel'){ state.ui.classId = t.value; save(); render(); return; }
     if (act === 'wiz-item'){ const id = t.dataset.id;
       if (WIZ.items[id]) delete WIZ.items[id]; else WIZ.items[id] = 1; render(); return; }
-    if (act === 'seg-sc'){ collectEditor(); EDIT.segs[+t.dataset.i].s = t.value; renderEditor(); return; }
+    if (act === 'seg-sc'){ collectEditor(); EDIT.segs[+t.dataset.i].s = t.value;
+      renderEditor({focus:'[data-act="seg-sc"][data-i="' + t.dataset.i + '"]'}); return; }
     /* 量尺現在是原生 radio，走 change 而不是 click——方向鍵移動也會觸發。
        只更新這一列與抬頭的計數，不重繪整段。 */
     if (act === 'sv-pick'){

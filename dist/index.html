@@ -40,7 +40,7 @@
   --q3:#78829a; --q3-bg:#eceff4; --q3-line:#c3cad6;
   --q4:#4a72ae; --q4-bg:#e6edf7; --q4-line:#b3c6e0;
 
-  --sc-1:#3e6fb0; --sc-2:#a86f1c; --sc-3:#2e7d5b;
+  --sc-1:#3e6fb0; --sc-2:#8a5a12; --sc-3:#2e7d5b;
   --sc-4:#be3a2b; --sc-5:#6a4a9e; --sc-6:#0e7c86;
 
   --good:#2e7d5b; --warn:#a86f1c; --crit:#be3a2b;
@@ -191,6 +191,15 @@ input:focus-visible,select:focus-visible,textarea:focus-visible{border-color:tra
   cursor:pointer; text-align:left; text-decoration:underline; text-underline-offset:3px}
 button.pill{font:inherit; font-size:0.8rem; cursor:pointer; border-color:var(--rule-strong)}
 .pill{display:inline-flex; align-items:center; gap:5px; border-radius:100px; padding:1px 9px; font-size:0.8rem; border:1px solid var(--rule); background:var(--shade); color:var(--ink-2); white-space:nowrap}
+/* [hidden] 在 UA 樣式表裡是 display:none，而作者樣式的 .pill{display:inline-flex}
+   永遠贏過 UA 來源——所以 hidden 對 .pill 完全無效。每個學生一進作答頁
+   就會看到「已標記 0 句」，取消最後一個標記後它也不會消失，
+   報讀器還會多唸一段沒有意義的「已標記 0 句」。 */
+.pill[hidden]{ display:none }
+/* 會變的數字用等寬數字並固定寬度，位數變化不會推動卡片頭的排版。
+   #turnLeft（三個 AI 組）與 #noteCount（對照組）兩邊一致。 */
+#turnLeft, #noteCount{ font-variant-numeric:tabular-nums; display:inline-block;
+  min-width:2.2ch; text-align:right }
 .pill .dot{width:7px; height:7px; border-radius:50%; background:currentColor}
 .q1{color:var(--q1); background:var(--q1-bg); border-color:var(--q1-line)}
 .q2{color:var(--q2); background:var(--q2-bg); border-color:var(--q2-line)}
@@ -223,7 +232,7 @@ td.n,th.n{text-align:right; font-family:var(--f-mono); font-variant-numeric:tabu
   border-bottom:2px solid transparent; font-size:0.9rem; white-space:nowrap;
   text-decoration:none; display:inline-block;
 }
-.tabs button[aria-selected="true"], .tabs a[aria-current="true"]{
+.tabs [aria-current="true"]{
   color:var(--ink); border-bottom-color:var(--accent); font-weight:600}
 
 .steps{display:flex; gap:8px; align-items:center; margin-bottom:18px; flex-wrap:wrap}
@@ -281,7 +290,7 @@ td.n,th.n{text-align:right; font-family:var(--f-mono); font-variant-numeric:tabu
 }
 .canvas-inner{position:relative; width:1600px; height:1100px}
 .note{
-  position:absolute; width:264px; background:var(--card); border:1px solid var(--rule);
+  position:absolute; width:13.2rem; background:var(--card); border:1px solid var(--rule);
   border-left:4px solid var(--ink-4); border-radius:var(--r-m); padding:9px 11px; cursor:grab;
   box-shadow:var(--shadow); user-select:none;
 }
@@ -290,6 +299,9 @@ td.n,th.n{text-align:right; font-family:var(--f-mono); font-variant-numeric:tabu
 .note .nt{font-weight:600; font-size:0.9rem; line-height:1.45; margin-bottom:3px; font-family:var(--f-display)}
 .note .nb{font-size:0.8rem; color:var(--ink-3); line-height:1.55; max-height:3.4em; overflow:hidden}
 .note .nf{display:flex; gap:7px; align-items:center; margin-top:7px; font-size:0.8rem; color:var(--ink-4); font-family:var(--f-mono); flex-wrap:wrap}
+/* 資訊列在 .note.problem 的淺紅底（--q2-bg）上只有 4.09:1。
+   --ink-3 在同一個底色上是 5.07:1。 */
+.note.problem .nf, .note.rise .nf{ color:var(--ink-3) }
 .note.unread{box-shadow:var(--shadow),inset 0 3px 0 var(--accent)}
 .note.problem{border-left-color:var(--q2); background:var(--q2-bg)}
 .note.rise{border-left-color:var(--sc-6); box-shadow:var(--shadow),0 0 0 3px var(--card),0 0 0 4px var(--sc-6)}
@@ -378,7 +390,11 @@ input[type=checkbox],input[type=radio]{ width:1.15em; height:1.15em; accent-colo
 .skip:focus{ top:8px }
 /* 作答頁內的兩顆跳躍鈕跟著卡片走，不用絕對定位 */
 .aal .skip{ position:static; top:auto; display:block; margin:0 0 10px }
-.aal .skip:not(:focus){ position:absolute; left:-9999px }
+/* 這兩顆鈕（跳過文章、回到文章）是版面內的正式導覽控制項，不是隱藏式
+   skip link。原本沿用了 .skip 的 :not(:focus) 絕對定位到 -9999px，於是
+   平板觸控與滑鼠的四年級學生——本研究的主要受試方式——完全看不到它們，
+   窄版轉單欄後必須用手指捲過整篇文章才碰得到第一個選項。
+   全站的「略過導覽」（:364 起）維持隱藏式，那一處是對的。 */
 
 /* 高對比模式：使用者可在頂列開啟 */
 :root[data-contrast="high"]{
@@ -430,12 +446,6 @@ input[type=checkbox],input[type=radio]{ width:1.15em; height:1.15em; accent-colo
 .aal-text > .card-p{overflow-y:auto; min-height:0}
 .aal-side{display:flex; flex-direction:column; gap:16px; min-width:0}
 .aal-chat .card-p{display:flex; flex-direction:column}
-.sentences{line-height:2.1; font-size:1.05rem}
-.sent{cursor:pointer; padding:1px 2px; border-radius:3px; border-bottom:1px dashed var(--rule-strong)}
-.sent:hover{background:var(--shade)}
-.sent.on{background:var(--q4-bg); border-bottom:3px solid var(--q4); color:var(--ink); font-weight:600}
-/* 不以顏色單獨傳達訊息（1.4.1）：這一組規則沒有 .passage 前綴，也要帶記號 */
-.sent.on::after{content:"�08D"; color:var(--q4); font-weight:700}
 /* 對話卡與筆記卡要逐層等高：內容區、工具列、說明文字三段都鎖住最小高度。
    用 rem 是為了讓字級放大時兩邊一起長，不會在 175% 又拉開差距。 */
 .aal-chat .pane-bar{min-height:2.35rem; align-items:center}
@@ -4141,26 +4151,79 @@ function toast(msg){
   toast._t = setTimeout(function(){ r.innerHTML = ''; }, 2600);
 }
 
+const FOCUSABLE = 'a[href],button:not([disabled]),input:not([disabled]),' +
+                  'select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
+
 function modal(html, opts){
   opts = opts || {};
   const r = $('#modalRoot');
-  /* 彈窗要有可及名稱（拿第一個標題）與 Esc 出口，
-     否則報讀器只會唸「對話方塊」，而鍵盤使用者被困在裡面。 */
+  /* 覆寫 innerHTML 之前先讀 activeElement。反過來的話，原本有焦點的節點
+     已經被移除、activeElement 已經是 body，_returnTo 就永遠是 body——
+     而編輯器每按一次「＋ 再加一個支架段落」都會重繪這個彈窗。 */
+  const prev = document.activeElement;
+  const reopening = !!r.firstChild;
+  const keepTop = reopening ? (r.querySelector('.modal') || {}).scrollTop : 0;
+
   r.innerHTML = '<div class="modal-back" data-act="modal-back"><div class="modal' +
-    (opts.wide ? ' wide' : '') + '" role="dialog" aria-modal="true" aria-labelledby="modalTitle"' +
+    (opts.wide ? ' wide' : '') + '" role="dialog" aria-modal="true"' +
     ' tabindex="-1">' + html + '</div></div>';
+  const box = r.querySelector('.modal');
   const h = r.querySelector('h2,h3,h4');
-  if (h && !h.id) h.id = 'modalTitle';
-  if (!h) r.querySelector('.modal').setAttribute('aria-label', opts.label || '對話方塊');
-  modal._returnTo = document.activeElement;
-  const first = r.querySelector('input,textarea,select,button') || r.querySelector('.modal');
-  if (first) first.focus();
+  /* aria-labelledby 只在 id 真的設好時才輸出。無條件輸出、卻只在有標題時
+     指派 id，會讓它指向不存在的 id——可及名稱因此是空的，而 aria-label
+     的優先度比它低，補了也沒用。 */
+  if (h){
+    if (!h.id) h.id = 'modalTitle';
+    box.setAttribute('aria-labelledby', h.id);
+  } else {
+    box.setAttribute('aria-label', opts.label || '對話方塊');
+  }
+
+  if (!reopening) modal._returnTo = prev;
+  if (keepTop) box.scrollTop = keepTop;
+
+  /* 初始焦點給 .modal 本身，讓報讀器先唸出 dialog 名稱。
+     原本抓「第一個可聚焦元素」抓到的是最上面的「關閉」鈕——
+     重繪之後順手按 Enter 就等於關掉彈窗，剛打的字全沒。 */
+  if (opts.focus){
+    const f = r.querySelector(opts.focus);
+    if (f){ f.focus(); if (f.setSelectionRange) try { f.setSelectionRange(f.value.length, f.value.length); } catch (e) {} }
+    else box.focus();
+  } else {
+    box.focus();
+  }
+
+  /* 焦點陷阱。宣告了 aria-modal 卻讓 Tab 走進被遮罩壓住的頁面，
+     對鍵盤與報讀器使用者等於沒有彈窗。 */
+  if (!modal._trap){
+    modal._trap = function(e){
+      if (e.key !== 'Tab') return;
+      const m = $('#modalRoot').querySelector('.modal');
+      if (!m) return;
+      const f = Array.prototype.filter.call(m.querySelectorAll(FOCUSABLE), function(el){
+        return el.offsetParent !== null || el === document.activeElement;
+      });
+      if (!f.length){ e.preventDefault(); m.focus(); return; }
+      const first = f[0], last = f[f.length - 1];
+      if (e.shiftKey && (document.activeElement === first || document.activeElement === m)){
+        e.preventDefault(); last.focus();
+      } else if (!e.shiftKey && document.activeElement === last){
+        e.preventDefault(); first.focus();
+      }
+    };
+    document.addEventListener('keydown', modal._trap, true);
+  }
 }
 function closeModal(){
   $('#modalRoot').innerHTML = '';
-  /* 焦點還給打開它的那顆按鈕，不要掉回 body */
+  if (modal._trap){ document.removeEventListener('keydown', modal._trap, true); modal._trap = null; }
+  /* 焦點還給打開它的那顆按鈕。那顆按鈕已經不在文件裡（重繪換掉了）時，
+     退到 #stage——寧可退到主舞台也不要掉回 body。 */
   if (modal._returnTo && document.contains(modal._returnTo)){
     try { modal._returnTo.focus(); } catch (e) {}
+  } else {
+    const stage = $('#stage');
+    if (stage) try { stage.focus({preventScroll:true}); } catch (e) {}
   }
   modal._returnTo = null;
 }
@@ -5345,30 +5408,40 @@ function viewKBCanvas(vid){
     const cls = ['note', n.kind === 'problem' ? 'problem' : '', n.kind === 'rise' ? 'rise' : '',
                  isUnread(n) ? 'unread' : '', KBPICK[n.id] ? 'sel' : ''].filter(Boolean).join(' ');
     const scls = scaf ? (scaffold(scaf.s) || {}).cls : '';
-    /* aria-label 會吞掉整張卡的內容（支架標籤、摘要、作者、回應數），
-       改用 labelledby + describedby 指向卡內真正的節點。 */
+    /* aria-label 會吞掉整張卡的內容，改用 labelledby + describedby。
+       但 role="button" 的 Children Presentational 為 true——卡內所有子節點的
+       語意都被移除，所以 .nf（未讀、作者、回應／閱讀／註記數）也必須被
+       describedby 明確參照，否則報讀器一律拿不到。 */
     return '<div class="' + cls + ' ' + (scls || '') + '" style="left:' + n.x + 'px;top:' + n.y + 'px"' +
       ' data-note="' + n.id + '" tabindex="0" role="button"' +
-      ' aria-labelledby="nt-' + n.id + '" aria-describedby="nb-' + n.id + '">' +
+      ' aria-labelledby="nt-' + n.id + '" aria-describedby="nb-' + n.id + ' nf-' + n.id + '">' +
       '<div class="nt" id="nt-' + n.id + '">' + esc(n.title) + '</div>' +
       (scaf ? '<div class="small" style="color:var(--' + ((scaffold(scaf.s) || {}).cls || '').replace('sc', 'sc-') +
         ');font-size:0.55rem;font-weight:600;margin-bottom:2px">' + esc(scaffoldLabel(scaf.s)) + '</div>' : '') +
       '<div class="nb" id="nb-' + n.id + '">' + esc((scaf ? scaf.text : '').slice(0, 90)) + '</div>' +
       /* 未讀原本只用一條顏色細線傳達（1.4.1），補一個記號與報讀器文字。
          放在 .nf 那一列，不要放標題前——卡片只有 13.2rem 寬，會提早折行。 */
-      '<div class="nf">' +
+      '<div class="nf" id="nf-' + n.id + '">' +
         (isUnread(n) ? '<span class="sr-only">未讀。</span>' +
                        '<span class="unread-dot" aria-hidden="true">●</span>' : '') +
         '<span>' + esc(noteAuthors(n)) + '</span>' +
-        (childrenOf(n.id).length ? '<span>↳' + childrenOf(n.id).length + '</span>' : '') +
-        ((n.reads || []).length ? '<span>👁' + n.reads.length + '</span>' : '') +
-        ((n.annotations || []).length ? '<span>✎' + n.annotations.length + '</span>' : '') +
+        /* 符號各補一段報讀器文字，否則會被唸成符號名 */
+        (childrenOf(n.id).length ? '<span><span aria-hidden="true">↳</span>' + childrenOf(n.id).length +
+          '<span class="sr-only"> 則回應</span></span>' : '') +
+        ((n.reads || []).length ? '<span><span aria-hidden="true">👁</span>' + n.reads.length +
+          '<span class="sr-only"> 人已讀</span></span>' : '') +
+        ((n.annotations || []).length ? '<span><span aria-hidden="true">✎</span>' + n.annotations.length +
+          '<span class="sr-only"> 則註記</span></span>' : '') +
       '</div></div>';
   }).join('');
 
   // 連線
   const pos = {};
-  ns.forEach(function(n){ pos[n.id] = {x: n.x + 108, y: n.y + 40}; });
+  /* 卡片寬度改成 13.2rem（會隨字級放大），錨點不能再寫死 108px——
+       108 ≒ 264/2 − 24，是 100% 字級下的值。 */
+  const rootFS = parseFloat(getComputedStyle(document.documentElement).fontSize) || 20;
+  const NOTE_W = 13.2 * rootFS;
+  ns.forEach(function(n){ pos[n.id] = {x: n.x + NOTE_W / 2 - 24, y: n.y + 40}; });
   const edges = [];
   ns.forEach(function(n){
     if (n.buildOn && pos[n.buildOn]) edges.push(curve(pos[n.buildOn], pos[n.id], 'build'));
@@ -5551,7 +5624,7 @@ function openNoteEditor(o){
   renderEditor();
 }
 
-function renderEditor(){
+function renderEditor(opts){
   const parent = EDIT.buildOn ? getNote(EDIT.buildOn) : null;
   const others = state.notes.filter(function(n){ return n.id !== EDIT.id; });
   modal(
@@ -5590,7 +5663,8 @@ function renderEditor(){
     '</div>' +
     '<div class="modal-f"><button class="btn" data-act="close-modal">取消</button>' +
     (EDIT.id ? '<button class="btn danger" data-act="del-note" data-id="' + EDIT.id + '">刪除這則</button>' : '') +
-    '<button class="btn primary" data-act="save-note">貼上去</button></div>', {wide:false});
+    '<button class="btn primary" data-act="save-note">貼上去</button></div>',
+    {wide:false, focus:(opts && opts.focus) || null});
 }
 
 function collectEditor(){
@@ -5702,7 +5776,7 @@ function viewDash(){
     '）</strong>。其他班級還沒有知識建構資料，因此不在這張圖上；' +
     '頂列的班級選單在這一頁不作用。</p></div>' +
     '<div class="tabs">' + tabs.map(function(t){
-      return '<button data-act="dtab" data-id="' + t[0] + '" aria-selected="' + (DTAB === t[0]) + '">' + t[1] + '</button>';
+      return '<button data-act="dtab" data-id="' + t[0] + '" ' + (DTAB === t[0] ? ' aria-current="true"' : '') + '>' + t[1] + '</button>';
     }).join('') + '</div>' + body;
 }
 
@@ -6703,6 +6777,9 @@ function viewAbout(){
    ========================================================================== */
 
 let AAL = null;
+/* 上一次離開作答頁的方式。分析端要分得開「同一次上課中途離開再回來」
+   與「重整或換裝置」——後者的 rel 時間軸斷得比較徹底。 */
+let AAL_LEFT_VIA = 'reload';
 
 /* 作答草稿。刻意用獨立的 localStorage key，不擠進 50-kb.js 的 save()——
    那一支會靜默吞掉配額錯誤，而學生的 16 題作答不能靜默遺失。 */
@@ -6724,7 +6801,9 @@ function aalSave(){
                          tele:AAL.tele, drafts:AAL.drafts, savedAt:Date.now()};
     localStorage.setItem(AAL_DRAFT_KEY, JSON.stringify(all));
     aalSave._fails = 0;
+    AAL.dirty = false;
   } catch (e) {
+    AAL.dirty = true;   // beforeunload 的守門條件
     /* 加了 tele/drafts 之後這個 key 會變大，配額問題不再是偶發。
        連續兩次失敗就停掉自動存檔並常駐警示，不要只 toast 一次。 */
     aalSave._fails = (aalSave._fails || 0) + 1;
@@ -6774,7 +6853,8 @@ function aalInit(aid){
          算進 firstKeyLatency，產生沒有意義的離群值。 */
       Object.keys(AAL.tele).forEach(function(iid){ AAL.tele[iid].enter = Date.now(); });
       AAL.t0 = Date.now();
-      aalLog('RESUME', 'R', {resumed:true, via:'reload', savedAt:d.savedAt || null});
+      aalLog('RESUME', 'R', {resumed:true, via:AAL_LEFT_VIA, savedAt:d.savedAt || null});
+      AAL_LEFT_VIA = 'reload';
     }
   } catch (e) { /* 草稿壞掉就當作沒有，從頭開始 */ }
 }
@@ -6842,7 +6922,7 @@ function viewAaL(aid){
       '<div class="muted small">' + esc(me.name) + '　·　' +
       esc((classOfStudent(me.id) || {}).name || '') + '</div></div>' +
       '<div class="row">' +
-      '<a class="btn sm" href="#/student">← 先離開（進度會保留）</a>' +
+      '<button class="btn sm" data-act="aal-leave">← 先離開（進度會保留）</button>' +
       '<span class="pill">第 ' + (AAL.idx + 1) + ' / ' + AAL.items.length + ' 題</span>' +
       '<span class="pill">' + esc(text.title) + '</span>' +
       '<button class="btn sm" data-act="aal-prev"' + (AAL.idx ? '' : ' disabled') + '>← 上一題</button>' +
@@ -7116,8 +7196,15 @@ async function aalSay(){
   const sendBtn = document.querySelector('[data-act="aal-say"]');
   if (chat) chat.insertAdjacentHTML('beforeend', '<div class="msg me">' + esc(text) + '</div>');
   box.value = '';
-  box.disabled = true;
-  if (sendBtn) sendBtn.disabled = true;
+  /* 等待期間用 readOnly，不用 disabled。停用一個正握有焦點的元素會讓焦點
+     掉到 body——LLM 引擎下等待可達數秒，學生回過神時要從整頁最上面重新
+     Tab、穿過三四十顆句子按鈕才回得到作答區。readonly 一樣擋住所有輸入。 */
+  box.readOnly = true;
+  box.setAttribute('aria-busy', 'true');
+  if (sendBtn){
+    if (document.activeElement === sendBtn) box.focus();
+    sendBtn.disabled = true;
+  }
   if (chat){
     chat.insertAdjacentHTML('beforeend',
       '<div class="msg agent" id="aalThinking">' + esc(condition(AAL.cond).name) + '正在想…</div>');
@@ -7167,14 +7254,22 @@ async function aalSay(){
   const left = maxT - aalStudentTurns(it.id);
   const pill = document.getElementById('turnLeft');
   if (pill) pill.textContent = Math.max(0, left);
+  box.readOnly = false;
+  box.removeAttribute('aria-busy');
   if (left > 0){
-    box.disabled = false;
     if (sendBtn) sendBtn.disabled = false;
     box.focus();
   } else {
     box.placeholder = '這一題已經聊完了';
+    box.disabled = true;
     if (chat) chat.insertAdjacentHTML('beforeend',
-      '<div class="msg sys">這一題的對話次數用完了。換下一題會重新計算。</div>');
+      '<div class="msg sys" id="turnsDone" tabindex="-1">這一題的對話次數用完了。換下一題會重新計算。</div>');
+    /* 額度用完那一次 box 可以真的 disabled，但焦點要有去處——
+       不接住的話，第 6 次之後焦點永久留在 body。 */
+    const done = document.getElementById('turnsDone');
+    const next = document.querySelector('[data-act="aal-next"]:not([disabled])');
+    if (done) done.focus({preventScroll:true});
+    else if (next) next.focus({preventScroll:true});
     toast('這一題的對話次數用完了，可以按下一題。');
   }
 }
@@ -7739,7 +7834,10 @@ function viewResearch(){
   else body = rExport();
   return sectionHead('研究控制台', '評量即學習事件的設計、分派與歷程層次分析。') +
     '<div class="tabs">' + tabs.map(function(t){
-      return '<button data-act="rtab" data-id="' + t[0] + '" aria-selected="' + (RTAB === t[0]) + '">' + t[1] + '</button>';
+      /* aria-selected 不是 role=button 支援的屬性，會被無障礙 API 丟掉。
+         用 aria-current，與派題分析的分頁一致（CSS 已有對應規則）。 */
+      return '<button data-act="rtab" data-id="' + t[0] + '"' +
+        (RTAB === t[0] ? ' aria-current="true"' : '') + '>' + t[1] + '</button>';
     }).join('') + '</div>' + body;
 }
 
@@ -8341,6 +8439,10 @@ const TEACHER_ONLY = {assign:1, dash:1, inspect:1, bank:1};
    否則學生每標一句話、每點一顆量尺都會被彈回頁首、焦點掉回 body。 */
 let LAST_ROUTE_KEY = null;
 
+/* 自己捲動的容器：重繪之後要把 scrollTop 放回去。
+   #aalChat 不在裡面——那一個要捲到底，不是原位。 */
+const SCROLL_KEEP = ['.aal-text > .card-p', '.canvas'];
+
 function render(){
   ROUTE = parseRoute();
   const stage = $('#stage');
@@ -8398,23 +8500,42 @@ function render(){
     case 'mygrowth':  html = viewMyGrowth(); break;
     default:          html = '<div class="empty"><h3>找不到這一頁</h3><a class="btn" href="#/teacher">回首頁</a></div>';
   }
-  /* 重繪之前先記下位置與焦點。焦點用 data-* 屬性組出選擇器再找回來——
-     aal-mark 的 data-i、sv-pick 的 data-k+data-v、aal-check 的 data-i
-     在同一頁內都唯一。 */
+  /* 重繪之前先記下位置與焦點。焦點用 data-* 屬性組出選擇器再找回來。
+     這套機制服務的是「同一條路由裡就地重繪」的按鈕群——分頁鈕（dtab、rtab）、
+     KIDMAP 的學生清單、非選題切換、派題精靈的題目勾選。它們全都靠 data-id
+     區分，少了那一段選擇器就只會回傳文件順序第一顆。
+     （aal-mark／aal-pick／aal-check 在第 1 輪之後改成就地更新、不再走 render，
+     不再是這裡的對象。） */
   const key = ROUTE.name + '/' + a.join('/');
   const samePage = (key === LAST_ROUTE_KEY);
   /* 離開知識建構空間就把選取模式與搜尋清掉。進 #/note、#/synth 再回來時
      殘留的狀態會與畫面脫節。 */
   if (ROUTE.name !== 'kb' && KBSEL){ KBSEL = null; KBPICK = {}; }
   if (ROUTE.name !== 'kb' && ROUTE.name !== 'note' && ROUTE.name !== 'synth') KBSEARCH.q = '';
+  /* 離開作答頁就釋放 AAL。順便修掉「換身分之後舊 AAL 還在」的隱患。
+     回來時會重跑 aalInit 並補寫一筆 RESUME——那是對的，確實是兩次入座。 */
+  if (AAL && ROUTE.name !== 'aal'){ AAL = null; AAL_LEFT_VIA = 'nav'; }
   const prevY = window.scrollY;
+  /* 內層捲動容器的位置。window.scrollY 還原不了它們——v.innerHTML 一換，
+     容器就被重建、scrollTop 歸零。同一篇文章換題時，學生每次都要重新捲回
+     剛讀的段落；實驗組觸發重繪的次數更多，等於把這份額外負荷不對等地
+     加在實驗組身上。新增捲動容器只要往這個陣列加一行。 */
+  const innerY = {};
+  SCROLL_KEEP.forEach(function(s){
+    const el = v.querySelector(s); if (el) innerY[s] = el.scrollTop;
+  });
   const ae = document.activeElement;
   let fk = null;
   if (samePage && ae && ae !== document.body && v.contains(ae) && ae.dataset && ae.dataset.act){
+    /* 這些 data-* 的值目前都是系統產生的 uid，只含 [A-Za-z0-9_-]，
+       所以不需要 CSS.escape。日後若其中任何一個可能含使用者輸入就要改。 */
     fk = '[data-act="' + ae.dataset.act + '"]' +
       (ae.dataset.i !== undefined ? '[data-i="' + ae.dataset.i + '"]' : '') +
       (ae.dataset.k !== undefined ? '[data-k="' + ae.dataset.k + '"]' : '') +
-      (ae.dataset.v !== undefined ? '[data-v="' + ae.dataset.v + '"]' : '');
+      (ae.dataset.v !== undefined ? '[data-v="' + ae.dataset.v + '"]' : '') +
+      (ae.dataset.id !== undefined ? '[data-id="' + ae.dataset.id + '"]' : '') +
+      (ae.dataset.sid !== undefined ? '[data-sid="' + ae.dataset.sid + '"]' : '') +
+      (ae.dataset.iid !== undefined ? '[data-iid="' + ae.dataset.iid + '"]' : '');
   }
 
   v.innerHTML = html;
@@ -8430,7 +8551,17 @@ function render(){
     try { window.scrollTo(0, 0); } catch (e) {}
     if (stage) stage.focus({preventScroll: true});
   } else {
-    if (fk){ const back = v.querySelector(fk); if (back) back.focus({preventScroll: true}); }
+    SCROLL_KEEP.forEach(function(s){
+      const el = v.querySelector(s); if (el && innerY[s] != null) el.scrollTop = innerY[s];
+    });
+    /* 還原目標剛好變 disabled（換到頭尾的上一題／下一題、上一位／下一位）時，
+       focus() 是 no-op，焦點會掉回 body——鍵盤使用者要從整頁最上面重來。
+       寧可退到 #stage。 */
+    if (fk){
+      const back = v.querySelector(fk);
+      if (back && !back.disabled) back.focus({preventScroll: true});
+      else if (stage) stage.focus({preventScroll: true});
+    }
     try { window.scrollTo(0, prevY); } catch (e) {}
   }
   LAST_ROUTE_KEY = key;
@@ -8620,8 +8751,12 @@ async function saveFile(filename, text, mime){
 /* --- 事件 --- */
 function bindEvents(){
   /* 作答到一半誤觸關閉／重整時攔一下。草稿已經落地，但還是要讓學生知道。 */
+  /* 守門條件必須是「真的有沒落地的東西」，不是「模組變數還活著」。
+     marks／checks／notes／texts／answers 都在草稿裡，正常狀況下關分頁
+     不會掉資料；只有 aalSave() 寫失敗（配額）時 dirty 才會留著。 */
   window.addEventListener('beforeunload', function(e){
-    if (AAL && Object.keys(AAL.answers).length){ e.preventDefault(); e.returnValue = ''; }
+    if (AAL) flushLogs();
+    if (AAL && AAL.dirty){ e.preventDefault(); e.returnValue = ''; }
   });
 
   /* 對話輸入框按 Enter 送出。
@@ -8723,8 +8858,10 @@ function bindEvents(){
       openNoteEditor({viewId:id, kind:'rise', contains:picks,
         title:'【躍升】', segs:[{s:'s6', text:''}], x:900, y:520});
       return; }
-    if (act === 'seg-add'){ collectEditor(); EDIT.segs.push({s:'s1', text:''}); renderEditor(); return; }
-    if (act === 'seg-del'){ collectEditor(); EDIT.segs.splice(+t.dataset.i, 1); renderEditor(); return; }
+    if (act === 'seg-add'){ collectEditor(); EDIT.segs.push({s:'s1', text:''});
+      renderEditor({focus:'[data-act="seg-text"][data-i="' + (EDIT.segs.length - 1) + '"]'}); return; }
+    if (act === 'seg-del'){ collectEditor(); const di = +t.dataset.i; EDIT.segs.splice(di, 1);
+      renderEditor({focus:'[data-act="seg-text"][data-i="' + Math.max(0, di - 1) + '"]'}); return; }
     if (act === 'save-note'){ saveEditor(); return; }
     if (act === 'del-note'){ if (confirm('刪除這則貼文？延伸它的貼文會失去連結，這個動作無法復原。')){
       if (!deleteNote(id)){ toast('代為檢視時不能替學生刪貼文。'); return; }
@@ -8780,9 +8917,30 @@ function bindEvents(){
       const nu = aalItem().unit;
       if (nu !== oldUnit){
         toast('第 ' + (AAL.idx + 1) + ' 題換了一篇文章：〈' + getText(nu).title + '〉，左邊已經換過來了。');
+        /* 換了文章，左欄要從頭開始——否則學生會在新文章的中段醒來 */
+        const p = document.querySelector('.aal-text > .card-p');
+        if (p) p.scrollTop = 0;
         const h = document.getElementById('passageTitle');
         if (h) h.focus();
+      } else {
+        /* 同一篇文章換題（T1 十題共用一篇，這是多數情況）：
+           不移焦點的話報讀器什麼都不會唸，題幹、選項、已選答案靜默替換；
+           窄版單欄的學生停在文章第 9 段，畫面看起來完全沒動，會以為按壞了
+           而連按，一次跳過兩三題——那會在歷程序列裡憑空多出 idx 跳躍。 */
+        const ans = document.getElementById('aalAnswer');
+        if (ans){ ans.focus({preventScroll:true}); ans.scrollIntoView({block:'start'}); }
       }
+      return; }
+
+    /* 學生按了系統自己寫的「進度會保留」，就要真的把 AAL 收乾淨——
+       否則 beforeunload 的守門條件（AAL 還活著）仍成立，他之後在任何一頁
+       關分頁都會被警告「變更可能不會被儲存」，與那顆鈕的承諾直接打架。 */
+    if (act === 'aal-leave'){
+      flushPendingPicks();
+      flushLogs();
+      aalSave();
+      AAL = null;
+      go('#/student'); render();
       return; }
 
     if (act === 'skip-passage'){
@@ -8796,8 +8954,16 @@ function bindEvents(){
 
     /* 教師／研究者的唯讀檢視：換題不寫任何日誌 */
     if (act === 'inspect-who-prev' || act === 'inspect-who-next'){ go('#/inspect/' + INSPECT.aid + '/' + id); return; }
-    if (act === 'inspect-prev'){ INSPECT.idx = Math.max(0, INSPECT.idx - 1); render(); return; }
-    if (act === 'inspect-next'){ INSPECT.idx = Math.min(INSPECT.items.length - 1, INSPECT.idx + 1); render(); return; }
+    /* 與學生端的換題同一套行為：焦點落到作答卡、捲到它，
+       否則教師端與學生端在同一個動作上分岔。 */
+    if (act === 'inspect-prev' || act === 'inspect-next'){
+      INSPECT.idx = act === 'inspect-prev'
+        ? Math.max(0, INSPECT.idx - 1)
+        : Math.min(INSPECT.items.length - 1, INSPECT.idx + 1);
+      render();
+      const ans = document.getElementById('aalAnswer');
+      if (ans){ ans.focus({preventScroll:true}); ans.scrollIntoView({block:'start'}); }
+      return; }
     if (act === 'aal-submit'){ aalSubmit(); return; }
     if (act === 'aal-note-clear'){
       const it = aalItem();
@@ -8889,7 +9055,8 @@ function bindEvents(){
     if (act === 'class-sel'){ state.ui.classId = t.value; save(); render(); return; }
     if (act === 'wiz-item'){ const id = t.dataset.id;
       if (WIZ.items[id]) delete WIZ.items[id]; else WIZ.items[id] = 1; render(); return; }
-    if (act === 'seg-sc'){ collectEditor(); EDIT.segs[+t.dataset.i].s = t.value; renderEditor(); return; }
+    if (act === 'seg-sc'){ collectEditor(); EDIT.segs[+t.dataset.i].s = t.value;
+      renderEditor({focus:'[data-act="seg-sc"][data-i="' + t.dataset.i + '"]'}); return; }
     /* 量尺現在是原生 radio，走 change 而不是 click——方向鍵移動也會觸發。
        只更新這一列與抬頭的計數，不重繪整段。 */
     if (act === 'sv-pick'){

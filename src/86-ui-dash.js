@@ -27,7 +27,7 @@ function viewDash(){
     '）</strong>。其他班級還沒有知識建構資料，因此不在這張圖上；' +
     '頂列的班級選單在這一頁不作用。</p></div>' +
     '<div class="tabs">' + tabs.map(function(t){
-      return '<button data-act="dtab" data-id="' + t[0] + '" aria-selected="' + (DTAB === t[0]) + '">' + t[1] + '</button>';
+      return '<button data-act="dtab" data-id="' + t[0] + '" ' + (DTAB === t[0] ? ' aria-current="true"' : '') + '>' + t[1] + '</button>';
     }).join('') + '</div>' + body;
 }
 

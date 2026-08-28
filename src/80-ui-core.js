@@ -30,26 +30,79 @@ function toast(msg){
   toast._t = setTimeout(function(){ r.innerHTML = ''; }, 2600);
 }
 
+const FOCUSABLE = 'a[href],button:not([disabled]),input:not([disabled]),' +
+                  'select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
+
 function modal(html, opts){
   opts = opts || {};
   const r = $('#modalRoot');
-  /* 彈窗要有可及名稱（拿第一個標題）與 Esc 出口，
-     否則報讀器只會唸「對話方塊」，而鍵盤使用者被困在裡面。 */
+  /* 覆寫 innerHTML 之前先讀 activeElement。反過來的話，原本有焦點的節點
+     已經被移除、activeElement 已經是 body，_returnTo 就永遠是 body——
+     而編輯器每按一次「＋ 再加一個支架段落」都會重繪這個彈窗。 */
+  const prev = document.activeElement;
+  const reopening = !!r.firstChild;
+  const keepTop = reopening ? (r.querySelector('.modal') || {}).scrollTop : 0;
+
   r.innerHTML = '<div class="modal-back" data-act="modal-back"><div class="modal' +
-    (opts.wide ? ' wide' : '') + '" role="dialog" aria-modal="true" aria-labelledby="modalTitle"' +
+    (opts.wide ? ' wide' : '') + '" role="dialog" aria-modal="true"' +
     ' tabindex="-1">' + html + '</div></div>';
+  const box = r.querySelector('.modal');
   const h = r.querySelector('h2,h3,h4');
-  if (h && !h.id) h.id = 'modalTitle';
-  if (!h) r.querySelector('.modal').setAttribute('aria-label', opts.label || '對話方塊');
-  modal._returnTo = document.activeElement;
-  const first = r.querySelector('input,textarea,select,button') || r.querySelector('.modal');
-  if (first) first.focus();
+  /* aria-labelledby 只在 id 真的設好時才輸出。無條件輸出、卻只在有標題時
+     指派 id，會讓它指向不存在的 id——可及名稱因此是空的，而 aria-label
+     的優先度比它低，補了也沒用。 */
+  if (h){
+    if (!h.id) h.id = 'modalTitle';
+    box.setAttribute('aria-labelledby', h.id);
+  } else {
+    box.setAttribute('aria-label', opts.label || '對話方塊');
+  }
+
+  if (!reopening) modal._returnTo = prev;
+  if (keepTop) box.scrollTop = keepTop;
+
+  /* 初始焦點給 .modal 本身，讓報讀器先唸出 dialog 名稱。
+     原本抓「第一個可聚焦元素」抓到的是最上面的「關閉」鈕——
+     重繪之後順手按 Enter 就等於關掉彈窗，剛打的字全沒。 */
+  if (opts.focus){
+    const f = r.querySelector(opts.focus);
+    if (f){ f.focus(); if (f.setSelectionRange) try { f.setSelectionRange(f.value.length, f.value.length); } catch (e) {} }
+    else box.focus();
+  } else {
+    box.focus();
+  }
+
+  /* 焦點陷阱。宣告了 aria-modal 卻讓 Tab 走進被遮罩壓住的頁面，
+     對鍵盤與報讀器使用者等於沒有彈窗。 */
+  if (!modal._trap){
+    modal._trap = function(e){
+      if (e.key !== 'Tab') return;
+      const m = $('#modalRoot').querySelector('.modal');
+      if (!m) return;
+      const f = Array.prototype.filter.call(m.querySelectorAll(FOCUSABLE), function(el){
+        return el.offsetParent !== null || el === document.activeElement;
+      });
+      if (!f.length){ e.preventDefault(); m.focus(); return; }
+      const first = f[0], last = f[f.length - 1];
+      if (e.shiftKey && (document.activeElement === first || document.activeElement === m)){
+        e.preventDefault(); last.focus();
+      } else if (!e.shiftKey && document.activeElement === last){
+        e.preventDefault(); first.focus();
+      }
+    };
+    document.addEventListener('keydown', modal._trap, true);
+  }
 }
 function closeModal(){
   $('#modalRoot').innerHTML = '';
-  /* 焦點還給打開它的那顆按鈕，不要掉回 body */
+  if (modal._trap){ document.removeEventListener('keydown', modal._trap, true); modal._trap = null; }
+  /* 焦點還給打開它的那顆按鈕。那顆按鈕已經不在文件裡（重繪換掉了）時，
+     退到 #stage——寧可退到主舞台也不要掉回 body。 */
   if (modal._returnTo && document.contains(modal._returnTo)){
     try { modal._returnTo.focus(); } catch (e) {}
+  } else {
+    const stage = $('#stage');
+    if (stage) try { stage.focus({preventScroll:true}); } catch (e) {}
   }
   modal._returnTo = null;
 }

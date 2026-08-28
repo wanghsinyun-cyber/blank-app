@@ -18,7 +18,10 @@ function viewResearch(){
   else body = rExport();
   return sectionHead('研究控制台', '評量即學習事件的設計、分派與歷程層次分析。') +
     '<div class="tabs">' + tabs.map(function(t){
-      return '<button data-act="rtab" data-id="' + t[0] + '" aria-selected="' + (RTAB === t[0]) + '">' + t[1] + '</button>';
+      /* aria-selected 不是 role=button 支援的屬性，會被無障礙 API 丟掉。
+         用 aria-current，與派題分析的分頁一致（CSS 已有對應規則）。 */
+      return '<button data-act="rtab" data-id="' + t[0] + '"' +
+        (RTAB === t[0] ? ' aria-current="true"' : '') + '>' + t[1] + '</button>';
     }).join('') + '</div>' + body;
 }
 

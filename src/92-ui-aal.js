@@ -5,6 +5,9 @@
    ========================================================================== */
 
 let AAL = null;
+/* 上一次離開作答頁的方式。分析端要分得開「同一次上課中途離開再回來」
+   與「重整或換裝置」——後者的 rel 時間軸斷得比較徹底。 */
+let AAL_LEFT_VIA = 'reload';
 
 /* 作答草稿。刻意用獨立的 localStorage key，不擠進 50-kb.js 的 save()——
    那一支會靜默吞掉配額錯誤，而學生的 16 題作答不能靜默遺失。 */
@@ -26,7 +29,9 @@ function aalSave(){
                          tele:AAL.tele, drafts:AAL.drafts, savedAt:Date.now()};
     localStorage.setItem(AAL_DRAFT_KEY, JSON.stringify(all));
     aalSave._fails = 0;
+    AAL.dirty = false;
   } catch (e) {
+    AAL.dirty = true;   // beforeunload 的守門條件
     /* 加了 tele/drafts 之後這個 key 會變大，配額問題不再是偶發。
        連續兩次失敗就停掉自動存檔並常駐警示，不要只 toast 一次。 */
     aalSave._fails = (aalSave._fails || 0) + 1;
@@ -76,7 +81,8 @@ function aalInit(aid){
          算進 firstKeyLatency，產生沒有意義的離群值。 */
       Object.keys(AAL.tele).forEach(function(iid){ AAL.tele[iid].enter = Date.now(); });
       AAL.t0 = Date.now();
-      aalLog('RESUME', 'R', {resumed:true, via:'reload', savedAt:d.savedAt || null});
+      aalLog('RESUME', 'R', {resumed:true, via:AAL_LEFT_VIA, savedAt:d.savedAt || null});
+      AAL_LEFT_VIA = 'reload';
     }
   } catch (e) { /* 草稿壞掉就當作沒有，從頭開始 */ }
 }
@@ -144,7 +150,7 @@ function viewAaL(aid){
       '<div class="muted small">' + esc(me.name) + '　·　' +
       esc((classOfStudent(me.id) || {}).name || '') + '</div></div>' +
       '<div class="row">' +
-      '<a class="btn sm" href="#/student">← 先離開（進度會保留）</a>' +
+      '<button class="btn sm" data-act="aal-leave">← 先離開（進度會保留）</button>' +
       '<span class="pill">第 ' + (AAL.idx + 1) + ' / ' + AAL.items.length + ' 題</span>' +
       '<span class="pill">' + esc(text.title) + '</span>' +
       '<button class="btn sm" data-act="aal-prev"' + (AAL.idx ? '' : ' disabled') + '>← 上一題</button>' +
@@ -418,8 +424,15 @@ async function aalSay(){
   const sendBtn = document.querySelector('[data-act="aal-say"]');
   if (chat) chat.insertAdjacentHTML('beforeend', '<div class="msg me">' + esc(text) + '</div>');
   box.value = '';
-  box.disabled = true;
-  if (sendBtn) sendBtn.disabled = true;
+  /* 等待期間用 readOnly，不用 disabled。停用一個正握有焦點的元素會讓焦點
+     掉到 body——LLM 引擎下等待可達數秒，學生回過神時要從整頁最上面重新
+     Tab、穿過三四十顆句子按鈕才回得到作答區。readonly 一樣擋住所有輸入。 */
+  box.readOnly = true;
+  box.setAttribute('aria-busy', 'true');
+  if (sendBtn){
+    if (document.activeElement === sendBtn) box.focus();
+    sendBtn.disabled = true;
+  }
   if (chat){
     chat.insertAdjacentHTML('beforeend',
       '<div class="msg agent" id="aalThinking">' + esc(condition(AAL.cond).name) + '正在想…</div>');
@@ -469,14 +482,22 @@ async function aalSay(){
   const left = maxT - aalStudentTurns(it.id);
   const pill = document.getElementById('turnLeft');
   if (pill) pill.textContent = Math.max(0, left);
+  box.readOnly = false;
+  box.removeAttribute('aria-busy');
   if (left > 0){
-    box.disabled = false;
     if (sendBtn) sendBtn.disabled = false;
     box.focus();
   } else {
     box.placeholder = '這一題已經聊完了';
+    box.disabled = true;
     if (chat) chat.insertAdjacentHTML('beforeend',
-      '<div class="msg sys">這一題的對話次數用完了。換下一題會重新計算。</div>');
+      '<div class="msg sys" id="turnsDone" tabindex="-1">這一題的對話次數用完了。換下一題會重新計算。</div>');
+    /* 額度用完那一次 box 可以真的 disabled，但焦點要有去處——
+       不接住的話，第 6 次之後焦點永久留在 body。 */
+    const done = document.getElementById('turnsDone');
+    const next = document.querySelector('[data-act="aal-next"]:not([disabled])');
+    if (done) done.focus({preventScroll:true});
+    else if (next) next.focus({preventScroll:true});
     toast('這一題的對話次數用完了，可以按下一題。');
   }
 }

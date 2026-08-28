@@ -144,3 +144,97 @@
   }
   setTimeout(step, 500);
 })();
+
+/* ==========================================================================
+   四條件文案 diff
+   第 1 輪把作答頁右欄的高度量到 2px 以內，卻讓「這個網站是什麼」用 tutor 的
+   台詞對四個條件說話、問卷副標依條件位移——因為只驗了幾何，沒驗文字。
+   這一支把每一個學生看得到的畫面在四個條件下各渲染一次然後比對：
+   卡片數要完全相同、字數落差 ≤10%、高度落差 ≤4px，並掃一遍禁字。
+   每一輪收斂前必跑。console 一行：diffConditionCopy()
+   ========================================================================== */
+window.diffConditionCopy = function(){
+  const CONDS = ['tutor', 'tutee', 'peer', 'control'];
+  /* 對照組整節課不會遇到夥伴，畫面上不該出現這些字；
+     三個 AI 組不該看到別的條件的夥伴名字（那會提前給角色提示，
+     而課後的操弄檢核問的正是「剛剛陪我讀的那位夥伴比較像…」）。 */
+  const BAN = {control: ['夥伴', '次話', '跟它說', '對話']};
+  CONDS.forEach(function(c){
+    if (c === 'control') return;
+    BAN[c] = CONDS.filter(function(x){ return x !== c && x !== 'control'; })
+                  .map(function(x){ return condition(x).name; });
+  });
+
+  const realRole = state.ui.role, realImp = state.ui.impersonate, realHash = location.hash;
+  state.ui.impersonate = null;
+
+  function pick(cond){
+    const k = state.classes.find(function(x){ return x.condition === cond; });
+    return k ? k.studentIds[0] : null;
+  }
+  function shot(sid, hash){
+    state.ui.role = sid; renderShell();
+    location.hash = hash; render();
+    const v = document.getElementById('view');
+    return {cards: v.querySelectorAll('.card').length,
+            chars: v.innerText.replace(/\s/g, '').length,
+            h: Math.round(v.offsetHeight),
+            text: v.innerText};
+  }
+
+  /* 問卷段數依條件而異（對照組少一段操弄檢核），所以逐段比對會對不齊。
+     改成比對「最後一段」與「第一段」，那是條件位移最容易露出來的兩處。 */
+  const SCREENS = [
+    ['我的作業',   '#/student'],
+    ['這個網站是什麼', '#/about'],
+    ['作答頁',     '#/aal/a-post'],
+    ['問卷第 1 段', '#/survey/post/1'],
+    ['問卷最後一段', null]      // 逐條件算
+  ];
+
+  const rows = [];
+  const bans = [];
+  SCREENS.forEach(function(sc){
+    const per = {};
+    CONDS.forEach(function(cond){
+      const sid = pick(cond); if (!sid) return;
+      let hash = sc[1];
+      if (!hash){
+        const secs = surveySections('post', cond);
+        hash = '#/survey/post/' + secs.length;
+      }
+      /* 作答頁要走得進去：暫時清掉這一位的後測交卷紀錄 */
+      let restored = null;
+      if (hash.indexOf('#/aal/') === 0){
+        restored = state.submissions.filter(function(s){ return s.aid === 'a-post' && s.sid === sid; });
+        state.submissions = state.submissions.filter(function(s){ return !(s.aid === 'a-post' && s.sid === sid); });
+      }
+      per[cond] = shot(sid, hash);
+      if (restored && restored.length) state.submissions = state.submissions.concat(restored);
+      (BAN[cond] || []).forEach(function(w){
+        if (per[cond].text.indexOf(w) >= 0) bans.push(sc[0] + ' / ' + cond + '：「' + w + '」');
+      });
+    });
+    const vals = CONDS.map(function(c){ return per[c]; }).filter(Boolean);
+    if (!vals.length) return;
+    const cards = vals.map(function(x){ return x.cards; });
+    const chars = vals.map(function(x){ return x.chars; });
+    const hs    = vals.map(function(x){ return x.h; });
+    const cardsSame = Math.max.apply(null, cards) === Math.min.apply(null, cards);
+    const charPct = +(((Math.max.apply(null, chars) - Math.min.apply(null, chars)) /
+                       Math.max(1, Math.min.apply(null, chars))) * 100).toFixed(1);
+    const hSpread = Math.max.apply(null, hs) - Math.min.apply(null, hs);
+    rows.push({畫面: sc[0], 卡片數: cards.join('/'), 卡片數相同: cardsSame,
+               字數: chars.join('/'), 字數落差: charPct + '%', 字數過關: charPct <= 10,
+               高度落差: hSpread + 'px', 高度過關: hSpread <= 4});
+  });
+
+  state.ui.role = realRole; state.ui.impersonate = realImp; renderShell();
+  location.hash = realHash || '#/teacher'; render();
+
+  const fails = rows.filter(function(r){ return !r.卡片數相同 || !r.字數過關 || !r.高度過關; });
+  if (console.table) console.table(rows);
+  console.log(bans.length ? '禁字命中 ' + bans.length + ' 筆：\n  ' + bans.join('\n  ') : '禁字檢查：0 筆命中');
+  console.log(fails.length ? '不對等 ' + fails.length + ' 個畫面' : '四條件文案對等：全數通過');
+  return {rows: rows, bans: bans, pass: fails.length === 0 && bans.length === 0};
+};

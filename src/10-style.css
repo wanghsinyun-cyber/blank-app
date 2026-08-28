@@ -32,7 +32,7 @@
   --q3:#78829a; --q3-bg:#eceff4; --q3-line:#c3cad6;
   --q4:#4a72ae; --q4-bg:#e6edf7; --q4-line:#b3c6e0;
 
-  --sc-1:#3e6fb0; --sc-2:#a86f1c; --sc-3:#2e7d5b;
+  --sc-1:#3e6fb0; --sc-2:#8a5a12; --sc-3:#2e7d5b;
   --sc-4:#be3a2b; --sc-5:#6a4a9e; --sc-6:#0e7c86;
 
   --good:#2e7d5b; --warn:#a86f1c; --crit:#be3a2b;
@@ -183,6 +183,15 @@ input:focus-visible,select:focus-visible,textarea:focus-visible{border-color:tra
   cursor:pointer; text-align:left; text-decoration:underline; text-underline-offset:3px}
 button.pill{font:inherit; font-size:0.8rem; cursor:pointer; border-color:var(--rule-strong)}
 .pill{display:inline-flex; align-items:center; gap:5px; border-radius:100px; padding:1px 9px; font-size:0.8rem; border:1px solid var(--rule); background:var(--shade); color:var(--ink-2); white-space:nowrap}
+/* [hidden] 在 UA 樣式表裡是 display:none，而作者樣式的 .pill{display:inline-flex}
+   永遠贏過 UA 來源——所以 hidden 對 .pill 完全無效。每個學生一進作答頁
+   就會看到「已標記 0 句」，取消最後一個標記後它也不會消失，
+   報讀器還會多唸一段沒有意義的「已標記 0 句」。 */
+.pill[hidden]{ display:none }
+/* 會變的數字用等寬數字並固定寬度，位數變化不會推動卡片頭的排版。
+   #turnLeft（三個 AI 組）與 #noteCount（對照組）兩邊一致。 */
+#turnLeft, #noteCount{ font-variant-numeric:tabular-nums; display:inline-block;
+  min-width:2.2ch; text-align:right }
 .pill .dot{width:7px; height:7px; border-radius:50%; background:currentColor}
 .q1{color:var(--q1); background:var(--q1-bg); border-color:var(--q1-line)}
 .q2{color:var(--q2); background:var(--q2-bg); border-color:var(--q2-line)}
@@ -215,7 +224,7 @@ td.n,th.n{text-align:right; font-family:var(--f-mono); font-variant-numeric:tabu
   border-bottom:2px solid transparent; font-size:0.9rem; white-space:nowrap;
   text-decoration:none; display:inline-block;
 }
-.tabs button[aria-selected="true"], .tabs a[aria-current="true"]{
+.tabs [aria-current="true"]{
   color:var(--ink); border-bottom-color:var(--accent); font-weight:600}
 
 .steps{display:flex; gap:8px; align-items:center; margin-bottom:18px; flex-wrap:wrap}
@@ -273,7 +282,7 @@ td.n,th.n{text-align:right; font-family:var(--f-mono); font-variant-numeric:tabu
 }
 .canvas-inner{position:relative; width:1600px; height:1100px}
 .note{
-  position:absolute; width:264px; background:var(--card); border:1px solid var(--rule);
+  position:absolute; width:13.2rem; background:var(--card); border:1px solid var(--rule);
   border-left:4px solid var(--ink-4); border-radius:var(--r-m); padding:9px 11px; cursor:grab;
   box-shadow:var(--shadow); user-select:none;
 }
@@ -282,6 +291,9 @@ td.n,th.n{text-align:right; font-family:var(--f-mono); font-variant-numeric:tabu
 .note .nt{font-weight:600; font-size:0.9rem; line-height:1.45; margin-bottom:3px; font-family:var(--f-display)}
 .note .nb{font-size:0.8rem; color:var(--ink-3); line-height:1.55; max-height:3.4em; overflow:hidden}
 .note .nf{display:flex; gap:7px; align-items:center; margin-top:7px; font-size:0.8rem; color:var(--ink-4); font-family:var(--f-mono); flex-wrap:wrap}
+/* 資訊列在 .note.problem 的淺紅底（--q2-bg）上只有 4.09:1。
+   --ink-3 在同一個底色上是 5.07:1。 */
+.note.problem .nf, .note.rise .nf{ color:var(--ink-3) }
 .note.unread{box-shadow:var(--shadow),inset 0 3px 0 var(--accent)}
 .note.problem{border-left-color:var(--q2); background:var(--q2-bg)}
 .note.rise{border-left-color:var(--sc-6); box-shadow:var(--shadow),0 0 0 3px var(--card),0 0 0 4px var(--sc-6)}
@@ -370,7 +382,11 @@ input[type=checkbox],input[type=radio]{ width:1.15em; height:1.15em; accent-colo
 .skip:focus{ top:8px }
 /* 作答頁內的兩顆跳躍鈕跟著卡片走，不用絕對定位 */
 .aal .skip{ position:static; top:auto; display:block; margin:0 0 10px }
-.aal .skip:not(:focus){ position:absolute; left:-9999px }
+/* 這兩顆鈕（跳過文章、回到文章）是版面內的正式導覽控制項，不是隱藏式
+   skip link。原本沿用了 .skip 的 :not(:focus) 絕對定位到 -9999px，於是
+   平板觸控與滑鼠的四年級學生——本研究的主要受試方式——完全看不到它們，
+   窄版轉單欄後必須用手指捲過整篇文章才碰得到第一個選項。
+   全站的「略過導覽」（:364 起）維持隱藏式，那一處是對的。 */
 
 /* 高對比模式：使用者可在頂列開啟 */
 :root[data-contrast="high"]{
@@ -422,12 +438,6 @@ input[type=checkbox],input[type=radio]{ width:1.15em; height:1.15em; accent-colo
 .aal-text > .card-p{overflow-y:auto; min-height:0}
 .aal-side{display:flex; flex-direction:column; gap:16px; min-width:0}
 .aal-chat .card-p{display:flex; flex-direction:column}
-.sentences{line-height:2.1; font-size:1.05rem}
-.sent{cursor:pointer; padding:1px 2px; border-radius:3px; border-bottom:1px dashed var(--rule-strong)}
-.sent:hover{background:var(--shade)}
-.sent.on{background:var(--q4-bg); border-bottom:3px solid var(--q4); color:var(--ink); font-weight:600}
-/* 不以顏色單獨傳達訊息（1.4.1）：這一組規則沒有 .passage 前綴，也要帶記號 */
-.sent.on::after{content:"�08D"; color:var(--q4); font-weight:700}
 /* 對話卡與筆記卡要逐層等高：內容區、工具列、說明文字三段都鎖住最小高度。
    用 rem 是為了讓字級放大時兩邊一起長，不會在 175% 又拉開差距。 */
 .aal-chat .pane-bar{min-height:2.35rem; align-items:center}
