@@ -76,9 +76,9 @@ const CONSTRUCTS = [
 
 /* 角色知覺之操弄檢核（後測；對照組不施） */
 const MANIP_CHECK = [
-  {id:'mc_tutor', text:'剛剛的 AI 夥伴比較像在「教我、引導我想」'},
-  {id:'mc_tutee', text:'剛剛的 AI 夥伴比較像「需要我教它的同學」'},
-  {id:'mc_peer',  text:'剛剛的 AI 夥伴比較像「跟我一起做題目的同學」'}
+  {id:'mc_tutor', text:'剛剛陪我讀的那位夥伴，比較像在「教我、引導我想」'},
+  {id:'mc_tutee', text:'剛剛陪我讀的那位夥伴，比較像「需要我教它的同學」'},
+  {id:'mc_peer',  text:'剛剛陪我讀的那位夥伴，比較像「跟我一起讀的同學」'}
 ];
 /* 系統使用感受（後測；四條件皆施） */
 const SUS_ITEMS = [

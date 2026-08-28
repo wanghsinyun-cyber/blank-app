@@ -8,10 +8,19 @@ const $$ = function(s, r){ return Array.prototype.slice.call((r || document).que
 let ROUTE = {name:'teacher', args:[]};
 
 function go(hash){ location.hash = hash; }
+/* 已知路由白名單。逐條抄自 99-app.js 的 render() switch；
+   新增 case 時這裡要同步，否則新路由會被當成未知而不重繪。
+   有這道白名單，頁內錨點（#stage、#anything）就不會把畫面打成 404。 */
+const KNOWN_ROUTES = {teacher:1, create:1, assign:1, kb:1, note:1, synth:1, dash:1,
+  bank:1, settings:1, about:1, research:1, aal:1, inspect:1, survey:1,
+  student:1, quiz:1, result:1, mygrowth:1};
+
 function parseRoute(){
   const h = (location.hash || '#/teacher').replace(/^#\/?/, '');
   const parts = h.split('/').filter(Boolean);
-  return {name: parts[0] || 'teacher', args: parts.slice(1)};
+  const name = parts[0] || 'teacher';
+  if (!KNOWN_ROUTES[name] && typeof ROUTE !== 'undefined' && ROUTE) return ROUTE;
+  return {name: name, args: parts.slice(1)};
 }
 
 function toast(msg){
@@ -104,7 +113,7 @@ function renderRail(){
     {h:'#/mygrowth', g2:'長', t:'我的學習軌跡'},
     {g:'問卷'},
     {h:'#/survey/pre',  g2:'前', t:'課前問卷', b: surveyOf(me.id, 'pre')  ? null : '待填'},
-    {h:'#/survey/post', g2:'後', t:'課後問卷', b: surveyOf(me.id, 'post') ? null : '待填'},
+    {h:'#/survey/post', g2:'後', t:'課後問卷', b: surveyOf(me.id, 'post') ? null : (submitted('a-post', me.id) ? '待填' : '上完課再填')},
     {g:'關於'},
     {h:'#/about', g2:'說', t:'系統說明'}
   ];

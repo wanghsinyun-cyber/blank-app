@@ -27,8 +27,11 @@ function viewStudent(){
         ((state.settings && state.settings.maxTurns) || MAX_TURNS) + ' 次話。</p></div>'
       : '<div class="card card-p" style="margin-bottom:16px">' +
         '<div class="eyebrow">這節課的進行方式</div>' +
-        '<p class="small" style="margin-top:6px">你這一班沒有 AI 夥伴。畫面右邊是「我的筆記」，' +
-        '把你想到的、卡住的地方寫下來就好。</p></div>') +
+        /* 不要用否定句定義對照組（「你這一班沒有…」等於告訴孩子他拿到的是缺角版本），
+           也不要提到別班。正面描述他真正要做的事就好。 */
+        '<p class="small" style="margin-top:6px">這節課你自己讀、自己想。' +
+        '畫面右邊是「我的筆記」，把你想到的、卡住的地方寫下來。</p>' +
+        '<p class="muted small">筆記只有你和老師看得到，不會拿來打分數。</p></div>') +
     (needPre ? '<div class="card card-p" style="margin-bottom:16px;border-left:3px solid var(--warn)">' +
       '<div class="row" style="justify-content:space-between"><span class="small">還沒填課前問卷。</span>' +
       '<a class="btn sm primary" href="#/survey/pre">去填課前問卷</a></div></div>' : '') +

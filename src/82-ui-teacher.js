@@ -150,6 +150,7 @@ function viewCreate(){
    派題分析
    ========================================================================== */
 function viewAssign(aid){
+  if (!isTeacher()) return studentBlocked();
   const diag = diagnose(state, aid);
   if (!diag) return '<div class="empty"><h3>找不到這份派題</h3><p>它可能已刪除。</p><a class="btn" href="#/teacher">回教師後台</a></div>';
   const a = diag.assignment;

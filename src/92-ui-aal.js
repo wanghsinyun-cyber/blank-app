@@ -6,6 +6,30 @@
 
 let AAL = null;
 
+/* 作答草稿。刻意用獨立的 localStorage key，不擠進 50-kb.js 的 save()——
+   那一支會靜默吞掉配額錯誤，而學生的 16 題作答不能靜默遺失。 */
+const AAL_DRAFT_KEY = 'kairos-draft';
+
+function aalDraftId(){ return AAL.aid + '|' + AAL.me; }
+
+function aalSave(){
+  if (!AAL) return;
+  try {
+    const all = JSON.parse(localStorage.getItem(AAL_DRAFT_KEY) || '{}');
+    all[aalDraftId()] = {idx:AAL.idx, answers:AAL.answers, texts:AAL.texts, notes:AAL.notes,
+                         marks:AAL.marks, checks:AAL.checks, savedAt:Date.now()};
+    localStorage.setItem(AAL_DRAFT_KEY, JSON.stringify(all));
+  } catch (e) { toast('這一題沒能存起來，先不要關掉分頁。'); }
+}
+
+function aalDropDraft(){
+  try {
+    const all = JSON.parse(localStorage.getItem(AAL_DRAFT_KEY) || '{}');
+    delete all[aalDraftId()];
+    localStorage.setItem(AAL_DRAFT_KEY, JSON.stringify(all));
+  } catch (e) {}
+}
+
 function aalInit(aid){
   const a = getAssignment(aid);
   const me = currentUser();
@@ -17,6 +41,22 @@ function aalInit(aid){
     answers: {}, texts: {}, notes: {}, marks: {}, checks: {}, turns: {},
     tele: {}, drafts: {}, t0: Date.now()
   };
+  /* 還原草稿。t0 一定重設為現在，並補寫一筆 RESUME，
+     讓分析端知道這一場的 rel 時間軸跨了兩次入座、可以排除或另計。 */
+  try {
+    const all = JSON.parse(localStorage.getItem(AAL_DRAFT_KEY) || '{}');
+    const d = all[aalDraftId()];
+    if (d){
+      AAL.idx = Math.min(d.idx || 0, AAL.items.length - 1);
+      AAL.answers = d.answers || {};
+      AAL.texts   = d.texts   || {};
+      AAL.notes   = d.notes   || {};
+      AAL.marks   = d.marks   || {};
+      AAL.checks  = d.checks  || {};
+      AAL.t0 = Date.now();
+      aalLog('RESUME', 'R', {resumed:true, savedAt:d.savedAt || null});
+    }
+  } catch (e) { /* 草稿壞掉就當作沒有，從頭開始 */ }
 }
 
 function aalItem(){ return AAL.items[AAL.idx]; }
@@ -64,7 +104,10 @@ function viewAaL(aid){
       '<div><h2>' + esc(a.title) + '</h2>' +
       '<div class="muted small">' + esc(me.name) + '　·　' + esc((classOfStudent(me.id) || {}).name || '') +
       '　·　夥伴條件：<b>' + esc(cond.name) + '</b></div></div>' +
-      '<div class="row"><span class="pill">第 ' + (AAL.idx + 1) + ' / ' + AAL.items.length + ' 題</span>' +
+      '<div class="row">' +
+      '<a class="btn sm" href="#/student">← 先離開（進度會保留）</a>' +
+      '<span class="pill">第 ' + (AAL.idx + 1) + ' / ' + AAL.items.length + ' 題</span>' +
+      '<span class="pill">' + esc(text.title) + '</span>' +
       '<button class="btn sm" data-act="aal-prev"' + (AAL.idx ? '' : ' disabled') + '>← 上一題</button>' +
       '<button class="btn sm" data-act="aal-next"' + (AAL.idx < AAL.items.length - 1 ? '' : ' disabled') + '>下一題 →</button>' +
       '<button class="btn primary sm" data-act="aal-submit">交卷</button></div>' +
@@ -72,12 +115,17 @@ function viewAaL(aid){
 
     '<div class="aal">' +
     /* ---- 左欄：文本，逐句可標記 ---- */
-    '<div class="aal-text card"><div class="card-h"><h3 id="passageTitle">' + esc(text.title) + '</h3>' +
+    /* 一篇文章有 30–40 句，每一句都是可聚焦的按鈕。沒有這顆跳躍鈕，
+       鍵盤使用者要按幾十次 Tab 才走得到作答區（WCAG 2.4.1）。 */
+    '<div class="aal-text card">' +
+      '<button class="skip" data-act="skip-passage" type="button">跳過文章，直接作答</button>' +
+      '<div class="card-h"><h3 id="passageTitle" tabindex="-1">' + esc(text.title) + '</h3>' +
       '<span class="pill">' + esc(text.genre) + '</span>' +
-      (marks.length ? '<span class="pill">已標記 ' + marks.length + ' 句</span>' : '') + '</div>' +
+      '<span class="pill" id="markCount"' + (marks.length ? '' : ' hidden') + '>已標記 ' +
+      '<span id="markCountN">' + marks.length + '</span> 句</span></div>' +
       '<div class="card-p">' +
-      '<p class="muted small" id="passageHelp">點一下任何一句，把它標記起來。標記只有你看得到，不會影響分數，' +
-      '換題也不會消失。</p>' +
+      '<p class="muted small" id="passageHelp">點一下任何一句，把它標記起來。標記不會影響分數，' +
+      '換題也不會消失；每一篇文章的標記分開記。</p>' +
       '<div class="passage" role="group" aria-labelledby="passageTitle" aria-describedby="passageHelp">' +
         text.paras.map(function(_, pi){
           return '<p class="para">' + sents.filter(function(s){ return s.para === pi; }).map(function(s){
@@ -92,7 +140,7 @@ function viewAaL(aid){
 
     /* ---- 右欄：題目與作答 ＋ 對話／筆記 ---- */
     '<div class="aal-side">' +
-      '<div class="card"><div class="card-h"><h3>第 ' + (AAL.idx + 1) + ' 題</h3>' + procPill(it.process) + '</div>' +
+      '<div class="card" id="aalAnswer" tabindex="-1"><div class="card-h"><h3>第 ' + (AAL.idx + 1) + ' 題</h3>' + procPill(it.process) + '</div>' +
       '<div class="card-p">' +
       '<div class="stem">' + esc(it.stem) + '</div>' +
       (it.type === 'mc'
@@ -117,6 +165,7 @@ function viewAaL(aid){
           return '<label class="opt" style="align-items:center"><input type="checkbox" data-act="aal-check" data-i="' + i + '"' +
             (on ? ' checked' : '') + '><span>' + esc(c) + '</span></label>';
         }).join('') +
+        '<button class="skip" data-act="back-to-passage" type="button">回到文章</button>' +
       '</div></div>' +
     '</div></div>';
 }
@@ -140,17 +189,22 @@ function aalDialogPane(it, cond, turns, used, maxT){
       '"' + (left > 0 ? '' : ' disabled') + ' style="flex:1">' +
       '<button class="btn primary sm" data-act="aal-say"' + (left > 0 ? '' : ' disabled') + '>送出</button>' +
     '</div>' +
-    '<p class="muted small" style="margin-top:8px">夥伴不會告訴你答案，也不會說你對或錯——它只會一直問你怎麼想的。</p>' +
+    '<p class="muted small" style="margin-top:8px">陪你的這位夥伴是電腦程式，不是真的人。' +
+    '它不會告訴你答案，也不會說你對或錯——只會一直問你怎麼想的。' +
+    '你寫的字老師之後看得到，不會拿來打分數。</p>' +
     '</div></div>';
 }
 
 function aalNotePane(it){
   return '<div class="card aal-chat"><div class="card-h"><h3>我的筆記</h3>' +
-    '<span class="muted small">只有你看得到</span></div><div class="card-p">' +
+    '<span class="muted small">寫給自己看的</span></div><div class="card-p">' +
     '<textarea data-act="aal-note" style="min-height:210px" placeholder="把你想到的、卡住的地方寫下來">' +
     esc(AAL.notes[it.id] || '') + '</textarea>' +
-    '<p class="muted small" style="margin-top:8px">這一節沒有 AI 夥伴。版面與其他班完全一樣，' +
-    '只是把對話區換成同樣大小的筆記區。</p>' +
+    /* 與對話卡的說明對稱：同樣三句、同樣的隱私描述，不提別班、不用否定句。
+       「只有你看得到」是不實的——老師在唯讀重播裡看得到筆記。 */
+    '<p class="muted small" style="margin-top:8px">這節課你自己讀、自己想。' +
+    '想到什麼、卡在哪裡，都可以寫下來。' +
+    '你寫的字老師之後看得到，不會拿來打分數。</p>' +
     '</div></div>';
 }
 
@@ -168,13 +222,24 @@ function passageSentences(text){
 }
 
 /* --- 互動處理 --- */
+/* 標記與作答都是「每分鐘按十幾次」的微互動。
+   這裡刻意不呼叫 render()：整頁重繪會把捲動位置與鍵盤焦點都丟掉，
+   學生讀到第 9 段標一句話就被彈回文章開頭。只改真正變動的那幾個節點。 */
 function aalMark(i){
   const it = aalItem();
   const m = AAL.marks[it.unit] = AAL.marks[it.unit] || [];
   const k = m.indexOf(i);
+  const on = k < 0;
   if (k >= 0) m.splice(k, 1); else m.push(i);
-  aalLog('MARK', 'M', {sent:i, textId:it.unit, on: k < 0});
-  render();
+  aalLog('MARK', 'M', {sent:i, textId:it.unit, on: on});
+  aalSave();
+
+  const btn = document.querySelector('.passage .sent[data-i="' + i + '"]');
+  if (btn){ btn.classList.toggle('on', on); btn.setAttribute('aria-pressed', String(on)); }
+  const pill = document.getElementById('markCount');
+  const n = document.getElementById('markCountN');
+  if (n) n.textContent = m.length;
+  if (pill){ if (m.length) pill.removeAttribute('hidden'); else pill.setAttribute('hidden', ''); }
 }
 
 function aalPick(k){
@@ -184,7 +249,12 @@ function aalPick(k){
   if (first) AAL.drafts[it.id] = {first: k, final: k};
   else AAL.drafts[it.id].final = k;
   aalLog('OPTION', 'O', {choice:k, changed: !first});
-  render();
+  aalSave();
+
+  const fs = document.querySelector('.aal-side fieldset.opts');
+  if (fs) Array.prototype.forEach.call(fs.querySelectorAll('label.opt'), function(lb, idx){
+    lb.classList.toggle('chosen', idx === k);
+  });
 }
 
 function aalTypeTelemetry(iid, value){
@@ -285,7 +355,7 @@ function aalSubmit(){
   state.submissions = state.submissions.filter(function(s){ return !(s.aid === AAL.aid && s.sid === me.id); });
   state.submissions.push({aid:AAL.aid, sid:me.id, at:Date.now()});
   save();
-  const aid = AAL.aid;
+  aalDropDraft();          // 交出去了，草稿不用留
   AAL = null;
   toast('已交卷。接下來是這節課的問卷。');
   go('#/survey/post');
@@ -296,19 +366,53 @@ function aalSubmit(){
    ========================================================================== */
 let SURVEY = null;
 
+/* 這一份問卷實際要作答的所有題鍵。抬頭的題數與送出前的檢查都吃這一個來源，
+   否則會出現「抬頭說 47 題、送出只檢查 41 題」，操弄檢核與使用感受整段留白也送得出去。
+   cond 參數不可省：對照組不施操弄檢核，否則會被要求填不存在的三題而永遠送不出去。 */
+function surveyKeys(phase, cond){
+  const ks = [];
+  constructsFor(phase).forEach(function(c){
+    c.items.forEach(function(_, i){ ks.push(c.id + '_' + i); });
+  });
+  if (phase === 'post'){
+    if (cond !== 'control') MANIP_CHECK.forEach(function(_, i){ ks.push('mc_x_' + i); });
+    SUS_ITEMS.forEach(function(_, i){ ks.push('sys_x_' + i); });
+  }
+  return ks;
+}
+
+/* 課後問卷的門檻。操弄檢核問的是「剛剛那位夥伴像什麼」——
+   還沒上課就填，答案沒有意義，而它是驗證實驗操弄成功與否的關鍵工具。
+   前測不設門檻（它本來就該在課前填）。 */
+function surveyGate(phase){
+  const me = currentUser();
+  if (phase === 'pre') return '';
+  if (me.role !== 'student') return '';
+  if (submitted('a-post', me.id)) return '';
+  const a = getAssignment('a-post');
+  if (!a) return '';
+  return '<div class="empty"><h3>課後問卷要等這節課上完</h3>' +
+    '<p style="max-width:62ch">這份問卷問的是你剛剛上這節課的感覺。' +
+    '還沒上完就填，你會不知道要怎麼回答。先把下面這份做完，做完就會自動帶你來這裡。</p>' +
+    '<div class="col" style="margin-top:14px;align-items:flex-start">' +
+    '<a class="btn primary" href="#/aal/' + a.id + '">' + esc(a.title) + '　開始這份作業 →</a>' +
+    '<a class="btn" href="#/student">回我的作業</a></div></div>';
+}
+
 function viewSurvey(phase){
   const me = currentUser();
   if (me.role !== 'student') return '<div class="empty"><h3>請切換成學生身分</h3>' +
     '<p>問卷是學生端的畫面。</p></div>';
+  const gate = surveyGate(phase); if (gate) return gate;
   const done = surveyOf(me.id, phase);
   if (!SURVEY || SURVEY.phase !== phase || SURVEY.sid !== me.id){
     SURVEY = {phase:phase, sid:me.id, resp: done ? Object.assign({}, done.resp) : {}};
   }
   const cs = constructsFor(phase);
   const cond = conditionOfStudent(me.id);
-  const total = cs.reduce(function(a, c){ return a + c.items.length; }, 0) +
-    (phase === 'post' ? (cond === 'control' ? 0 : MANIP_CHECK.length) + SUS_ITEMS.length : 0);
-  const answered = Object.keys(SURVEY.resp).filter(function(k){ return SURVEY.resp[k]; }).length;
+  const keys = surveyKeys(phase, cond);
+  const total = keys.length;
+  const answered = keys.filter(function(k){ return SURVEY.resp[k]; }).length;
 
   function block(title, items, scale, prefix, cls){
     return '<div class="card" style="margin-bottom:14px"><div class="card-h">' +
@@ -328,8 +432,12 @@ function viewSurvey(phase){
       }).join('') + '</div></div>';
   }
 
+  /* 進度數字要能就地更新，所以不能走 sectionHead 的 sub（那一段會被 esc() 轉義），
+     改放在右側動作列裡，用 role="status" 讓報讀器也聽得到進度變化。 */
   return sectionHead(phase === 'pre' ? '課前問卷' : '課後問卷',
-      '沒有標準答案，照你真正的感覺選就好。共 ' + total + ' 題，已完成 ' + answered + ' 題。',
+      '沒有標準答案，照你真正的感覺選就好。',
+      '<span class="pill" role="status" aria-live="polite">已完成 <span id="svDone">' + answered +
+      '</span> / 共 ' + total + ' 題</span>' +
       '<button class="btn primary" data-act="sv-submit" data-id="' + phase + '">送出問卷</button>') +
     '<div class="card card-p" style="margin-bottom:14px;border-left:3px solid var(--warn)">' +
     '<p class="small" style="margin:0">本平台內建的題項是<strong>依構念自撰的示範題</strong>，' +
@@ -345,16 +453,34 @@ function viewSurvey(phase){
 
 function surveySubmit(phase){
   const me = currentUser();
-  const cs = constructsFor(phase);
-  const need = cs.reduce(function(a, c){ return a + c.items.length; }, 0);
-  const got = cs.reduce(function(a, c){
-    return a + c.items.filter(function(_, i){ return SURVEY.resp[c.id + '_' + i]; }).length; }, 0);
-  if (got < need && !confirm('還有 ' + (need - got) + ' 題沒作答，確定要送出嗎？')) return;
+  const cond = conditionOfStudent(me.id);
+  if (surveyGate(phase)){ toast('這節課還沒上完，問卷等一下再填。'); return; }
 
-  // 操弄檢核與使用感受用固定鍵存回原本的 id
+  const keys = surveyKeys(phase, cond);
+  const miss = keys.filter(function(k){ return !SURVEY.resp[k]; });
+  if (miss.length){
+    /* 先把人帶到第一題沒答的地方，再問——不然他不知道漏在哪 */
+    const el = document.querySelector('[data-k="' + miss[0] + '"]');
+    if (el){
+      const row = el.closest('.likert');
+      if (row) row.classList.add('missing');
+      el.scrollIntoView({block:'center'});
+      el.focus();
+    }
+    if (!confirm('還有 ' + miss.length + ' 題沒作答（「角色知覺」和「系統使用感受」那兩段也要看一下）。\n\n' +
+                 '按「確定」直接送出，按「取消」回去把它填完。')) return;
+  }
+
+  // 操弄檢核與使用感受用固定鍵存回原本的 id。
+  // 未答一律寫成 null，讓分析端能用「鍵存在但值為 null」區分漏答與未施測；
+  // 對照組不建 mc_* 鍵，因為那三題本來就不對他施測。
   const resp = Object.assign({}, SURVEY.resp);
-  MANIP_CHECK.forEach(function(m, i){ if (resp['mc_x_' + i]) resp[m.id] = resp['mc_x_' + i]; });
-  SUS_ITEMS.forEach(function(s, i){ if (resp['sys_x_' + i]) resp[s.id] = resp['sys_x_' + i]; });
+  if (phase === 'post' && cond !== 'control'){
+    MANIP_CHECK.forEach(function(m, i){ resp[m.id] = SURVEY.resp['mc_x_' + i] || null; });
+  }
+  if (phase === 'post'){
+    SUS_ITEMS.forEach(function(s, i){ resp[s.id] = SURVEY.resp['sys_x_' + i] || null; });
+  }
 
   state.surveys = (state.surveys || []).filter(function(s){
     return !(s.sid === me.id && s.phase === phase); });

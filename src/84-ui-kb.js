@@ -115,8 +115,10 @@ function viewKBCanvas(vid){
       '<a class="btn" href="#/synth/' + v.id + '">想法串綜整</a>') +
     (it ? '<div class="card card-p" style="margin-bottom:14px;border-left:3px solid var(--q2)">' +
       '<div class="eyebrow">這個視圖從哪裡來</div>' +
-      '<p class="small" style="margin-top:6px">來自 <a href="#/assign/' + v.origin.aid + '">' +
-      esc((getAssignment(v.origin.aid) || {}).title || '') + '</a> 第 ' + it.no + ' 題的 KIDMAP 迷思象限。</p>' +
+      /* 學生只看到作業名稱的純文字：那條連結會直接把他帶到含 16 題正解的分析頁 */
+      '<p class="small" style="margin-top:6px">來自 ' + (isTeacher() ? '<a href="#/assign/' + v.origin.aid + '">' : '<span>') +
+      esc((getAssignment(v.origin.aid) || {}).title || '') + (isTeacher() ? '</a>' : '</span>') +
+      ' 第 ' + it.no + ' 題的 KIDMAP 迷思象限。</p>' +
       '<div class="item"><div class="stem">' + esc(it.stem) + '</div>' +
       '<div class="muted small">' + it.options.map(function(o, k){ return String.fromCharCode(65 + k) + '. ' + esc(o); }).join('　') + '</div></div>' +
       '</div>' : '') +

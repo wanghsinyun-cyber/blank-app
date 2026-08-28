@@ -5,6 +5,14 @@
 const DISCOURSE_ROUTES = {kb:1, note:1, synth:1};
 const PLAIN_ROUTES = {about:1, settings:1, bank:1, survey:1};
 const RESEARCHER_ONLY = {research:1, create:1, settings:1};
+/* 教師端專屬。這些頁面會印出正解、誘答標記與全班診斷；
+   學生走進去等於在前後測之間拿到答案，Δθ 就沒有意義了。 */
+const TEACHER_ONLY = {assign:1, dash:1, inspect:1, bank:1};
+
+/* 上一次繪製的是哪一條路由。用來判斷這次 render() 是「換頁」還是「原地重繪」：
+   換頁才捲回頁首並把焦點交給主舞台；原地重繪要把捲動位置與焦點放回去，
+   否則學生每標一句話、每點一顆量尺都會被彈回頁首、焦點掉回 body。 */
+let LAST_ROUTE_KEY = null;
 
 function render(){
   ROUTE = parseRoute();
@@ -21,6 +29,14 @@ function render(){
       '<p style="max-width:60ch">條件分派、建立派題與系統設定屬於研究端的操作。' +
       '教學上需要的資料在「教師後台」「派題分析」「知識建構中心」與「雙軌評量儀表板」。</p>' +
       '<a class="btn" href="#/teacher">回教師後台</a></div>';
+    renderRail();
+    return;
+  }
+  if (TEACHER_ONLY[ROUTE.name] && !isTeacher()){
+    stage.className = 'stage';
+    $('#view').innerHTML = '<div class="empty"><h3>這一頁是老師看的</h3>' +
+      '<p style="max-width:60ch">你的作業、討論與學習軌跡都在左邊的選單裡。</p>' +
+      '<a class="btn" href="#/student">回我的作業</a></div>';
     renderRail();
     return;
   }
@@ -45,6 +61,21 @@ function render(){
     case 'mygrowth':  html = viewMyGrowth(); break;
     default:          html = '<div class="empty"><h3>找不到這一頁</h3><a class="btn" href="#/teacher">回首頁</a></div>';
   }
+  /* 重繪之前先記下位置與焦點。焦點用 data-* 屬性組出選擇器再找回來——
+     aal-mark 的 data-i、sv-pick 的 data-k+data-v、aal-check 的 data-i
+     在同一頁內都唯一。 */
+  const key = ROUTE.name + '/' + a.join('/');
+  const samePage = (key === LAST_ROUTE_KEY);
+  const prevY = window.scrollY;
+  const ae = document.activeElement;
+  let fk = null;
+  if (samePage && ae && ae !== document.body && v.contains(ae) && ae.dataset && ae.dataset.act){
+    fk = '[data-act="' + ae.dataset.act + '"]' +
+      (ae.dataset.i !== undefined ? '[data-i="' + ae.dataset.i + '"]' : '') +
+      (ae.dataset.k !== undefined ? '[data-k="' + ae.dataset.k + '"]' : '') +
+      (ae.dataset.v !== undefined ? '[data-v="' + ae.dataset.v + '"]' : '');
+  }
+
   v.innerHTML = html;
   renderRail();
   if (ROUTE.name === 'quiz' || ROUTE.name === 'aal') initPads();
@@ -55,7 +86,15 @@ function render(){
     const s = document.getElementById('aalSay');
     if (s && render._focusSay){ s.focus(); render._focusSay = false; }
   }
-  try { window.scrollTo(0, 0); } catch (e) {}
+
+  if (!samePage){
+    try { window.scrollTo(0, 0); } catch (e) {}
+    if (stage) stage.focus({preventScroll: true});
+  } else {
+    if (fk){ const back = v.querySelector(fk); if (back) back.focus({preventScroll: true}); }
+    try { window.scrollTo(0, prevY); } catch (e) {}
+  }
+  LAST_ROUTE_KEY = key;
 }
 
 /* --- 畫布拖曳 --- */
@@ -241,6 +280,18 @@ async function saveFile(filename, text, mime){
 
 /* --- 事件 --- */
 function bindEvents(){
+  /* 作答到一半誤觸關閉／重整時攔一下。草稿已經落地，但還是要讓學生知道。 */
+  window.addEventListener('beforeunload', function(e){
+    if (AAL && Object.keys(AAL.answers).length){ e.preventDefault(); e.returnValue = ''; }
+  });
+
+  /* 略過導覽：不動 hash，直接把焦點送進主舞台（#stage 有 tabindex="-1"）。 */
+  const sk = document.getElementById('skipLink');
+  if (sk) sk.addEventListener('click', function(){
+    const s = document.getElementById('stage');
+    if (s){ s.focus(); s.scrollIntoView({block:'start'}); }
+  });
+
   document.addEventListener('click', function(e){
     const t = e.target.closest('[data-act]');
     if (!t) return;
@@ -336,8 +387,30 @@ function bindEvents(){
     if (act === 'aal-mark'){ aalMark(+t.dataset.i); return; }
     if (act === 'aal-pick'){ aalPick(+t.dataset.k); return; }
     if (act === 'aal-say'){ render._focusSay = true; aalSay(); return; }
-    if (act === 'aal-prev'){ AAL.idx = Math.max(0, AAL.idx - 1); render(); return; }
-    if (act === 'aal-next'){ AAL.idx = Math.min(AAL.items.length - 1, AAL.idx + 1); render(); return; }
+    /* 換題可能同時換掉左欄的文章（T1 十題、T2 六題）。
+       文章無聲換掉會讓學生以為自己的標記不見了，所以要說一聲並把焦點帶過去。 */
+    if (act === 'aal-prev' || act === 'aal-next'){
+      const oldUnit = aalItem().unit;
+      AAL.idx = act === 'aal-prev' ? Math.max(0, AAL.idx - 1)
+                                   : Math.min(AAL.items.length - 1, AAL.idx + 1);
+      aalSave();
+      render();
+      const nu = aalItem().unit;
+      if (nu !== oldUnit){
+        toast('第 ' + (AAL.idx + 1) + ' 題換了一篇文章：〈' + getText(nu).title + '〉，左邊已經換過來了。');
+        const h = document.getElementById('passageTitle');
+        if (h) h.focus();
+      }
+      return; }
+
+    if (act === 'skip-passage'){
+      const el = document.getElementById('aalAnswer');
+      if (el){ el.focus(); el.scrollIntoView({block:'start'}); }
+      return; }
+    if (act === 'back-to-passage'){
+      const h = document.getElementById('passageTitle');
+      if (h){ h.focus(); h.scrollIntoView({block:'start'}); }
+      return; }
 
     /* 教師／研究者的唯讀檢視：換題不寫任何日誌 */
     if (act === 'inspect-prev'){ INSPECT.idx = Math.max(0, INSPECT.idx - 1); render(); return; }
@@ -347,11 +420,30 @@ function bindEvents(){
       const it = aalItem();
       const arr = AAL.checks[it.id] = AAL.checks[it.id] || [];
       const i = +t.dataset.i, k = arr.indexOf(i);
-      if (k >= 0) arr.splice(k, 1); else { arr.push(i); aalLog('CHECK', 'C', {idx:i}); }
-      render(); return; }
+      /* 取消勾選也要寫日誌：教師端的唯讀重播是用 CHECK 事件還原的，
+         只記「勾」不記「取消」會讓老師看到學生勾了他其實已取消的項目，
+         而且「勾了 N / 5」會超過 5。重播端取同一 idx 的最後一筆。 */
+      if (k >= 0){ arr.splice(k, 1); aalLog('CHECK', 'C', {idx:i, off:true}); }
+      else { arr.push(i); aalLog('CHECK', 'C', {idx:i, off:false}); }
+      aalSave();
+      return; }   // 原生 checkbox，畫面不需要重繪
 
     /* 問卷 */
-    if (act === 'sv-pick'){ SURVEY.resp[t.dataset.k] = +t.dataset.v; render(); return; }
+    if (act === 'sv-pick'){
+      SURVEY.resp[t.dataset.k] = +t.dataset.v;
+      /* 只更新這一列的量尺與抬頭的計數，不重繪整份 47 題 */
+      const scale = t.parentElement;
+      if (scale) Array.prototype.forEach.call(scale.querySelectorAll('.lk'), function(b){
+        const on = b.dataset.v === t.dataset.v;
+        b.classList.toggle('on', on);
+        b.setAttribute('aria-pressed', String(on));
+      });
+      const row = t.closest('.likert');
+      if (row) row.classList.remove('missing');
+      const d = document.getElementById('svDone');
+      if (d) d.textContent = surveyKeys(SURVEY.phase, conditionOfStudent(currentUser().id))
+        .filter(function(k2){ return SURVEY.resp[k2]; }).length;
+      return; }
     if (act === 'sv-submit'){ surveySubmit(id); return; }
 
     /* 設定與匯出 */
@@ -450,6 +542,7 @@ function bindEvents(){
       if (AAL.drafts[it.id]) AAL.drafts[it.id].final = t.value;
       if (!aalTypeTelemetry._last || Date.now() - aalTypeTelemetry._last > 4000){
         aalTypeTelemetry._last = Date.now(); aalLog('TYPE', 'W', {len:t.value.length});
+        aalSave();
       }
       return; }
     if (act === 'aal-note'){
@@ -458,6 +551,7 @@ function bindEvents(){
       if (!aalTypeTelemetry._lastN || Date.now() - aalTypeTelemetry._lastN > 4000){
         aalTypeTelemetry._lastN = Date.now();
         aalLog('NOTE', 'N', {text:t.value.slice(-80)});
+        aalSave();
       }
       return; }
     if (act === 'aalSay'){ return; }

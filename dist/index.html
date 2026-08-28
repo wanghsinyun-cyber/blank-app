@@ -357,12 +357,18 @@ input[type=checkbox],input[type=radio]{ width:1.15em; height:1.15em; accent-colo
   overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; border:0;
 }
 /* 跳至主要內容：鍵盤 Tab 第一站 */
+/* 略過連結。用 <button> 而不是 <a href="#...">，因為本站是 hash 路由：
+   任何寫進 hash 的錨點都會被 parseRoute() 當成路由名，把畫面打成「找不到這一頁」。 */
 .skip{
   position:absolute; left:8px; top:-100px; z-index:100;
   background:var(--accent); color:var(--accent-ink); padding:10px 16px;
   border-radius:var(--r-m); font-weight:600; transition:top .15s;
+  border:0; font-family:inherit; font-size:inherit; cursor:pointer;
 }
 .skip:focus{ top:8px }
+/* 作答頁內的兩顆跳躍鈕跟著卡片走，不用絕對定位 */
+.aal .skip{ position:static; top:auto; display:block; margin:0 0 10px }
+.aal .skip:not(:focus){ position:absolute; left:-9999px }
 
 /* 高對比模式：使用者可在頂列開啟 */
 :root[data-contrast="high"]{
@@ -404,7 +410,11 @@ input[type=checkbox],input[type=radio]{ width:1.15em; height:1.15em; accent-colo
    四條件共用同一份版面幾何：對照組只是把對話卡換成同尺寸的筆記卡，
    使外在認知負荷、捲動深度與畫面留白在條件之間保持一致。 */
 .aal{display:grid; grid-template-columns:minmax(0,1.05fr) minmax(330px,.95fr); gap:16px; align-items:start}
-.aal-text{position:sticky; top:calc(var(--topbar-h) + 2px)}
+/* 左欄文章：sticky 但要有自己的捲動區，否則文章比視窗高時後半段永遠捲不到。
+   card-h（標題與「已標記 N 句」）不捲，只捲 card-p。 */
+.aal-text{position:sticky; top:calc(var(--topbar-h) + 2px);
+  max-height:calc(100vh - var(--topbar-h) - 1rem); display:flex; flex-direction:column}
+.aal-text > .card-p{overflow-y:auto; min-height:0}
 .aal-side{display:flex; flex-direction:column; gap:16px; min-width:0}
 .aal-chat .card-p{display:flex; flex-direction:column}
 .sentences{line-height:2.1; font-size:1.05rem}
@@ -429,6 +439,7 @@ input[type=checkbox],input[type=radio]{ width:1.15em; height:1.15em; accent-colo
     cursor:pointer; font-family:var(--f-mono); font-size:0.85rem; color:var(--ink-3)}
 .lk:hover{background:var(--shade)}
 .lk.on{background:var(--accent); border-color:var(--accent); color:var(--accent-ink); font-weight:600}
+.likert.missing{outline:3px solid var(--crit); outline-offset:6px; border-radius:var(--r-m)}
 .scale-lab{display:flex; justify-content:space-between; font-size:0.8rem; color:var(--ink-4); margin-top:4px; max-width:270px}
 
 pre.prompt{
@@ -457,7 +468,7 @@ pre.prompt{
 @media (prefers-reduced-motion:reduce){*{animation:none!important; transition:none!important}}
 @media print{.rail,.topbar,.kb-toolbar{display:none} .app,.main{display:block} .stage{min-height:0}}
 </style>
-<a class="skip" href="#stage">跳至主要內容</a>
+<button class="skip" id="skipLink" type="button">跳至主要內容</button>
 <div class="app">
   <header class="topbar">
     <div class="brand"><b>KAIROS</b><span>契機 · 評量即學習平台</span></div>
@@ -1854,9 +1865,9 @@ const CONSTRUCTS = [
 
 /* 角色知覺之操弄檢核（後測；對照組不施） */
 const MANIP_CHECK = [
-  {id:'mc_tutor', text:'剛剛的 AI 夥伴比較像在「教我、引導我想」'},
-  {id:'mc_tutee', text:'剛剛的 AI 夥伴比較像「需要我教它的同學」'},
-  {id:'mc_peer',  text:'剛剛的 AI 夥伴比較像「跟我一起做題目的同學」'}
+  {id:'mc_tutor', text:'剛剛陪我讀的那位夥伴，比較像在「教我、引導我想」'},
+  {id:'mc_tutee', text:'剛剛陪我讀的那位夥伴，比較像「需要我教它的同學」'},
+  {id:'mc_peer',  text:'剛剛陪我讀的那位夥伴，比較像「跟我一起讀的同學」'}
 ];
 /* 系統使用感受（後測；四條件皆施） */
 const SUS_ITEMS = [
@@ -2265,6 +2276,12 @@ function assignmentRoster(a){
 }
 function isTeacher(){ const u = currentUser(); return u.role === 'teacher' || u.role === 'admin'; }
 function isResearcher(){ return currentUser().role === 'admin'; }
+/* 學生走進教師頁時的統一擋板。文案是給十歲孩子看的，不解釋權限模型。 */
+function studentBlocked(){
+  return '<div class="empty"><h3>這一頁是老師看的</h3>' +
+    '<p style="max-width:60ch">你的作業、討論與學習軌跡都在左邊的選單裡。</p>' +
+    '<a class="btn" href="#/student">回我的作業</a></div>';
+}
 
 /* 指派給這位學生、但還沒交卷的作業 */
 function pendingAssignments(sid){
@@ -3929,10 +3946,19 @@ const $$ = function(s, r){ return Array.prototype.slice.call((r || document).que
 let ROUTE = {name:'teacher', args:[]};
 
 function go(hash){ location.hash = hash; }
+/* 已知路由白名單。逐條抄自 99-app.js 的 render() switch；
+   新增 case 時這裡要同步，否則新路由會被當成未知而不重繪。
+   有這道白名單，頁內錨點（#stage、#anything）就不會把畫面打成 404。 */
+const KNOWN_ROUTES = {teacher:1, create:1, assign:1, kb:1, note:1, synth:1, dash:1,
+  bank:1, settings:1, about:1, research:1, aal:1, inspect:1, survey:1,
+  student:1, quiz:1, result:1, mygrowth:1};
+
 function parseRoute(){
   const h = (location.hash || '#/teacher').replace(/^#\/?/, '');
   const parts = h.split('/').filter(Boolean);
-  return {name: parts[0] || 'teacher', args: parts.slice(1)};
+  const name = parts[0] || 'teacher';
+  if (!KNOWN_ROUTES[name] && typeof ROUTE !== 'undefined' && ROUTE) return ROUTE;
+  return {name: name, args: parts.slice(1)};
 }
 
 function toast(msg){
@@ -4025,7 +4051,7 @@ function renderRail(){
     {h:'#/mygrowth', g2:'長', t:'我的學習軌跡'},
     {g:'問卷'},
     {h:'#/survey/pre',  g2:'前', t:'課前問卷', b: surveyOf(me.id, 'pre')  ? null : '待填'},
-    {h:'#/survey/post', g2:'後', t:'課後問卷', b: surveyOf(me.id, 'post') ? null : '待填'},
+    {h:'#/survey/post', g2:'後', t:'課後問卷', b: surveyOf(me.id, 'post') ? null : (submitted('a-post', me.id) ? '待填' : '上完課再填')},
     {g:'關於'},
     {h:'#/about', g2:'說', t:'系統說明'}
   ];
@@ -4444,6 +4470,7 @@ function viewCreate(){
    派題分析
    ========================================================================== */
 function viewAssign(aid){
+  if (!isTeacher()) return studentBlocked();
   const diag = diagnose(state, aid);
   if (!diag) return '<div class="empty"><h3>找不到這份派題</h3><p>它可能已刪除。</p><a class="btn" href="#/teacher">回教師後台</a></div>';
   const a = diag.assignment;
@@ -4972,8 +4999,10 @@ function viewKBCanvas(vid){
       '<a class="btn" href="#/synth/' + v.id + '">想法串綜整</a>') +
     (it ? '<div class="card card-p" style="margin-bottom:14px;border-left:3px solid var(--q2)">' +
       '<div class="eyebrow">這個視圖從哪裡來</div>' +
-      '<p class="small" style="margin-top:6px">來自 <a href="#/assign/' + v.origin.aid + '">' +
-      esc((getAssignment(v.origin.aid) || {}).title || '') + '</a> 第 ' + it.no + ' 題的 KIDMAP 迷思象限。</p>' +
+      /* 學生只看到作業名稱的純文字：那條連結會直接把他帶到含 16 題正解的分析頁 */
+      '<p class="small" style="margin-top:6px">來自 ' + (isTeacher() ? '<a href="#/assign/' + v.origin.aid + '">' : '<span>') +
+      esc((getAssignment(v.origin.aid) || {}).title || '') + (isTeacher() ? '</a>' : '</span>') +
+      ' 第 ' + it.no + ' 題的 KIDMAP 迷思象限。</p>' +
       '<div class="item"><div class="stem">' + esc(it.stem) + '</div>' +
       '<div class="muted small">' + it.options.map(function(o, k){ return String.fromCharCode(65 + k) + '. ' + esc(o); }).join('　') + '</div></div>' +
       '</div>' : '') +
@@ -5259,6 +5288,7 @@ function viewSynth(vid){
 let DTAB = 'dual';
 
 function viewDash(){
+  if (!isTeacher()) return studentBlocked();
   const tabs = [['dual','雙軌總覽'],['students','學生個別'],['sna','建構網絡'],['discourse','論述指標'],['report','社群報告']];
   let body = '';
   if (DTAB === 'dual') body = dashDual();
@@ -5416,34 +5446,98 @@ function dashReport(){
 }
 
 /* --- 學生端的個人軌跡 --- */
+/* 學生版的分區文案。不可以讀 DUAL_ZONE——那一份是寫給老師的處置建議
+   （「需要介入」「優先安排小組角色」），對著十歲孩子講會變成貼標籤。
+   同一份資料，換一套對他說話的說法。 */
+const DUAL_ZONE_STUDENT = {
+  A:{name:'你把討論變成了自己的理解',
+     desc:'你在課堂上說出來的想法，後測也看得出來變化。繼續這樣讀。'},
+  B:{name:'你講了很多，下一步是把它變成自己的',
+     desc:'你貼了不少想法。試著挑一則你同意的，寫出「我為什麼也這樣想」的理由，而不只是說「我同意」。'},
+  C:{name:'你自己讀懂了，還沒說出來',
+     desc:'你的理解有進步。班上有同學正卡在你已經想通的地方，把你的想法貼出去，他們會需要。'},
+  D:{name:'這節課還在起步',
+     desc:'先挑一題你最有話想說的，用「我的想法」支架貼一則就好。一則就夠。'}
+};
+
 function viewMyGrowth(){
   const me = currentUser();
-  const dt = dualTrack();
-  const row = dt.rows.find(function(r){ return r.sid === me.id; });
-  if (!row) return '<div class="empty"><h3>這個帳號沒有學習紀錄</h3><p>請切換成班上的學生來看。</p></div>';
+  if (me.role !== 'student') return '<div class="empty"><h3>這一頁是學生看的</h3>' +
+    '<a class="btn" href="#/teacher">回教師後台</a></div>';
+
+  /* 不走 dualTrack()：那一份只涵蓋知識建構示範班（settings.kbClassId）的 24 人，
+     其餘 72 人會直接撞到空狀態。diagnose 的 roster 是四班 96 人，四個條件都有資料。 */
+  const pre  = diagnose(state, 'a-pre');
+  const post = diagnose(state, 'a-post');
+  const pp = pre  && pre.ready  ? pre.perStudent.find(function(p){ return p.sid === me.id; })  : null;
+  const qp = post && post.ready ? post.perStudent.find(function(p){ return p.sid === me.id; }) : null;
+  if (!pp && !qp) return '<div class="empty"><h3>還沒有可以看的紀錄</h3>' +
+    '<p style="max-width:60ch">你的紀錄要等前測與後測都完成之後才算得出來。</p>' +
+    '<a class="btn" href="#/student">回我的作業</a></div>';
+
   const ds = discourseStats().find(function(s){ return s.sid === me.id; }) || {};
   const myNotes = state.notes.filter(function(n){ return n.authorIds.indexOf(me.id) >= 0; });
-  const Z = DUAL_ZONE[row.zone];
+  const thetaPre  = pp ? pp.theta : null;
+  const thetaPost = qp ? qp.theta : null;
+  const delta = (thetaPre != null && thetaPost != null) ? thetaPost - thetaPre : null;
+  const q2Pre  = pp ? pp.q[2] : 0;
+  const q2Post = qp ? qp.q[2] : 0;
+
+  /* 這一班有沒有討論紀錄。沒有的話走降級版面，但卡片數與尺寸一模一樣，
+     四個條件看到的版面幾何必須相同，否則介面差異會混進依變項。 */
+  const k = classOfStudent(me.id);
+  const mates = k ? k.studentIds : [];
+  const classNotes = state.notes.filter(function(n){
+    return n.authorIds.some(function(a){ return mates.indexOf(a) >= 0; }); });
+  const hasKB = classNotes.length > 0;
+
+  let zone = 'D';
+  if (hasKB){
+    /* 切點用同班同學的中位數，不用全體 */
+    const all = discourseStats().filter(function(s){ return mates.indexOf(s.sid) >= 0; });
+    const kbis = all.map(function(s){ return s.kbi; }).sort(function(a, b){ return a - b; });
+    const kmed = kbis.length ? kbis[Math.floor(kbis.length / 2)] : 0;
+    const deltas = mates.map(function(sid){
+      const a = pre  && pre.ready  ? pre.perStudent.find(function(p){ return p.sid === sid; })  : null;
+      const b = post && post.ready ? post.perStudent.find(function(p){ return p.sid === sid; }) : null;
+      return (a && b) ? b.theta - a.theta : null;
+    }).filter(function(x){ return x != null; }).sort(function(a, b){ return a - b; });
+    const dmed = deltas.length ? deltas[Math.floor(deltas.length / 2)] : 0;
+    const dHigh = delta != null && delta >= dmed;      // 算不出來一律歸「低」
+    const kHigh = (ds.kbi || 0) >= kmed;
+    zone = dHigh ? (kHigh ? 'A' : 'C') : (kHigh ? 'B' : 'D');
+  }
+  const Z = DUAL_ZONE_STUDENT[zone];
 
   return sectionHead('我的學習軌跡', me.name) +
     '<div class="grid g4" style="margin-bottom:16px">' +
-      statCard('能力估計 θ', fx(row.thetaPost != null ? row.thetaPost : row.thetaPre), '前測 ' + fx(row.thetaPre) + ' → 後測 ' + fx(row.thetaPost)) +
-      statCard('能力變化 Δθ', (row.delta == null ? '—' : (row.delta > 0 ? '+' : '') + fx(row.delta)),
-        row.delta == null ? '等後測完成' : (row.delta > 0 ? '往上' : '持平或下降'),
-        row.delta > 0.15 ? 'good' : (row.delta < -0.15 ? 'crit' : '')) +
-      statCard('迷思題數', row.q2Pre + ' → ' + row.q2Post, '能力足以答對卻答錯的題數', row.q2Post < row.q2Pre ? 'good' : '') +
-      statCard('知識建構指數', ds.kbi || 0, '班上中位數 ' + Math.round(dt.kmed)) +
+      statCard('這次讀懂的程度', thetaPost != null ? fx(thetaPost) : (thetaPre != null ? fx(thetaPre) : '—'),
+        '課前 ' + (thetaPre == null ? '—' : fx(thetaPre)) + ' → 課後 ' + (thetaPost == null ? '—' : fx(thetaPost))) +
+      statCard('比課前進步多少', (delta == null ? '—' : (delta > 0 ? '+' : '') + fx(delta)),
+        delta == null ? '等課後那份做完' : (delta > 0 ? '往上' : '持平或下降'),
+        delta != null && delta > 0.15 ? 'good' : (delta != null && delta < -0.15 ? 'crit' : '')) +
+      statCard('本來會、卻答錯的題數', q2Pre + ' → ' + q2Post,
+        '這些是最值得回頭看的題目', q2Post < q2Pre ? 'good' : '') +
+      (hasKB
+        ? statCard('討論參與度', ds.kbi || 0, '把想法貼出來、也接住別人的想法')
+        : statCard('討論參與度', '—', '你們班的知識建構空間還沒有討論紀錄')) +
     '</div>' +
     '<div class="grid g2">' +
       '<div class="card"><div class="card-p">' +
-        '<div class="pill ' + Z.cls + '"><span class="dot"></span>' + Z.name + '</div>' +
-        '<p class="small" style="margin-top:10px">' + esc(Z.desc) + '</p>' +
+        (hasKB
+          ? '<div class="pill"><span aria-hidden="true">◆</span>' + esc(Z.name) + '</div>' +
+            '<p class="small" style="margin-top:10px">' + esc(Z.desc) + '</p>'
+          : '<div class="pill"><span aria-hidden="true">◆</span>這節課還在起步</div>' +
+            '<p class="small" style="margin-top:10px">你們班的知識建構空間還沒有討論紀錄。' +
+            '等大家開始貼想法之後，這裡會告訴你你的想法被接住了幾次。</p>') +
         '<hr class="hr">' +
-        '<h4>你的論述輪廓</h4>' +
+        '<h4>你在討論裡做了什麼</h4>' +
         '<div class="col" style="margin-top:8px">' +
-        [['貼文', ds.notes || 0], ['延伸別人的想法', ds.buildMade || 0], ['被別人延伸', ds.buildGot || 0],
-         ['讀過別人的貼文', ds.reads || 0], ['用過的支架種類', (ds.scaffoldKinds || 0) + ' / 6'],
-         ['用到的專門用語', ds.termCount || 0], ['平均論述層次', fx(ds.epi, 1) + ' / 4']].map(function(p){
+        [['貼出想法', ds.notes || 0], ['接住別人的想法', ds.buildMade || 0],
+         ['你的想法被接住', ds.buildGot || 0], ['讀過別人的貼文', ds.reads || 0],
+         ['用過幾種開頭句', (ds.scaffoldKinds || 0) + ' / 6'],
+         ['用到的關鍵詞', ds.termCount || 0],
+         ['說理的深度', fx(ds.epi, 1) + ' / 4']].map(function(p){
           return '<div class="row" style="justify-content:space-between;border-bottom:1px solid var(--rule-soft);padding-bottom:5px">' +
             '<span class="small">' + p[0] + '</span><span class="num">' + p[1] + '</span></div>';
         }).join('') + '</div>' +
@@ -5487,8 +5581,11 @@ function viewStudent(){
         ((state.settings && state.settings.maxTurns) || MAX_TURNS) + ' 次話。</p></div>'
       : '<div class="card card-p" style="margin-bottom:16px">' +
         '<div class="eyebrow">這節課的進行方式</div>' +
-        '<p class="small" style="margin-top:6px">你這一班沒有 AI 夥伴。畫面右邊是「我的筆記」，' +
-        '把你想到的、卡住的地方寫下來就好。</p></div>') +
+        /* 不要用否定句定義對照組（「你這一班沒有…」等於告訴孩子他拿到的是缺角版本），
+           也不要提到別班。正面描述他真正要做的事就好。 */
+        '<p class="small" style="margin-top:6px">這節課你自己讀、自己想。' +
+        '畫面右邊是「我的筆記」，把你想到的、卡住的地方寫下來。</p>' +
+        '<p class="muted small">筆記只有你和老師看得到，不會拿來打分數。</p></div>') +
     (needPre ? '<div class="card card-p" style="margin-bottom:16px;border-left:3px solid var(--warn)">' +
       '<div class="row" style="justify-content:space-between"><span class="small">還沒填課前問卷。</span>' +
       '<a class="btn sm primary" href="#/survey/pre">去填課前問卷</a></div></div>' : '') +
@@ -5739,6 +5836,7 @@ function redraw(id){
 let BANKF = {process:'', type:'', unit:''};
 
 function viewBank(){
+  if (!isTeacher()) return studentBlocked();
   const list = ITEMS.filter(function(i){
     return (!BANKF.process || i.process === BANKF.process) &&
            (!BANKF.type || i.type === BANKF.type) &&
@@ -5892,7 +5990,34 @@ function viewSettings(){
 }
 
 /* --- 系統說明與研究設計 --- */
+/* 學生版的「系統說明」。
+   研究設計書（四個條件、七個研究問題、量哪些構念）不能端到受試者面前——
+   知道自己被分到哪一組、知道問卷在量什麼，會直接污染所有自陳依變項。
+   這一版四個條件看到的字**完全相同**，不依 conditionOfStudent 分歧。 */
+function viewAboutStudent(){
+  return sectionHead('這個網站是什麼', '三件你會想先知道的事。') +
+  '<div class="col" style="max-width:70ch">' +
+    '<div class="card card-p">' +
+      '<h3>這個網站要你做什麼</h3>' +
+      '<p class="lead" style="margin-top:8px">讀一篇文章，回答關於它的問題，' +
+      '然後把你是怎麼讀出來的說出來。答錯沒關係，我們想看的是你怎麼想。</p>' +
+    '</div>' +
+    '<div class="card card-p">' +
+      '<h3>你旁邊的夥伴</h3>' +
+      '<p class="lead" style="margin-top:8px">它不會告訴你答案，也不會說你對或錯。' +
+      '它只會一直問你「你是從哪裡看出來的」。</p>' +
+    '</div>' +
+    '<div class="card card-p">' +
+      '<h3>你寫的東西會怎麼被用</h3>' +
+      '<p class="lead" style="margin-top:8px">你在這裡寫的字、標記的句子、跟夥伴說的話，' +
+      '老師之後看得到，這是為了知道你怎麼讀，不會拿來打分數。' +
+      '研究整理的時候會把名字拿掉。你隨時可以跟老師說你不想繼續。</p>' +
+    '</div>' +
+  '</div>';
+}
+
 function viewAbout(){
+  if (!isTeacher()) return viewAboutStudent();
   const P = [
     ['真實想法、真實問題', '前測的迷思題不是「錯題訂正」，而是全班真正卡住的問題，直接成為視圖的起點。'],
     ['可改進的想法', '貼文可以被延伸、挑戰、改寫；系統記錄每一次修改與論述層次的變化。'],
@@ -6105,6 +6230,30 @@ function viewAbout(){
 
 let AAL = null;
 
+/* 作答草稿。刻意用獨立的 localStorage key，不擠進 50-kb.js 的 save()——
+   那一支會靜默吞掉配額錯誤，而學生的 16 題作答不能靜默遺失。 */
+const AAL_DRAFT_KEY = 'kairos-draft';
+
+function aalDraftId(){ return AAL.aid + '|' + AAL.me; }
+
+function aalSave(){
+  if (!AAL) return;
+  try {
+    const all = JSON.parse(localStorage.getItem(AAL_DRAFT_KEY) || '{}');
+    all[aalDraftId()] = {idx:AAL.idx, answers:AAL.answers, texts:AAL.texts, notes:AAL.notes,
+                         marks:AAL.marks, checks:AAL.checks, savedAt:Date.now()};
+    localStorage.setItem(AAL_DRAFT_KEY, JSON.stringify(all));
+  } catch (e) { toast('這一題沒能存起來，先不要關掉分頁。'); }
+}
+
+function aalDropDraft(){
+  try {
+    const all = JSON.parse(localStorage.getItem(AAL_DRAFT_KEY) || '{}');
+    delete all[aalDraftId()];
+    localStorage.setItem(AAL_DRAFT_KEY, JSON.stringify(all));
+  } catch (e) {}
+}
+
 function aalInit(aid){
   const a = getAssignment(aid);
   const me = currentUser();
@@ -6116,6 +6265,22 @@ function aalInit(aid){
     answers: {}, texts: {}, notes: {}, marks: {}, checks: {}, turns: {},
     tele: {}, drafts: {}, t0: Date.now()
   };
+  /* 還原草稿。t0 一定重設為現在，並補寫一筆 RESUME，
+     讓分析端知道這一場的 rel 時間軸跨了兩次入座、可以排除或另計。 */
+  try {
+    const all = JSON.parse(localStorage.getItem(AAL_DRAFT_KEY) || '{}');
+    const d = all[aalDraftId()];
+    if (d){
+      AAL.idx = Math.min(d.idx || 0, AAL.items.length - 1);
+      AAL.answers = d.answers || {};
+      AAL.texts   = d.texts   || {};
+      AAL.notes   = d.notes   || {};
+      AAL.marks   = d.marks   || {};
+      AAL.checks  = d.checks  || {};
+      AAL.t0 = Date.now();
+      aalLog('RESUME', 'R', {resumed:true, savedAt:d.savedAt || null});
+    }
+  } catch (e) { /* 草稿壞掉就當作沒有，從頭開始 */ }
 }
 
 function aalItem(){ return AAL.items[AAL.idx]; }
@@ -6163,7 +6328,10 @@ function viewAaL(aid){
       '<div><h2>' + esc(a.title) + '</h2>' +
       '<div class="muted small">' + esc(me.name) + '　·　' + esc((classOfStudent(me.id) || {}).name || '') +
       '　·　夥伴條件：<b>' + esc(cond.name) + '</b></div></div>' +
-      '<div class="row"><span class="pill">第 ' + (AAL.idx + 1) + ' / ' + AAL.items.length + ' 題</span>' +
+      '<div class="row">' +
+      '<a class="btn sm" href="#/student">← 先離開（進度會保留）</a>' +
+      '<span class="pill">第 ' + (AAL.idx + 1) + ' / ' + AAL.items.length + ' 題</span>' +
+      '<span class="pill">' + esc(text.title) + '</span>' +
       '<button class="btn sm" data-act="aal-prev"' + (AAL.idx ? '' : ' disabled') + '>← 上一題</button>' +
       '<button class="btn sm" data-act="aal-next"' + (AAL.idx < AAL.items.length - 1 ? '' : ' disabled') + '>下一題 →</button>' +
       '<button class="btn primary sm" data-act="aal-submit">交卷</button></div>' +
@@ -6171,12 +6339,17 @@ function viewAaL(aid){
 
     '<div class="aal">' +
     /* ---- 左欄：文本，逐句可標記 ---- */
-    '<div class="aal-text card"><div class="card-h"><h3 id="passageTitle">' + esc(text.title) + '</h3>' +
+    /* 一篇文章有 30–40 句，每一句都是可聚焦的按鈕。沒有這顆跳躍鈕，
+       鍵盤使用者要按幾十次 Tab 才走得到作答區（WCAG 2.4.1）。 */
+    '<div class="aal-text card">' +
+      '<button class="skip" data-act="skip-passage" type="button">跳過文章，直接作答</button>' +
+      '<div class="card-h"><h3 id="passageTitle" tabindex="-1">' + esc(text.title) + '</h3>' +
       '<span class="pill">' + esc(text.genre) + '</span>' +
-      (marks.length ? '<span class="pill">已標記 ' + marks.length + ' 句</span>' : '') + '</div>' +
+      '<span class="pill" id="markCount"' + (marks.length ? '' : ' hidden') + '>已標記 ' +
+      '<span id="markCountN">' + marks.length + '</span> 句</span></div>' +
       '<div class="card-p">' +
-      '<p class="muted small" id="passageHelp">點一下任何一句，把它標記起來。標記只有你看得到，不會影響分數，' +
-      '換題也不會消失。</p>' +
+      '<p class="muted small" id="passageHelp">點一下任何一句，把它標記起來。標記不會影響分數，' +
+      '換題也不會消失；每一篇文章的標記分開記。</p>' +
       '<div class="passage" role="group" aria-labelledby="passageTitle" aria-describedby="passageHelp">' +
         text.paras.map(function(_, pi){
           return '<p class="para">' + sents.filter(function(s){ return s.para === pi; }).map(function(s){
@@ -6191,7 +6364,7 @@ function viewAaL(aid){
 
     /* ---- 右欄：題目與作答 ＋ 對話／筆記 ---- */
     '<div class="aal-side">' +
-      '<div class="card"><div class="card-h"><h3>第 ' + (AAL.idx + 1) + ' 題</h3>' + procPill(it.process) + '</div>' +
+      '<div class="card" id="aalAnswer" tabindex="-1"><div class="card-h"><h3>第 ' + (AAL.idx + 1) + ' 題</h3>' + procPill(it.process) + '</div>' +
       '<div class="card-p">' +
       '<div class="stem">' + esc(it.stem) + '</div>' +
       (it.type === 'mc'
@@ -6216,6 +6389,7 @@ function viewAaL(aid){
           return '<label class="opt" style="align-items:center"><input type="checkbox" data-act="aal-check" data-i="' + i + '"' +
             (on ? ' checked' : '') + '><span>' + esc(c) + '</span></label>';
         }).join('') +
+        '<button class="skip" data-act="back-to-passage" type="button">回到文章</button>' +
       '</div></div>' +
     '</div></div>';
 }
@@ -6239,17 +6413,22 @@ function aalDialogPane(it, cond, turns, used, maxT){
       '"' + (left > 0 ? '' : ' disabled') + ' style="flex:1">' +
       '<button class="btn primary sm" data-act="aal-say"' + (left > 0 ? '' : ' disabled') + '>送出</button>' +
     '</div>' +
-    '<p class="muted small" style="margin-top:8px">夥伴不會告訴你答案，也不會說你對或錯——它只會一直問你怎麼想的。</p>' +
+    '<p class="muted small" style="margin-top:8px">陪你的這位夥伴是電腦程式，不是真的人。' +
+    '它不會告訴你答案，也不會說你對或錯——只會一直問你怎麼想的。' +
+    '你寫的字老師之後看得到，不會拿來打分數。</p>' +
     '</div></div>';
 }
 
 function aalNotePane(it){
   return '<div class="card aal-chat"><div class="card-h"><h3>我的筆記</h3>' +
-    '<span class="muted small">只有你看得到</span></div><div class="card-p">' +
+    '<span class="muted small">寫給自己看的</span></div><div class="card-p">' +
     '<textarea data-act="aal-note" style="min-height:210px" placeholder="把你想到的、卡住的地方寫下來">' +
     esc(AAL.notes[it.id] || '') + '</textarea>' +
-    '<p class="muted small" style="margin-top:8px">這一節沒有 AI 夥伴。版面與其他班完全一樣，' +
-    '只是把對話區換成同樣大小的筆記區。</p>' +
+    /* 與對話卡的說明對稱：同樣三句、同樣的隱私描述，不提別班、不用否定句。
+       「只有你看得到」是不實的——老師在唯讀重播裡看得到筆記。 */
+    '<p class="muted small" style="margin-top:8px">這節課你自己讀、自己想。' +
+    '想到什麼、卡在哪裡，都可以寫下來。' +
+    '你寫的字老師之後看得到，不會拿來打分數。</p>' +
     '</div></div>';
 }
 
@@ -6267,13 +6446,24 @@ function passageSentences(text){
 }
 
 /* --- 互動處理 --- */
+/* 標記與作答都是「每分鐘按十幾次」的微互動。
+   這裡刻意不呼叫 render()：整頁重繪會把捲動位置與鍵盤焦點都丟掉，
+   學生讀到第 9 段標一句話就被彈回文章開頭。只改真正變動的那幾個節點。 */
 function aalMark(i){
   const it = aalItem();
   const m = AAL.marks[it.unit] = AAL.marks[it.unit] || [];
   const k = m.indexOf(i);
+  const on = k < 0;
   if (k >= 0) m.splice(k, 1); else m.push(i);
-  aalLog('MARK', 'M', {sent:i, textId:it.unit, on: k < 0});
-  render();
+  aalLog('MARK', 'M', {sent:i, textId:it.unit, on: on});
+  aalSave();
+
+  const btn = document.querySelector('.passage .sent[data-i="' + i + '"]');
+  if (btn){ btn.classList.toggle('on', on); btn.setAttribute('aria-pressed', String(on)); }
+  const pill = document.getElementById('markCount');
+  const n = document.getElementById('markCountN');
+  if (n) n.textContent = m.length;
+  if (pill){ if (m.length) pill.removeAttribute('hidden'); else pill.setAttribute('hidden', ''); }
 }
 
 function aalPick(k){
@@ -6283,7 +6473,12 @@ function aalPick(k){
   if (first) AAL.drafts[it.id] = {first: k, final: k};
   else AAL.drafts[it.id].final = k;
   aalLog('OPTION', 'O', {choice:k, changed: !first});
-  render();
+  aalSave();
+
+  const fs = document.querySelector('.aal-side fieldset.opts');
+  if (fs) Array.prototype.forEach.call(fs.querySelectorAll('label.opt'), function(lb, idx){
+    lb.classList.toggle('chosen', idx === k);
+  });
 }
 
 function aalTypeTelemetry(iid, value){
@@ -6384,7 +6579,7 @@ function aalSubmit(){
   state.submissions = state.submissions.filter(function(s){ return !(s.aid === AAL.aid && s.sid === me.id); });
   state.submissions.push({aid:AAL.aid, sid:me.id, at:Date.now()});
   save();
-  const aid = AAL.aid;
+  aalDropDraft();          // 交出去了，草稿不用留
   AAL = null;
   toast('已交卷。接下來是這節課的問卷。');
   go('#/survey/post');
@@ -6395,19 +6590,53 @@ function aalSubmit(){
    ========================================================================== */
 let SURVEY = null;
 
+/* 這一份問卷實際要作答的所有題鍵。抬頭的題數與送出前的檢查都吃這一個來源，
+   否則會出現「抬頭說 47 題、送出只檢查 41 題」，操弄檢核與使用感受整段留白也送得出去。
+   cond 參數不可省：對照組不施操弄檢核，否則會被要求填不存在的三題而永遠送不出去。 */
+function surveyKeys(phase, cond){
+  const ks = [];
+  constructsFor(phase).forEach(function(c){
+    c.items.forEach(function(_, i){ ks.push(c.id + '_' + i); });
+  });
+  if (phase === 'post'){
+    if (cond !== 'control') MANIP_CHECK.forEach(function(_, i){ ks.push('mc_x_' + i); });
+    SUS_ITEMS.forEach(function(_, i){ ks.push('sys_x_' + i); });
+  }
+  return ks;
+}
+
+/* 課後問卷的門檻。操弄檢核問的是「剛剛那位夥伴像什麼」——
+   還沒上課就填，答案沒有意義，而它是驗證實驗操弄成功與否的關鍵工具。
+   前測不設門檻（它本來就該在課前填）。 */
+function surveyGate(phase){
+  const me = currentUser();
+  if (phase === 'pre') return '';
+  if (me.role !== 'student') return '';
+  if (submitted('a-post', me.id)) return '';
+  const a = getAssignment('a-post');
+  if (!a) return '';
+  return '<div class="empty"><h3>課後問卷要等這節課上完</h3>' +
+    '<p style="max-width:62ch">這份問卷問的是你剛剛上這節課的感覺。' +
+    '還沒上完就填，你會不知道要怎麼回答。先把下面這份做完，做完就會自動帶你來這裡。</p>' +
+    '<div class="col" style="margin-top:14px;align-items:flex-start">' +
+    '<a class="btn primary" href="#/aal/' + a.id + '">' + esc(a.title) + '　開始這份作業 →</a>' +
+    '<a class="btn" href="#/student">回我的作業</a></div></div>';
+}
+
 function viewSurvey(phase){
   const me = currentUser();
   if (me.role !== 'student') return '<div class="empty"><h3>請切換成學生身分</h3>' +
     '<p>問卷是學生端的畫面。</p></div>';
+  const gate = surveyGate(phase); if (gate) return gate;
   const done = surveyOf(me.id, phase);
   if (!SURVEY || SURVEY.phase !== phase || SURVEY.sid !== me.id){
     SURVEY = {phase:phase, sid:me.id, resp: done ? Object.assign({}, done.resp) : {}};
   }
   const cs = constructsFor(phase);
   const cond = conditionOfStudent(me.id);
-  const total = cs.reduce(function(a, c){ return a + c.items.length; }, 0) +
-    (phase === 'post' ? (cond === 'control' ? 0 : MANIP_CHECK.length) + SUS_ITEMS.length : 0);
-  const answered = Object.keys(SURVEY.resp).filter(function(k){ return SURVEY.resp[k]; }).length;
+  const keys = surveyKeys(phase, cond);
+  const total = keys.length;
+  const answered = keys.filter(function(k){ return SURVEY.resp[k]; }).length;
 
   function block(title, items, scale, prefix, cls){
     return '<div class="card" style="margin-bottom:14px"><div class="card-h">' +
@@ -6427,8 +6656,12 @@ function viewSurvey(phase){
       }).join('') + '</div></div>';
   }
 
+  /* 進度數字要能就地更新，所以不能走 sectionHead 的 sub（那一段會被 esc() 轉義），
+     改放在右側動作列裡，用 role="status" 讓報讀器也聽得到進度變化。 */
   return sectionHead(phase === 'pre' ? '課前問卷' : '課後問卷',
-      '沒有標準答案，照你真正的感覺選就好。共 ' + total + ' 題，已完成 ' + answered + ' 題。',
+      '沒有標準答案，照你真正的感覺選就好。',
+      '<span class="pill" role="status" aria-live="polite">已完成 <span id="svDone">' + answered +
+      '</span> / 共 ' + total + ' 題</span>' +
       '<button class="btn primary" data-act="sv-submit" data-id="' + phase + '">送出問卷</button>') +
     '<div class="card card-p" style="margin-bottom:14px;border-left:3px solid var(--warn)">' +
     '<p class="small" style="margin:0">本平台內建的題項是<strong>依構念自撰的示範題</strong>，' +
@@ -6444,16 +6677,34 @@ function viewSurvey(phase){
 
 function surveySubmit(phase){
   const me = currentUser();
-  const cs = constructsFor(phase);
-  const need = cs.reduce(function(a, c){ return a + c.items.length; }, 0);
-  const got = cs.reduce(function(a, c){
-    return a + c.items.filter(function(_, i){ return SURVEY.resp[c.id + '_' + i]; }).length; }, 0);
-  if (got < need && !confirm('還有 ' + (need - got) + ' 題沒作答，確定要送出嗎？')) return;
+  const cond = conditionOfStudent(me.id);
+  if (surveyGate(phase)){ toast('這節課還沒上完，問卷等一下再填。'); return; }
 
-  // 操弄檢核與使用感受用固定鍵存回原本的 id
+  const keys = surveyKeys(phase, cond);
+  const miss = keys.filter(function(k){ return !SURVEY.resp[k]; });
+  if (miss.length){
+    /* 先把人帶到第一題沒答的地方，再問——不然他不知道漏在哪 */
+    const el = document.querySelector('[data-k="' + miss[0] + '"]');
+    if (el){
+      const row = el.closest('.likert');
+      if (row) row.classList.add('missing');
+      el.scrollIntoView({block:'center'});
+      el.focus();
+    }
+    if (!confirm('還有 ' + miss.length + ' 題沒作答（「角色知覺」和「系統使用感受」那兩段也要看一下）。\n\n' +
+                 '按「確定」直接送出，按「取消」回去把它填完。')) return;
+  }
+
+  // 操弄檢核與使用感受用固定鍵存回原本的 id。
+  // 未答一律寫成 null，讓分析端能用「鍵存在但值為 null」區分漏答與未施測；
+  // 對照組不建 mc_* 鍵，因為那三題本來就不對他施測。
   const resp = Object.assign({}, SURVEY.resp);
-  MANIP_CHECK.forEach(function(m, i){ if (resp['mc_x_' + i]) resp[m.id] = resp['mc_x_' + i]; });
-  SUS_ITEMS.forEach(function(s, i){ if (resp['sys_x_' + i]) resp[s.id] = resp['sys_x_' + i]; });
+  if (phase === 'post' && cond !== 'control'){
+    MANIP_CHECK.forEach(function(m, i){ resp[m.id] = SURVEY.resp['mc_x_' + i] || null; });
+  }
+  if (phase === 'post'){
+    SUS_ITEMS.forEach(function(s, i){ resp[s.id] = SURVEY.resp['sys_x_' + i] || null; });
+  }
 
   state.surveys = (state.surveys || []).filter(function(s){
     return !(s.sid === me.id && s.phase === phase); });
@@ -7254,6 +7505,14 @@ function rExport(){
 const DISCOURSE_ROUTES = {kb:1, note:1, synth:1};
 const PLAIN_ROUTES = {about:1, settings:1, bank:1, survey:1};
 const RESEARCHER_ONLY = {research:1, create:1, settings:1};
+/* 教師端專屬。這些頁面會印出正解、誘答標記與全班診斷；
+   學生走進去等於在前後測之間拿到答案，Δθ 就沒有意義了。 */
+const TEACHER_ONLY = {assign:1, dash:1, inspect:1, bank:1};
+
+/* 上一次繪製的是哪一條路由。用來判斷這次 render() 是「換頁」還是「原地重繪」：
+   換頁才捲回頁首並把焦點交給主舞台；原地重繪要把捲動位置與焦點放回去，
+   否則學生每標一句話、每點一顆量尺都會被彈回頁首、焦點掉回 body。 */
+let LAST_ROUTE_KEY = null;
 
 function render(){
   ROUTE = parseRoute();
@@ -7270,6 +7529,14 @@ function render(){
       '<p style="max-width:60ch">條件分派、建立派題與系統設定屬於研究端的操作。' +
       '教學上需要的資料在「教師後台」「派題分析」「知識建構中心」與「雙軌評量儀表板」。</p>' +
       '<a class="btn" href="#/teacher">回教師後台</a></div>';
+    renderRail();
+    return;
+  }
+  if (TEACHER_ONLY[ROUTE.name] && !isTeacher()){
+    stage.className = 'stage';
+    $('#view').innerHTML = '<div class="empty"><h3>這一頁是老師看的</h3>' +
+      '<p style="max-width:60ch">你的作業、討論與學習軌跡都在左邊的選單裡。</p>' +
+      '<a class="btn" href="#/student">回我的作業</a></div>';
     renderRail();
     return;
   }
@@ -7294,6 +7561,21 @@ function render(){
     case 'mygrowth':  html = viewMyGrowth(); break;
     default:          html = '<div class="empty"><h3>找不到這一頁</h3><a class="btn" href="#/teacher">回首頁</a></div>';
   }
+  /* 重繪之前先記下位置與焦點。焦點用 data-* 屬性組出選擇器再找回來——
+     aal-mark 的 data-i、sv-pick 的 data-k+data-v、aal-check 的 data-i
+     在同一頁內都唯一。 */
+  const key = ROUTE.name + '/' + a.join('/');
+  const samePage = (key === LAST_ROUTE_KEY);
+  const prevY = window.scrollY;
+  const ae = document.activeElement;
+  let fk = null;
+  if (samePage && ae && ae !== document.body && v.contains(ae) && ae.dataset && ae.dataset.act){
+    fk = '[data-act="' + ae.dataset.act + '"]' +
+      (ae.dataset.i !== undefined ? '[data-i="' + ae.dataset.i + '"]' : '') +
+      (ae.dataset.k !== undefined ? '[data-k="' + ae.dataset.k + '"]' : '') +
+      (ae.dataset.v !== undefined ? '[data-v="' + ae.dataset.v + '"]' : '');
+  }
+
   v.innerHTML = html;
   renderRail();
   if (ROUTE.name === 'quiz' || ROUTE.name === 'aal') initPads();
@@ -7304,7 +7586,15 @@ function render(){
     const s = document.getElementById('aalSay');
     if (s && render._focusSay){ s.focus(); render._focusSay = false; }
   }
-  try { window.scrollTo(0, 0); } catch (e) {}
+
+  if (!samePage){
+    try { window.scrollTo(0, 0); } catch (e) {}
+    if (stage) stage.focus({preventScroll: true});
+  } else {
+    if (fk){ const back = v.querySelector(fk); if (back) back.focus({preventScroll: true}); }
+    try { window.scrollTo(0, prevY); } catch (e) {}
+  }
+  LAST_ROUTE_KEY = key;
 }
 
 /* --- 畫布拖曳 --- */
@@ -7490,6 +7780,18 @@ async function saveFile(filename, text, mime){
 
 /* --- 事件 --- */
 function bindEvents(){
+  /* 作答到一半誤觸關閉／重整時攔一下。草稿已經落地，但還是要讓學生知道。 */
+  window.addEventListener('beforeunload', function(e){
+    if (AAL && Object.keys(AAL.answers).length){ e.preventDefault(); e.returnValue = ''; }
+  });
+
+  /* 略過導覽：不動 hash，直接把焦點送進主舞台（#stage 有 tabindex="-1"）。 */
+  const sk = document.getElementById('skipLink');
+  if (sk) sk.addEventListener('click', function(){
+    const s = document.getElementById('stage');
+    if (s){ s.focus(); s.scrollIntoView({block:'start'}); }
+  });
+
   document.addEventListener('click', function(e){
     const t = e.target.closest('[data-act]');
     if (!t) return;
@@ -7585,8 +7887,30 @@ function bindEvents(){
     if (act === 'aal-mark'){ aalMark(+t.dataset.i); return; }
     if (act === 'aal-pick'){ aalPick(+t.dataset.k); return; }
     if (act === 'aal-say'){ render._focusSay = true; aalSay(); return; }
-    if (act === 'aal-prev'){ AAL.idx = Math.max(0, AAL.idx - 1); render(); return; }
-    if (act === 'aal-next'){ AAL.idx = Math.min(AAL.items.length - 1, AAL.idx + 1); render(); return; }
+    /* 換題可能同時換掉左欄的文章（T1 十題、T2 六題）。
+       文章無聲換掉會讓學生以為自己的標記不見了，所以要說一聲並把焦點帶過去。 */
+    if (act === 'aal-prev' || act === 'aal-next'){
+      const oldUnit = aalItem().unit;
+      AAL.idx = act === 'aal-prev' ? Math.max(0, AAL.idx - 1)
+                                   : Math.min(AAL.items.length - 1, AAL.idx + 1);
+      aalSave();
+      render();
+      const nu = aalItem().unit;
+      if (nu !== oldUnit){
+        toast('第 ' + (AAL.idx + 1) + ' 題換了一篇文章：〈' + getText(nu).title + '〉，左邊已經換過來了。');
+        const h = document.getElementById('passageTitle');
+        if (h) h.focus();
+      }
+      return; }
+
+    if (act === 'skip-passage'){
+      const el = document.getElementById('aalAnswer');
+      if (el){ el.focus(); el.scrollIntoView({block:'start'}); }
+      return; }
+    if (act === 'back-to-passage'){
+      const h = document.getElementById('passageTitle');
+      if (h){ h.focus(); h.scrollIntoView({block:'start'}); }
+      return; }
 
     /* 教師／研究者的唯讀檢視：換題不寫任何日誌 */
     if (act === 'inspect-prev'){ INSPECT.idx = Math.max(0, INSPECT.idx - 1); render(); return; }
@@ -7596,11 +7920,30 @@ function bindEvents(){
       const it = aalItem();
       const arr = AAL.checks[it.id] = AAL.checks[it.id] || [];
       const i = +t.dataset.i, k = arr.indexOf(i);
-      if (k >= 0) arr.splice(k, 1); else { arr.push(i); aalLog('CHECK', 'C', {idx:i}); }
-      render(); return; }
+      /* 取消勾選也要寫日誌：教師端的唯讀重播是用 CHECK 事件還原的，
+         只記「勾」不記「取消」會讓老師看到學生勾了他其實已取消的項目，
+         而且「勾了 N / 5」會超過 5。重播端取同一 idx 的最後一筆。 */
+      if (k >= 0){ arr.splice(k, 1); aalLog('CHECK', 'C', {idx:i, off:true}); }
+      else { arr.push(i); aalLog('CHECK', 'C', {idx:i, off:false}); }
+      aalSave();
+      return; }   // 原生 checkbox，畫面不需要重繪
 
     /* 問卷 */
-    if (act === 'sv-pick'){ SURVEY.resp[t.dataset.k] = +t.dataset.v; render(); return; }
+    if (act === 'sv-pick'){
+      SURVEY.resp[t.dataset.k] = +t.dataset.v;
+      /* 只更新這一列的量尺與抬頭的計數，不重繪整份 47 題 */
+      const scale = t.parentElement;
+      if (scale) Array.prototype.forEach.call(scale.querySelectorAll('.lk'), function(b){
+        const on = b.dataset.v === t.dataset.v;
+        b.classList.toggle('on', on);
+        b.setAttribute('aria-pressed', String(on));
+      });
+      const row = t.closest('.likert');
+      if (row) row.classList.remove('missing');
+      const d = document.getElementById('svDone');
+      if (d) d.textContent = surveyKeys(SURVEY.phase, conditionOfStudent(currentUser().id))
+        .filter(function(k2){ return SURVEY.resp[k2]; }).length;
+      return; }
     if (act === 'sv-submit'){ surveySubmit(id); return; }
 
     /* 設定與匯出 */
@@ -7699,6 +8042,7 @@ function bindEvents(){
       if (AAL.drafts[it.id]) AAL.drafts[it.id].final = t.value;
       if (!aalTypeTelemetry._last || Date.now() - aalTypeTelemetry._last > 4000){
         aalTypeTelemetry._last = Date.now(); aalLog('TYPE', 'W', {len:t.value.length});
+        aalSave();
       }
       return; }
     if (act === 'aal-note'){
@@ -7707,6 +8051,7 @@ function bindEvents(){
       if (!aalTypeTelemetry._lastN || Date.now() - aalTypeTelemetry._lastN > 4000){
         aalTypeTelemetry._lastN = Date.now();
         aalLog('NOTE', 'N', {text:t.value.slice(-80)});
+        aalSave();
       }
       return; }
     if (act === 'aalSay'){ return; }

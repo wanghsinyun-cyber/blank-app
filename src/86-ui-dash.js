@@ -7,6 +7,7 @@
 let DTAB = 'dual';
 
 function viewDash(){
+  if (!isTeacher()) return studentBlocked();
   const tabs = [['dual','雙軌總覽'],['students','學生個別'],['sna','建構網絡'],['discourse','論述指標'],['report','社群報告']];
   let body = '';
   if (DTAB === 'dual') body = dashDual();
@@ -164,34 +165,98 @@ function dashReport(){
 }
 
 /* --- 學生端的個人軌跡 --- */
+/* 學生版的分區文案。不可以讀 DUAL_ZONE——那一份是寫給老師的處置建議
+   （「需要介入」「優先安排小組角色」），對著十歲孩子講會變成貼標籤。
+   同一份資料，換一套對他說話的說法。 */
+const DUAL_ZONE_STUDENT = {
+  A:{name:'你把討論變成了自己的理解',
+     desc:'你在課堂上說出來的想法，後測也看得出來變化。繼續這樣讀。'},
+  B:{name:'你講了很多，下一步是把它變成自己的',
+     desc:'你貼了不少想法。試著挑一則你同意的，寫出「我為什麼也這樣想」的理由，而不只是說「我同意」。'},
+  C:{name:'你自己讀懂了，還沒說出來',
+     desc:'你的理解有進步。班上有同學正卡在你已經想通的地方，把你的想法貼出去，他們會需要。'},
+  D:{name:'這節課還在起步',
+     desc:'先挑一題你最有話想說的，用「我的想法」支架貼一則就好。一則就夠。'}
+};
+
 function viewMyGrowth(){
   const me = currentUser();
-  const dt = dualTrack();
-  const row = dt.rows.find(function(r){ return r.sid === me.id; });
-  if (!row) return '<div class="empty"><h3>這個帳號沒有學習紀錄</h3><p>請切換成班上的學生來看。</p></div>';
+  if (me.role !== 'student') return '<div class="empty"><h3>這一頁是學生看的</h3>' +
+    '<a class="btn" href="#/teacher">回教師後台</a></div>';
+
+  /* 不走 dualTrack()：那一份只涵蓋知識建構示範班（settings.kbClassId）的 24 人，
+     其餘 72 人會直接撞到空狀態。diagnose 的 roster 是四班 96 人，四個條件都有資料。 */
+  const pre  = diagnose(state, 'a-pre');
+  const post = diagnose(state, 'a-post');
+  const pp = pre  && pre.ready  ? pre.perStudent.find(function(p){ return p.sid === me.id; })  : null;
+  const qp = post && post.ready ? post.perStudent.find(function(p){ return p.sid === me.id; }) : null;
+  if (!pp && !qp) return '<div class="empty"><h3>還沒有可以看的紀錄</h3>' +
+    '<p style="max-width:60ch">你的紀錄要等前測與後測都完成之後才算得出來。</p>' +
+    '<a class="btn" href="#/student">回我的作業</a></div>';
+
   const ds = discourseStats().find(function(s){ return s.sid === me.id; }) || {};
   const myNotes = state.notes.filter(function(n){ return n.authorIds.indexOf(me.id) >= 0; });
-  const Z = DUAL_ZONE[row.zone];
+  const thetaPre  = pp ? pp.theta : null;
+  const thetaPost = qp ? qp.theta : null;
+  const delta = (thetaPre != null && thetaPost != null) ? thetaPost - thetaPre : null;
+  const q2Pre  = pp ? pp.q[2] : 0;
+  const q2Post = qp ? qp.q[2] : 0;
+
+  /* 這一班有沒有討論紀錄。沒有的話走降級版面，但卡片數與尺寸一模一樣，
+     四個條件看到的版面幾何必須相同，否則介面差異會混進依變項。 */
+  const k = classOfStudent(me.id);
+  const mates = k ? k.studentIds : [];
+  const classNotes = state.notes.filter(function(n){
+    return n.authorIds.some(function(a){ return mates.indexOf(a) >= 0; }); });
+  const hasKB = classNotes.length > 0;
+
+  let zone = 'D';
+  if (hasKB){
+    /* 切點用同班同學的中位數，不用全體 */
+    const all = discourseStats().filter(function(s){ return mates.indexOf(s.sid) >= 0; });
+    const kbis = all.map(function(s){ return s.kbi; }).sort(function(a, b){ return a - b; });
+    const kmed = kbis.length ? kbis[Math.floor(kbis.length / 2)] : 0;
+    const deltas = mates.map(function(sid){
+      const a = pre  && pre.ready  ? pre.perStudent.find(function(p){ return p.sid === sid; })  : null;
+      const b = post && post.ready ? post.perStudent.find(function(p){ return p.sid === sid; }) : null;
+      return (a && b) ? b.theta - a.theta : null;
+    }).filter(function(x){ return x != null; }).sort(function(a, b){ return a - b; });
+    const dmed = deltas.length ? deltas[Math.floor(deltas.length / 2)] : 0;
+    const dHigh = delta != null && delta >= dmed;      // 算不出來一律歸「低」
+    const kHigh = (ds.kbi || 0) >= kmed;
+    zone = dHigh ? (kHigh ? 'A' : 'C') : (kHigh ? 'B' : 'D');
+  }
+  const Z = DUAL_ZONE_STUDENT[zone];
 
   return sectionHead('我的學習軌跡', me.name) +
     '<div class="grid g4" style="margin-bottom:16px">' +
-      statCard('能力估計 θ', fx(row.thetaPost != null ? row.thetaPost : row.thetaPre), '前測 ' + fx(row.thetaPre) + ' → 後測 ' + fx(row.thetaPost)) +
-      statCard('能力變化 Δθ', (row.delta == null ? '—' : (row.delta > 0 ? '+' : '') + fx(row.delta)),
-        row.delta == null ? '等後測完成' : (row.delta > 0 ? '往上' : '持平或下降'),
-        row.delta > 0.15 ? 'good' : (row.delta < -0.15 ? 'crit' : '')) +
-      statCard('迷思題數', row.q2Pre + ' → ' + row.q2Post, '能力足以答對卻答錯的題數', row.q2Post < row.q2Pre ? 'good' : '') +
-      statCard('知識建構指數', ds.kbi || 0, '班上中位數 ' + Math.round(dt.kmed)) +
+      statCard('這次讀懂的程度', thetaPost != null ? fx(thetaPost) : (thetaPre != null ? fx(thetaPre) : '—'),
+        '課前 ' + (thetaPre == null ? '—' : fx(thetaPre)) + ' → 課後 ' + (thetaPost == null ? '—' : fx(thetaPost))) +
+      statCard('比課前進步多少', (delta == null ? '—' : (delta > 0 ? '+' : '') + fx(delta)),
+        delta == null ? '等課後那份做完' : (delta > 0 ? '往上' : '持平或下降'),
+        delta != null && delta > 0.15 ? 'good' : (delta != null && delta < -0.15 ? 'crit' : '')) +
+      statCard('本來會、卻答錯的題數', q2Pre + ' → ' + q2Post,
+        '這些是最值得回頭看的題目', q2Post < q2Pre ? 'good' : '') +
+      (hasKB
+        ? statCard('討論參與度', ds.kbi || 0, '把想法貼出來、也接住別人的想法')
+        : statCard('討論參與度', '—', '你們班的知識建構空間還沒有討論紀錄')) +
     '</div>' +
     '<div class="grid g2">' +
       '<div class="card"><div class="card-p">' +
-        '<div class="pill ' + Z.cls + '"><span class="dot"></span>' + Z.name + '</div>' +
-        '<p class="small" style="margin-top:10px">' + esc(Z.desc) + '</p>' +
+        (hasKB
+          ? '<div class="pill"><span aria-hidden="true">◆</span>' + esc(Z.name) + '</div>' +
+            '<p class="small" style="margin-top:10px">' + esc(Z.desc) + '</p>'
+          : '<div class="pill"><span aria-hidden="true">◆</span>這節課還在起步</div>' +
+            '<p class="small" style="margin-top:10px">你們班的知識建構空間還沒有討論紀錄。' +
+            '等大家開始貼想法之後，這裡會告訴你你的想法被接住了幾次。</p>') +
         '<hr class="hr">' +
-        '<h4>你的論述輪廓</h4>' +
+        '<h4>你在討論裡做了什麼</h4>' +
         '<div class="col" style="margin-top:8px">' +
-        [['貼文', ds.notes || 0], ['延伸別人的想法', ds.buildMade || 0], ['被別人延伸', ds.buildGot || 0],
-         ['讀過別人的貼文', ds.reads || 0], ['用過的支架種類', (ds.scaffoldKinds || 0) + ' / 6'],
-         ['用到的專門用語', ds.termCount || 0], ['平均論述層次', fx(ds.epi, 1) + ' / 4']].map(function(p){
+        [['貼出想法', ds.notes || 0], ['接住別人的想法', ds.buildMade || 0],
+         ['你的想法被接住', ds.buildGot || 0], ['讀過別人的貼文', ds.reads || 0],
+         ['用過幾種開頭句', (ds.scaffoldKinds || 0) + ' / 6'],
+         ['用到的關鍵詞', ds.termCount || 0],
+         ['說理的深度', fx(ds.epi, 1) + ' / 4']].map(function(p){
           return '<div class="row" style="justify-content:space-between;border-bottom:1px solid var(--rule-soft);padding-bottom:5px">' +
             '<span class="small">' + p[0] + '</span><span class="num">' + p[1] + '</span></div>';
         }).join('') + '</div>' +

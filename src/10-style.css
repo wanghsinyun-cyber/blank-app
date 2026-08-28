@@ -349,12 +349,18 @@ input[type=checkbox],input[type=radio]{ width:1.15em; height:1.15em; accent-colo
   overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; border:0;
 }
 /* 跳至主要內容：鍵盤 Tab 第一站 */
+/* 略過連結。用 <button> 而不是 <a href="#...">，因為本站是 hash 路由：
+   任何寫進 hash 的錨點都會被 parseRoute() 當成路由名，把畫面打成「找不到這一頁」。 */
 .skip{
   position:absolute; left:8px; top:-100px; z-index:100;
   background:var(--accent); color:var(--accent-ink); padding:10px 16px;
   border-radius:var(--r-m); font-weight:600; transition:top .15s;
+  border:0; font-family:inherit; font-size:inherit; cursor:pointer;
 }
 .skip:focus{ top:8px }
+/* 作答頁內的兩顆跳躍鈕跟著卡片走，不用絕對定位 */
+.aal .skip{ position:static; top:auto; display:block; margin:0 0 10px }
+.aal .skip:not(:focus){ position:absolute; left:-9999px }
 
 /* 高對比模式：使用者可在頂列開啟 */
 :root[data-contrast="high"]{
@@ -396,7 +402,11 @@ input[type=checkbox],input[type=radio]{ width:1.15em; height:1.15em; accent-colo
    四條件共用同一份版面幾何：對照組只是把對話卡換成同尺寸的筆記卡，
    使外在認知負荷、捲動深度與畫面留白在條件之間保持一致。 */
 .aal{display:grid; grid-template-columns:minmax(0,1.05fr) minmax(330px,.95fr); gap:16px; align-items:start}
-.aal-text{position:sticky; top:calc(var(--topbar-h) + 2px)}
+/* 左欄文章：sticky 但要有自己的捲動區，否則文章比視窗高時後半段永遠捲不到。
+   card-h（標題與「已標記 N 句」）不捲，只捲 card-p。 */
+.aal-text{position:sticky; top:calc(var(--topbar-h) + 2px);
+  max-height:calc(100vh - var(--topbar-h) - 1rem); display:flex; flex-direction:column}
+.aal-text > .card-p{overflow-y:auto; min-height:0}
 .aal-side{display:flex; flex-direction:column; gap:16px; min-width:0}
 .aal-chat .card-p{display:flex; flex-direction:column}
 .sentences{line-height:2.1; font-size:1.05rem}
@@ -421,6 +431,7 @@ input[type=checkbox],input[type=radio]{ width:1.15em; height:1.15em; accent-colo
     cursor:pointer; font-family:var(--f-mono); font-size:0.85rem; color:var(--ink-3)}
 .lk:hover{background:var(--shade)}
 .lk.on{background:var(--accent); border-color:var(--accent); color:var(--accent-ink); font-weight:600}
+.likert.missing{outline:3px solid var(--crit); outline-offset:6px; border-radius:var(--r-m)}
 .scale-lab{display:flex; justify-content:space-between; font-size:0.8rem; color:var(--ink-4); margin-top:4px; max-width:270px}
 
 pre.prompt{

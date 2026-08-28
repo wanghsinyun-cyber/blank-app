@@ -5,6 +5,7 @@
 let BANKF = {process:'', type:'', unit:''};
 
 function viewBank(){
+  if (!isTeacher()) return studentBlocked();
   const list = ITEMS.filter(function(i){
     return (!BANKF.process || i.process === BANKF.process) &&
            (!BANKF.type || i.type === BANKF.type) &&
@@ -158,7 +159,34 @@ function viewSettings(){
 }
 
 /* --- 系統說明與研究設計 --- */
+/* 學生版的「系統說明」。
+   研究設計書（四個條件、七個研究問題、量哪些構念）不能端到受試者面前——
+   知道自己被分到哪一組、知道問卷在量什麼，會直接污染所有自陳依變項。
+   這一版四個條件看到的字**完全相同**，不依 conditionOfStudent 分歧。 */
+function viewAboutStudent(){
+  return sectionHead('這個網站是什麼', '三件你會想先知道的事。') +
+  '<div class="col" style="max-width:70ch">' +
+    '<div class="card card-p">' +
+      '<h3>這個網站要你做什麼</h3>' +
+      '<p class="lead" style="margin-top:8px">讀一篇文章，回答關於它的問題，' +
+      '然後把你是怎麼讀出來的說出來。答錯沒關係，我們想看的是你怎麼想。</p>' +
+    '</div>' +
+    '<div class="card card-p">' +
+      '<h3>你旁邊的夥伴</h3>' +
+      '<p class="lead" style="margin-top:8px">它不會告訴你答案，也不會說你對或錯。' +
+      '它只會一直問你「你是從哪裡看出來的」。</p>' +
+    '</div>' +
+    '<div class="card card-p">' +
+      '<h3>你寫的東西會怎麼被用</h3>' +
+      '<p class="lead" style="margin-top:8px">你在這裡寫的字、標記的句子、跟夥伴說的話，' +
+      '老師之後看得到，這是為了知道你怎麼讀，不會拿來打分數。' +
+      '研究整理的時候會把名字拿掉。你隨時可以跟老師說你不想繼續。</p>' +
+    '</div>' +
+  '</div>';
+}
+
 function viewAbout(){
+  if (!isTeacher()) return viewAboutStudent();
   const P = [
     ['真實想法、真實問題', '前測的迷思題不是「錯題訂正」，而是全班真正卡住的問題，直接成為視圖的起點。'],
     ['可改進的想法', '貼文可以被延伸、挑戰、改寫；系統記錄每一次修改與論述層次的變化。'],
