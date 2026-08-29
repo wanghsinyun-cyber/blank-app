@@ -188,36 +188,53 @@ function composePrompt(conditionId, processId, qfnId){
    ========================================================================== */
 
 /* 開場白分兩池：turn 0 時學生還沒說過任何話，也還沒作答，
-   所以「你這樣說我有一點懂了」「先不要急著選」這類句子在第一回合是假的
-   ——後者更糟，它暗示 AI 看得到學生正要選，違反「AI 不讀作答欄位」的設定。 */
+   所以「你這樣說我有一點懂了」這類句子在第一回合是假的。 */
 /* 三個角色一律「一句社會框架 + 一句提問」，句數與字數刻意對齊。
    話量若不相等，三個實驗組就從「三種社會框架」變成「三種資訊量」，
    RQ1 的組間比較會失效。
 
-   同儕的開場白本身就是「我先講我讀到哪裡」——所以 peer 的 opener 池
+   「相等」有兩層，而且原本兩層都沒對齊。
+   一層是**每句的字數**：peer 最短的一句原本比 tutee 最長的一句還長，
+   同儕組的孩子每一輪就是比同學組多聽幾個字——這正是本段警告的那件事。
+   三池的字數現在收在 12–18 字。
+   另一層是**池子的大小**：opener 是等機率抽取的，
+   池子小的角色重複率就高，孩子聽到同一句開場的次數不一樣多。
+   重複感本身是互動的表面特徵，會被讀成「這個 AI 比較罐頭」——
+   那就變成社會框架以外的第二個組間差異。三個角色一律 2 句開場 + 4 句後續，
+   且兩池不重疊。
+
+   同儕的開場白本身就是「我先講我自己怎麼讀」——所以 peer 的 opener 池
    直接放那些句子，不再額外多一句。內容只能關於**閱讀動作**，
    絕不碰文本內容或選項，碰了就是給提示。 */
-const PEER_SHARE = [
-  /* 這一句原本是「我剛剛在第二段停了一下」——那是位置線索，而且只有
-     peer 組拿得到（tutor 與 tutee 的開場池完全沒有任何段落或句次指涉）。
-     14 題選擇題裡有 3 題答案就在第二段，其餘 11 題則把孩子帶去錯的段落。
+const PEER_SHARE_FIRST = [
+  '我也在讀這一題，我先講我怎麼讀的。',
+  '我剛讀完，我先說我讀的感覺。'
+];
+const PEER_SHARE_LATER = [
+  /* 這幾句原本帶著位置：「我剛剛在第二段停了一下」是硬座標，已經拿掉了；
+     但改寫後仍留著「讀到中間」「把這裡看漏」「讀到後面才想通前面」——
+     那還是位置線索，只是換成軟的說法，而且一樣只有 peer 組拿得到。
+     14 題的答案分散在各段，隨機丟出一個方位，等於隨機把孩子帶對或帶錯。
      傷害不在「提示」而在「只有一個條件拿得到、且隨機出現的位置線索」：
-     RQ1 比的就不再是三種社會框架。改成不帶座標的閱讀動作句，字數維持。 */
-  '我讀到中間的時候停了一下，想了想才往下讀。',
-  '我第一次讀的時候，好像把這裡看漏了。',
-  '我是讀到後面，才想通前面在講什麼。',
+     RQ1 比的就不再是三種社會框架。改成完全不帶方位的閱讀動作句，字數維持。 */
+  '我讀的時候停了一下，想了想才往下讀。',
+  '我第一次讀，好像有地方看漏了。',
+  '我是讀了兩次，才想通它在講什麼。',
   '我這一題也想了一下下，沒有很快。'
 ];
 
 const ROLE_OPENER = {
+  /* 「先不要急著選，我們再想一下。」已從 tutor 的後續池移除。
+     它是一句關於**作答動作**的指令，而 AI 從頭到尾讀不到作答欄位——
+     第一回合說它是假的，第三回合說它一樣是假的（孩子可能早就選好了）。
+     上一輪只把它從 first 搬到 later，等於換個回合再違反一次同一條界線。 */
   tutor: {first: ['這一題我們一起看，我想知道你怎麼讀。', '我想聽聽你是怎麼看這一題的。'],
           later: ['好，我聽你說，我想確認你是怎麼想的。', '嗯，你再多說一點，我想聽清楚。',
-                  '我想確認我有聽懂你的意思。', '先不要急著選，我們再想一下。']},
-  tutee: {first: ['我也在讀這一段，可是我卡住了。', '這裡我不太懂耶。'],
-          later: ['我剛剛好像讀錯了。', '你這樣說我有一點懂了。',
-                  '所以你的意思是……', '等一下，我想再確認一次。']},
-  peer:  {first: PEER_SHARE.slice(0, 2),
-          later: PEER_SHARE.concat(['我的想法跟你可能不一樣。', '我剛剛也在想這個。'])}
+                  '我想確認我有聽懂你的意思。', '你剛剛的想法，我想再聽一次。']},
+  tutee: {first: ['我也在讀這一段，可是我卡住了。', '這一題我讀了，可是我不太懂。'],
+          later: ['我剛剛好像讀錯了，想再想一次。', '你這樣說，我好像有一點懂了。',
+                  '所以你的意思是……我想確認一下。', '等一下，我想再確認一次。']},
+  peer:  {first: PEER_SHARE_FIRST, later: PEER_SHARE_LATER}
 };
 
 const ROLE_STEM = {
@@ -226,14 +243,30 @@ const ROLE_STEM = {
   peer:  function(q){ return '那你呢？' + q; }
 };
 
-/* 依回合排程挑一個子歷程（不看學生說了什麼，只看回合數、該題的官方歷程標定與文體） */
-function pickSubprocess(processId, item, turn){
+/* 子歷程一律不看學生說了什麼，只看該題的標定、文體與回合排程。 */
+
+/* 這一題自己標定的子歷程。item.sub 是命題時對應的 PIRLS 子歷程，
+   對話要問的就是它——輪替出來的另一個子歷程問的是別的能力。
+   文體不合時回傳 null，由呼叫端退回輪替（目前 14 題皆相合）。 */
+function subForItem(item){
+  const s = item && item.sub ? subprocess(item.sub) : null;
+  if (!s) return null;
+  const t = item ? getText(item.unit) : null;
+  const genre = t ? t.genre : null;
+  return (s.fit === '皆可' || s.fit === genre) ? s : null;
+}
+/* avoid：要排除的子歷程 id。F5 是「延伸」，重問 F3 剛問過的那一句不是延伸。 */
+function pickSubprocess(processId, item, turn, avoid){
   const t = item ? getText(item.unit) : null;
   const genre = t ? t.genre : null;   // '敘事' | '說明'
   const subs = subprocessesOf(processId).filter(function(s){
     return s.fit === '皆可' || s.fit === genre;
   });
-  const pool = subs.length ? subs : subprocessesOf(processId);
+  let pool = subs.length ? subs : subprocessesOf(processId);
+  if (avoid && pool.length > 1){
+    const rest = pool.filter(function(s){ return s.id !== avoid; });
+    if (rest.length) pool = rest;
+  }
   return pool[turn % pool.length];
 }
 
@@ -249,14 +282,17 @@ function agentTurn(conditionId, item, turn, rnd){
   } else if (qfnId === 'F2'){
     body = '你剛剛的判斷，是從文章裡哪一句看出來的？';
   } else if (qfnId === 'F3'){
-    sub = pickSubprocess(pid, item, turn);
+    sub = subForItem(item) || pickSubprocess(pid, item, turn);
     body = sub.q;
   } else if (qfnId === 'F4'){
     body = '有沒有別的讀法也說得通？如果有人跟你想的不一樣，他可能是看到哪一句？';
   } else if (qfnId === 'F5'){
-    // 延伸：優先往上一層歷程取一個子歷程，沒有上一層就回到同層另一個
+    // 延伸：優先往上一層歷程取一個子歷程，沒有上一層就回到同層另一個。
+    // EE 沒有上一層，會退回同一個池子，而 turn+2 與 F3 的 turn 在池長 4 時同餘，
+    // 於是 F5 會逐字重問 F3——所以要把 F3 問過的那一個排除掉。
     const up = PROCESSES.find(function(p){ return p.order === processOrder(pid) + 1; });
-    sub = pickSubprocess(up ? up.id : pid, item, turn + 2);
+    const asked = subForItem(item) || pickSubprocess(pid, item, 2);
+    sub = pickSubprocess(up ? up.id : pid, item, turn + 2, asked ? asked.id : null);
     body = sub.q;
   } else {
     body = '現在如果只能講一句話說你的想法，你會怎麼說？';

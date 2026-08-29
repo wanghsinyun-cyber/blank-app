@@ -50,12 +50,30 @@ function saveUiOnly(){
 /* 老師正在以某位學生的視角檢視。此時一律唯讀——
    他的閱讀、貼文、註記都不可以記到學生名下（reads 是 KB 指數的原料）。 */
 function isImpersonating(){ return !!(state.ui && state.ui.impersonate); }
+/* 作答紀錄與題本是否還對得起來。
+   responses 存的是選項「索引」，題本一旦重排選項，舊索引就指到別的選項；
+   correct 旗標卻還是舊的，於是 choice === answer 的紀錄可以是「答錯」。
+   這種資料不會拋錯，只會讓 KIDMAP 的第二象限、頂誘答、失誤碼、AI 的探究提示
+   全部靜靜地對到錯的地方。版號忘了加的時候，這一關是最後的攔截。 */
+function responsesMatchKey(s){
+  if (!s || !Array.isArray(s.responses)) return true;
+  return !s.responses.some(function(r){
+    if (r.choice === null || r.choice === undefined || r.correct === null) return false;
+    const it = getItem(r.iid);
+    if (!it || it.type !== 'mc') return false;
+    return r.correct !== (r.choice === it.answer);
+  });
+}
 function loadState(){
   try {
     const raw = localStorage.getItem(STORE_KEY);
     if (raw){
       const s = JSON.parse(raw);
-      if (s && s.version === STATE_VERSION) return s;   // 版號不符（示範資料改版）→ 重新產生
+      // 版號不符（示範資料改版）→ 重新產生
+      if (s && s.version === STATE_VERSION){
+        if (responsesMatchKey(s)) return s;
+        console.warn('[KAIROS] 作答紀錄與現行題本的答案鍵不一致，已重新產生示範資料。');
+      }
     }
   } catch (e) { /* 讀不到就重新產生示範資料 */ }
   return buildSeedState();

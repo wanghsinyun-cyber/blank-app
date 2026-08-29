@@ -384,3 +384,60 @@ window.assertStudentInvariants = function(){
                            : '學生端不變量：全數通過');
   return {pass: fails.length === 0, fails: fails};
 };
+
+/* --- 示範資料金絲雀 ---
+   題本（options／answer／why）是種子契約的一部分：改動它，distractorFor()
+   消耗的亂數筆數就變了，整條 mulberry32 序列往後位移，模擬作答矩陣整份重生。
+   第 4 輪重排 R03／R10／R11／R12 的選項之後，ANCOVA 從
+   F(3, 91) = 8.96、ηp² = .228 變成 F(3, 91) = 5.73、ηp² = .159。
+   數值本身不是研究結論（CONDITION_GAIN 是理論推導的模擬參數），
+   但它必須「只在我們有意改題本時才變」——所以把基準寫死在這裡。
+   真正要守的是四個條件的排序：tutee > peer > tutor > control。 */
+window.assertSeedCanary = function(){
+  const fails = [];
+  const rows = analysisDataset();
+  const o = outcomeList()[0];                 // theta_post，共變數為前測 θ
+  const a = ancova(rows, o.get, o.cov);
+  if (!a){ return {pass:false, fails:['ancova() 回傳 null——分析資料不足']}; }
+
+  const EXP = {df2: 91, F: 5.73, eta: 0.159};
+  const near = function(x, y, tol){ return Math.abs(x - y) <= tol; };
+  if (a.df2 !== EXP.df2) fails.push('自由度 df2 = ' + a.df2 + '，基準是 ' + EXP.df2);
+  if (!near(a.F, EXP.F, 0.02)) fails.push('F = ' + a.F.toFixed(2) + '，基準是 ' + EXP.F);
+  if (typeof a.eta !== 'number') fails.push('ancova() 沒有回傳 eta 欄位');
+  else if (!near(a.eta, EXP.eta, 0.002))
+    fails.push('ηp² = ' + a.eta.toFixed(3) + '，基準是 ' + EXP.eta);
+
+  /* 排序才是實質主張：θ 增益要照 CONDITION_GAIN 的設計順序排 */
+  const pre = diagnose(state, 'a-pre'), post = diagnose(state, 'a-post');
+  const tp = {}, tq = {};
+  pre.perStudent.forEach(function(p){ tp[p.sid] = p.theta; });
+  post.perStudent.forEach(function(p){ tq[p.sid] = p.theta; });
+  const d = {};
+  state.classes.forEach(function(c){
+    const v = c.studentIds.map(function(s){
+      return (tp[s] != null && tq[s] != null) ? tq[s] - tp[s] : null;
+    }).filter(function(x){ return typeof x === 'number' && isFinite(x); });
+    d[c.condition] = v.length ? v.reduce(function(s, x){ return s + x; }, 0) / v.length : null;
+  });
+  const got = Object.keys(d).sort(function(x, y){ return d[y] - d[x]; }).join(' > ');
+  const want = 'tutee > peer > tutor > control';
+  if (got !== want) fails.push('條件排序 ' + got + '，設計順序是 ' + want);
+
+  /* 作答紀錄與答案鍵必須對得起來（重排選項卻忘了加版號，就會在這裡爆） */
+  let drift = 0;
+  state.responses.forEach(function(r){
+    if (r.choice === null || r.choice === undefined || r.correct === null) return;
+    const it = getItem(r.iid);
+    if (!it || it.type !== 'mc') return;
+    if (r.correct !== (r.choice === it.answer)) drift++;
+  });
+  if (drift) fails.push(drift + ' 筆作答紀錄與現行答案鍵不符（題本改了但 STATE_VERSION 沒加？）');
+
+  console.log(fails.length ? '示範資料金絲雀失敗 ' + fails.length + ' 項：\n  ' + fails.join('\n  ')
+                           : '示範資料金絲雀：全數通過');
+  return {pass: fails.length === 0, fails: fails,
+          got: {df2: a.df2, F: +a.F.toFixed(2),
+                eta: typeof a.eta === 'number' ? +a.eta.toFixed(3) : null,
+                p: typeof a.p === 'number' ? +a.p.toFixed(4) : null, order: got}};
+};
