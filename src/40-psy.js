@@ -154,7 +154,8 @@ function diagnose(state, aid){
   const X = done.map(function(sid){
     return items.map(function(it){
       const r = state.responses.find(function(r){ return r.aid === aid && r.sid === sid && r.iid === it.id; });
-      return r ? (r.correct ? 1 : 0) : null;
+      /* correct 可能是 null（沒作答）——那和「沒有這一筆」一樣要跳過 */
+      return (r && r.correct != null) ? (r.correct ? 1 : 0) : null;
     });
   });
 

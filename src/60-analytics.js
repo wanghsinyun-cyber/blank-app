@@ -36,9 +36,12 @@ function domainTermsIn(t){
 const EPI_LABEL = {1:'陳述主張', 2:'提出理由', 3:'援引證據或反例', 4:'綜整並改進理論'};
 
 /* --- 每位學生的論述指標 --- */
-function discourseStats(){
-  const klass = kbClass();
-  const ids = klass.studentIds;
+/* ids 省略時預設是知識建構示範班——教師端的雙軌儀表板與 dualTrack()
+   都靠這個範圍，而 #/dash 畫面上寫著「這一頁只涵蓋示範班」，
+   改預設值會讓那句宣稱變成假的，象限中位數也會跨四個條件混算。
+   要看別的母體請由呼叫端傳進來（例如學生看自己班）。 */
+function discourseStats(ids){
+  ids = ids || kbClass().studentIds;
   const byId = {};
   ids.forEach(function(sid){
     byId[sid] = {sid:sid, notes:0, buildMade:0, buildGot:0, rise:0, refs:0, ann:0,

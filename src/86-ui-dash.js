@@ -203,7 +203,12 @@ function viewMyGrowth(){
     '<p style="max-width:60ch">你的紀錄要等前測與後測都完成之後才算得出來。</p>' +
     '<a class="btn" href="#/student">回我的作業</a></div>';
 
-  const ds = discourseStats().find(function(s){ return s.sid === me.id; }) || {};
+  /* 母體是「自己班」，不是示範班。用預設範圍的話，示範班以外的 72 位學生
+     一律拿到空物件——左卡寫「貼出想法 0」，右卡同一畫面卻寫「我貼過 1 則」。 */
+  const myClass = classOfStudent(me.id);
+  const mates = myClass ? myClass.studentIds : [];
+  const dsAll = discourseStats(mates);
+  const ds = dsAll.find(function(s){ return s.sid === me.id; }) || {};
   const myNotes = state.notes.filter(function(n){ return n.authorIds.indexOf(me.id) >= 0; });
   const thetaPre  = pp ? pp.theta : null;
   const thetaPost = qp ? qp.theta : null;
@@ -213,8 +218,6 @@ function viewMyGrowth(){
 
   /* 這一班有沒有討論紀錄。沒有的話走降級版面，但卡片數與尺寸一模一樣，
      四個條件看到的版面幾何必須相同，否則介面差異會混進依變項。 */
-  const k = classOfStudent(me.id);
-  const mates = k ? k.studentIds : [];
   const classNotes = state.notes.filter(function(n){
     return n.authorIds.some(function(a){ return mates.indexOf(a) >= 0; }); });
   const hasKB = classNotes.length > 0;
@@ -222,7 +225,7 @@ function viewMyGrowth(){
   let zone = 'D';
   if (hasKB){
     /* 切點用同班同學的中位數，不用全體 */
-    const all = discourseStats().filter(function(s){ return mates.indexOf(s.sid) >= 0; });
+    const all = dsAll;
     const kbis = all.map(function(s){ return s.kbi; }).sort(function(a, b){ return a - b; });
     const kmed = kbis.length ? kbis[Math.floor(kbis.length / 2)] : 0;
     const deltas = mates.map(function(sid){
@@ -232,18 +235,31 @@ function viewMyGrowth(){
     }).filter(function(x){ return x != null; }).sort(function(a, b){ return a - b; });
     const dmed = deltas.length ? deltas[Math.floor(deltas.length / 2)] : 0;
     const dHigh = delta != null && delta >= dmed;      // 算不出來一律歸「低」
-    const kHigh = (ds.kbi || 0) >= kmed;
+    /* 沒有資料就不是高參與。少了後兩個條件，kmed 為 0 時 0>=0 恆真，
+       班上只要有任何一則貼文，一個字都沒貼的孩子也會被誇「你把討論
+       變成了自己的理解」。 */
+    const kHigh = all.length > 0 && (ds.notes || 0) > 0 && (ds.kbi || 0) >= kmed;
     zone = dHigh ? (kHigh ? 'A' : 'C') : (kHigh ? 'B' : 'D');
   }
   const Z = DUAL_ZONE_STUDENT[zone];
 
   return sectionHead('我的學習軌跡', me.name) +
     '<div class="grid g4" style="margin-bottom:16px">' +
-      statCard('這次讀懂的程度', thetaPost != null ? fx(thetaPost) : (thetaPre != null ? fx(thetaPre) : '—'),
-        '課前 ' + (thetaPre == null ? '—' : fx(thetaPre)) + ' → 課後 ' + (thetaPost == null ? '—' : fx(thetaPost))) +
-      statCard('比課前進步多少', (delta == null ? '—' : (delta > 0 ? '+' : '') + fx(delta)),
-        delta == null ? '等課後那份做完' : (delta > 0 ? '往上' : '持平或下降'),
-        delta != null && delta > 0.15 ? 'good' : (delta != null && delta < -0.15 ? 'crit' : '')) +
+      /* 這一頁原本把 Rasch 的 logit 原值直接印給十歲孩子看
+         （「這次讀懂的程度 -1.95」「比課前進步 -2.99」）。第 1 輪把
+         #/result 的 θ 換成星等，這一頁漏掉了——本輪回報密度最高的一條。
+         負數對孩子沒有意義，而且那是一個可以互相比較的數字。 */
+      statCard('這次讀得怎麼樣',
+        thetaPost != null ? readingStars(thetaPost, post && post.meanTheta)
+          : (thetaPre != null ? readingStars(thetaPre, pre && pre.meanTheta) : '—'),
+        thetaPost != null ? '五顆星是這次讀得最穩的' : '等課後那份做完') +
+      statCard('比課前有沒有進步',
+        delta == null ? '—' : (delta > 0.15 ? '有往上' : (delta < -0.15 ? '這次比較不順' : '差不多')),
+        delta == null ? '等課後那份做完'
+          : (delta > 0.15 ? '課後比課前讀得更穩了'
+            : (delta < -0.15 ? '一次結果不代表什麼，回去看看哪幾題卡住'
+              : '前後差不多')),
+        delta != null && delta > 0.15 ? 'good' : '') +
       statCard('本來會、卻答錯的題數', q2Pre + ' → ' + q2Post,
         '這些是最值得回頭看的題目', q2Post < q2Pre ? 'good' : '') +
       (hasKB

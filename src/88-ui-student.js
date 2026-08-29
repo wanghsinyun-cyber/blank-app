@@ -188,7 +188,14 @@ function viewResult(aid){
        而且「迷思」是個標籤。同一份資料，換一套對他說話的說法；
        底層的 ps.theta、ps.cells 與所有匯出一個字不動。 */
     '<div class="grid g4" style="margin-bottom:16px">' +
-      statCard('選擇題答對', right + ' / ' + mc.length, pct(right / Math.max(1, mc.length))) +
+      /* 分母是他實際作答的題數（缺答現在寫 null、不進 mc）。
+       不講清楚的話，只答一題的孩子會看到「1 / 1」而更困惑。 */
+    statCard('選擇題答對', right + ' / ' + mc.length,
+      (function(){
+        const total = a.itemIds.map(getItem).filter(function(i){ return i && i.type === 'mc'; }).length;
+        const miss = total - mc.length;
+        return pct(right / Math.max(1, mc.length)) + (miss ? '　另外 ' + miss + ' 題沒有作答' : '');
+      })()) +
       statCard('我這次的閱讀力', ps ? readingStars(ps.theta, diag.meanTheta) : '—',
         ps ? '和班上比起來的位置' : '需要更多人完成') +
       statCard('可惜的題目', ps ? ps.q[2] : '—', '這幾題你其實讀得懂，只是這次沒答對') +
@@ -222,10 +229,14 @@ function viewResult(aid){
       const c = diag && diag.ready && ps ? ps.cells.find(function(x){ return x.iid === it.id; }) : null;
       return '<div class="item"><div class="row" style="justify-content:space-between">' +
         '<b>第 ' + it.no + ' 題</b>' +
-        (c ? '<span class="pill ' + QUAD[c.q].key + '"><span class="dot"></span>' +
-             esc(QUAD_STUDENT[c.q]) + '</span>'
-           : (r && r.correct ? '<span class="pill q1"><span class="dot"></span>答對</span>' :
-          '<span class="pill q2"><span class="dot"></span>答錯</span>')) + '</div>' +
+        /* 三態，不是兩態：沒作答不等於答錯。把缺答畫成紅色的「答錯」，
+           孩子會以為自己寫了而且寫壞了。 */
+        (!r || r.choice == null
+           ? '<span class="pill"><span class="dot"></span>這一題你沒有作答</span>'
+           : (c ? '<span class="pill ' + QUAD[c.q].key + '"><span class="dot"></span>' +
+                  esc(QUAD_STUDENT[c.q]) + '</span>'
+                : (r.correct ? '<span class="pill q1"><span class="dot"></span>答對</span>'
+                             : '<span class="pill q2"><span class="dot"></span>答錯</span>'))) + '</div>' +
         '<div class="stem">' + esc(it.stem) + '</div>' +
         /* 前測的正解在後測交卷之前不打開：兩次測量用的是同一份題本，
            在中間逐題發答案卡，Δθ 就混入記憶效應，而記憶量與「有沒有來看

@@ -484,6 +484,9 @@ input[type=checkbox],input[type=radio]{ width:1.15em; height:1.15em; accent-colo
 .imp-bar span{flex:1}
 .unread-dot{color:var(--accent); margin-right:.25rem}
 .likert.missing{outline:3px solid var(--crit); outline-offset:6px; border-radius:var(--r-m)}
+/* 作答卡被帶回來時的標示。用外框 + 一行文字，不只靠顏色（1.4.1）。 */
+.card.missing{outline:3px solid var(--crit); outline-offset:4px}
+.card.missing .card-h::after{content:"　還沒寫完"; color:var(--crit); font-weight:600; font-size:0.8rem}
 .scale-lab{display:flex; justify-content:space-between; font-size:0.8rem; color:var(--ink-4); margin-top:4px; max-width:13.5rem}
 
 pre.prompt{
@@ -2367,7 +2370,8 @@ function diagnose(state, aid){
   const X = done.map(function(sid){
     return items.map(function(it){
       const r = state.responses.find(function(r){ return r.aid === aid && r.sid === sid && r.iid === it.id; });
-      return r ? (r.correct ? 1 : 0) : null;
+      /* correct 可能是 null（沒作答）——那和「沒有這一筆」一樣要跳過 */
+      return (r && r.correct != null) ? (r.correct ? 1 : 0) : null;
     });
   });
 
@@ -2859,9 +2863,12 @@ function domainTermsIn(t){
 const EPI_LABEL = {1:'陳述主張', 2:'提出理由', 3:'援引證據或反例', 4:'綜整並改進理論'};
 
 /* --- 每位學生的論述指標 --- */
-function discourseStats(){
-  const klass = kbClass();
-  const ids = klass.studentIds;
+/* ids 省略時預設是知識建構示範班——教師端的雙軌儀表板與 dualTrack()
+   都靠這個範圍，而 #/dash 畫面上寫著「這一頁只涵蓋示範班」，
+   改預設值會讓那句宣稱變成假的，象限中位數也會跨四個條件混算。
+   要看別的母體請由呼叫端傳進來（例如學生看自己班）。 */
+function discourseStats(ids){
+  ids = ids || kbClass().studentIds;
   const byId = {};
   ids.forEach(function(sid){
     byId[sid] = {sid:sid, notes:0, buildMade:0, buildGot:0, rise:0, refs:0, ann:0,
@@ -6150,7 +6157,12 @@ function viewMyGrowth(){
     '<p style="max-width:60ch">你的紀錄要等前測與後測都完成之後才算得出來。</p>' +
     '<a class="btn" href="#/student">回我的作業</a></div>';
 
-  const ds = discourseStats().find(function(s){ return s.sid === me.id; }) || {};
+  /* 母體是「自己班」，不是示範班。用預設範圍的話，示範班以外的 72 位學生
+     一律拿到空物件——左卡寫「貼出想法 0」，右卡同一畫面卻寫「我貼過 1 則」。 */
+  const myClass = classOfStudent(me.id);
+  const mates = myClass ? myClass.studentIds : [];
+  const dsAll = discourseStats(mates);
+  const ds = dsAll.find(function(s){ return s.sid === me.id; }) || {};
   const myNotes = state.notes.filter(function(n){ return n.authorIds.indexOf(me.id) >= 0; });
   const thetaPre  = pp ? pp.theta : null;
   const thetaPost = qp ? qp.theta : null;
@@ -6160,8 +6172,6 @@ function viewMyGrowth(){
 
   /* 這一班有沒有討論紀錄。沒有的話走降級版面，但卡片數與尺寸一模一樣，
      四個條件看到的版面幾何必須相同，否則介面差異會混進依變項。 */
-  const k = classOfStudent(me.id);
-  const mates = k ? k.studentIds : [];
   const classNotes = state.notes.filter(function(n){
     return n.authorIds.some(function(a){ return mates.indexOf(a) >= 0; }); });
   const hasKB = classNotes.length > 0;
@@ -6169,7 +6179,7 @@ function viewMyGrowth(){
   let zone = 'D';
   if (hasKB){
     /* 切點用同班同學的中位數，不用全體 */
-    const all = discourseStats().filter(function(s){ return mates.indexOf(s.sid) >= 0; });
+    const all = dsAll;
     const kbis = all.map(function(s){ return s.kbi; }).sort(function(a, b){ return a - b; });
     const kmed = kbis.length ? kbis[Math.floor(kbis.length / 2)] : 0;
     const deltas = mates.map(function(sid){
@@ -6179,18 +6189,31 @@ function viewMyGrowth(){
     }).filter(function(x){ return x != null; }).sort(function(a, b){ return a - b; });
     const dmed = deltas.length ? deltas[Math.floor(deltas.length / 2)] : 0;
     const dHigh = delta != null && delta >= dmed;      // 算不出來一律歸「低」
-    const kHigh = (ds.kbi || 0) >= kmed;
+    /* 沒有資料就不是高參與。少了後兩個條件，kmed 為 0 時 0>=0 恆真，
+       班上只要有任何一則貼文，一個字都沒貼的孩子也會被誇「你把討論
+       變成了自己的理解」。 */
+    const kHigh = all.length > 0 && (ds.notes || 0) > 0 && (ds.kbi || 0) >= kmed;
     zone = dHigh ? (kHigh ? 'A' : 'C') : (kHigh ? 'B' : 'D');
   }
   const Z = DUAL_ZONE_STUDENT[zone];
 
   return sectionHead('我的學習軌跡', me.name) +
     '<div class="grid g4" style="margin-bottom:16px">' +
-      statCard('這次讀懂的程度', thetaPost != null ? fx(thetaPost) : (thetaPre != null ? fx(thetaPre) : '—'),
-        '課前 ' + (thetaPre == null ? '—' : fx(thetaPre)) + ' → 課後 ' + (thetaPost == null ? '—' : fx(thetaPost))) +
-      statCard('比課前進步多少', (delta == null ? '—' : (delta > 0 ? '+' : '') + fx(delta)),
-        delta == null ? '等課後那份做完' : (delta > 0 ? '往上' : '持平或下降'),
-        delta != null && delta > 0.15 ? 'good' : (delta != null && delta < -0.15 ? 'crit' : '')) +
+      /* 這一頁原本把 Rasch 的 logit 原值直接印給十歲孩子看
+         （「這次讀懂的程度 -1.95」「比課前進步 -2.99」）。第 1 輪把
+         #/result 的 θ 換成星等，這一頁漏掉了——本輪回報密度最高的一條。
+         負數對孩子沒有意義，而且那是一個可以互相比較的數字。 */
+      statCard('這次讀得怎麼樣',
+        thetaPost != null ? readingStars(thetaPost, post && post.meanTheta)
+          : (thetaPre != null ? readingStars(thetaPre, pre && pre.meanTheta) : '—'),
+        thetaPost != null ? '五顆星是這次讀得最穩的' : '等課後那份做完') +
+      statCard('比課前有沒有進步',
+        delta == null ? '—' : (delta > 0.15 ? '有往上' : (delta < -0.15 ? '這次比較不順' : '差不多')),
+        delta == null ? '等課後那份做完'
+          : (delta > 0.15 ? '課後比課前讀得更穩了'
+            : (delta < -0.15 ? '一次結果不代表什麼，回去看看哪幾題卡住'
+              : '前後差不多')),
+        delta != null && delta > 0.15 ? 'good' : '') +
       statCard('本來會、卻答錯的題數', q2Pre + ' → ' + q2Post,
         '這些是最值得回頭看的題目', q2Post < q2Pre ? 'good' : '') +
       (hasKB
@@ -6417,7 +6440,14 @@ function viewResult(aid){
        而且「迷思」是個標籤。同一份資料，換一套對他說話的說法；
        底層的 ps.theta、ps.cells 與所有匯出一個字不動。 */
     '<div class="grid g4" style="margin-bottom:16px">' +
-      statCard('選擇題答對', right + ' / ' + mc.length, pct(right / Math.max(1, mc.length))) +
+      /* 分母是他實際作答的題數（缺答現在寫 null、不進 mc）。
+       不講清楚的話，只答一題的孩子會看到「1 / 1」而更困惑。 */
+    statCard('選擇題答對', right + ' / ' + mc.length,
+      (function(){
+        const total = a.itemIds.map(getItem).filter(function(i){ return i && i.type === 'mc'; }).length;
+        const miss = total - mc.length;
+        return pct(right / Math.max(1, mc.length)) + (miss ? '　另外 ' + miss + ' 題沒有作答' : '');
+      })()) +
       statCard('我這次的閱讀力', ps ? readingStars(ps.theta, diag.meanTheta) : '—',
         ps ? '和班上比起來的位置' : '需要更多人完成') +
       statCard('可惜的題目', ps ? ps.q[2] : '—', '這幾題你其實讀得懂，只是這次沒答對') +
@@ -6451,10 +6481,14 @@ function viewResult(aid){
       const c = diag && diag.ready && ps ? ps.cells.find(function(x){ return x.iid === it.id; }) : null;
       return '<div class="item"><div class="row" style="justify-content:space-between">' +
         '<b>第 ' + it.no + ' 題</b>' +
-        (c ? '<span class="pill ' + QUAD[c.q].key + '"><span class="dot"></span>' +
-             esc(QUAD_STUDENT[c.q]) + '</span>'
-           : (r && r.correct ? '<span class="pill q1"><span class="dot"></span>答對</span>' :
-          '<span class="pill q2"><span class="dot"></span>答錯</span>')) + '</div>' +
+        /* 三態，不是兩態：沒作答不等於答錯。把缺答畫成紅色的「答錯」，
+           孩子會以為自己寫了而且寫壞了。 */
+        (!r || r.choice == null
+           ? '<span class="pill"><span class="dot"></span>這一題你沒有作答</span>'
+           : (c ? '<span class="pill ' + QUAD[c.q].key + '"><span class="dot"></span>' +
+                  esc(QUAD_STUDENT[c.q]) + '</span>'
+                : (r.correct ? '<span class="pill q1"><span class="dot"></span>答對</span>'
+                             : '<span class="pill q2"><span class="dot"></span>答錯</span>'))) + '</div>' +
         '<div class="stem">' + esc(it.stem) + '</div>' +
         /* 前測的正解在後測交卷之前不打開：兩次測量用的是同一份題本，
            在中間逐題發答案卡，Δθ 就混入記憶效應，而記憶量與「有沒有來看
@@ -7049,7 +7083,7 @@ function aalInit(aid){
     cond: conditionOfStudent(me.id),
     idx: 0,
     items: a.itemIds.map(getItem).filter(Boolean),
-    answers: {}, texts: {}, notes: {}, marks: {}, checks: {}, turns: {},
+    answers: {}, texts: {}, notes: {}, marks: {}, checks: {},
     tele: {}, drafts: {}, t0: Date.now()
   };
   /* 還原草稿。t0 一定重設為現在，並補寫一筆 RESUME，
@@ -7077,10 +7111,10 @@ function aalInit(aid){
 }
 
 function aalItem(){ return AAL.items[AAL.idx]; }
-function aalTurns(iid){ return AAL.turns[iid] = AAL.turns[iid] || []; }
 /* 額度與語料是同一份帳：都以已落地的 state.dialog 為單一真相來源。
-   AAL.turns 只是本次工作階段的暫存，不能拿來判斷還剩幾次——
-   它住在記憶體裡，重整就歸零，等於誰按 F5 按得多誰就多拿鷹架。 */
+   曾經有一份記憶體裡的 AAL.turns 與它並存，額度改讀 state.dialog 之後
+   畫面卻還在讀 AAL.turns——重整後對話從畫面消失、額度照扣。
+   那個暫存已經整個拿掉，不要再加回來。 */
 function aalDialogOf(iid){
   return (state.dialog || []).filter(function(d){
     return d.sid === AAL.me && d.aid === AAL.aid && d.iid === iid;
@@ -7125,7 +7159,7 @@ function viewAaL(aid){
   const sents = passageSentences(text);
   // 標記是「對這篇文本」的，換題不會消失——學生在同一篇文章上持續累積閱讀痕跡
   const marks = AAL.marks[it.unit] = AAL.marks[it.unit] || [];
-  const turns = aalTurns(it.id);
+  const turns = aalDialogOf(it.id);
   const used = aalStudentTurns(it.id);
   const maxT = (state.settings && state.settings.maxTurns) || MAX_TURNS;
   const proc = processOf(it.process || 'FR');
@@ -7335,30 +7369,58 @@ function aalPick(k){
   /* 時間在使用者按下的當下就記，不能等回呼醒來才 Date.now()：
      交卷前 flush 會把一整批間隔壓縮成同一毫秒。 */
   const at = Date.now();
-  aalPick._pending[it.id] = {it:it, k:k, at:at};
+  /* 連身分一起拍快照。去抖視窗結束時 AAL 可能已經被釋放（學生按了側欄、
+     上一頁或返回手勢），那時 aalLog 讀不到 AAL.me／AAL.aid 會直接拋錯。 */
+  aalPick._pending[it.id] = {it:it, k:k, at:at,
+    who:{me:AAL.me, aid:AAL.aid, cond:AAL.cond, t0:AAL.t0}};
   aalPick._t[it.id] = setTimeout(function(){ commitPick(it.id); }, OPTION_DEBOUNCE_MS);
 }
 
 function commitPick(iid){
-  if (!AAL) return;                           // 已經交卷
+  /* 守門下沉一層：pending 裡本來就存了 {it, k, at}，aalLog 也吃得下 p.it，
+     所以就算 AAL 已經被釋放（又多了一條沒 flush 的離開路徑），
+     去抖視窗結束時仍然寫得進日誌。只有草稿與 drafts 需要 AAL。 */
   const p = (aalPick._pending || {})[iid];
   if (!p) return;
   delete aalPick._pending[iid];
   clearTimeout((aalPick._t || {})[iid]);
-  if (AAL.answers[iid] !== p.k) return;       // 期間又改了，這一次不算
-  const first = !AAL.drafts[iid];
-  if (first) AAL.drafts[iid] = {first: p.k, final: p.k};
-  else AAL.drafts[iid].final = p.k;
-  aalLog('OPTION', 'O', {choice:p.k, changed: !first, at:p.at}, p.it);
-  aalSave();
+  if (AAL){
+    if (AAL.answers[iid] !== p.k) return;     // 期間又改了，這一次不算
+    const first = !AAL.drafts[iid];
+    if (first) AAL.drafts[iid] = {first: p.k, final: p.k};
+    else AAL.drafts[iid].final = p.k;
+    aalLog('OPTION', 'O', {choice:p.k, changed: !first, at:p.at}, p.it);
+    aalSave();
+  } else if (p.who && !isImpersonating()){
+    /* AAL 已釋放：用快照自己組事件。late 讓分析端知道這一筆是補寫的。 */
+    const kk = classOfStudent(p.who.me);
+    logEvent({t:Date.now(), rel:p.at - p.who.t0, sid:p.who.me, cid:kk ? kk.id : null,
+      cond:p.who.cond, lang:'zh', aid:p.who.aid, iid:p.it.id,
+      proc:p.it.process || 'FR', type:'OPTION', code:'O',
+      choice:p.k, changed:null, at:p.at, late:true});
+  }
 }
 
 /* 換題與交卷之前一定要把待處理的去抖／節流結清，否則最後一次點選與
    最後一段打字會憑空消失。打字節流（aalTypeTelemetry 的呼叫端）寫的是
    TYPE／NOTE，不涉及題目歸屬，但同樣會漏最後一批。 */
 function flushPendingPicks(){
+  clearTimeout(aalTypeTelemetry._saveT); aalTypeTelemetry._saveT = null;
   Object.keys(aalPick._pending || {}).forEach(commitPick);
   flushTypeTelemetry();
+}
+
+/* 打字的「遙測節流」與「草稿落地」是兩件事，節奏不該綁在一起。
+   TYPE／NOTE 事件刻意用 4 秒節流（那是歷程分析的取樣率，不能改），
+   但草稿必須跟得上：原本節流視窗內打的字完全不落地，重整就靜默掉字，
+   而那打在對照組整節課唯一的產出（筆記）與兩題建構反應題上。
+   300ms 尾緣，只寫 localStorage、不寫日誌，不影響任何依變項的取樣。 */
+function scheduleDraftSave(){
+  clearTimeout(aalTypeTelemetry._saveT);
+  aalTypeTelemetry._saveT = setTimeout(function(){
+    aalTypeTelemetry._saveT = null;
+    if (AAL) aalSave();
+  }, 300);
 }
 
 /* 打字是 4 秒節流：節流視窗內的最後一段字沒有事件。換題或交卷時把它補上，
@@ -7401,7 +7463,13 @@ async function aalSay(){
 
   const rel = relativeProcessCode(text, it);
   const sm = sentimentOf(text);
-  aalTurns(it.id).push({speaker:'student', text:text, rel:rel, at:Date.now()});
+  /* 這一輪要用到的東西全部先拍快照。await 之後 AAL 可能已經被釋放
+     （學生在等 AI 回覆時按了交卷、先離開、或直接離開路由），
+     那時 aalLog 讀 AAL.me／AAL.t0 會拋 TypeError，而且那一輪的 AI 回覆
+     完全不會進 state.dialog——額度已經扣了，語料卻少一筆。 */
+  const kSnap = classOfStudent(AAL.me);
+  const ctx = {me:AAL.me, aid:AAL.aid, cond:AAL.cond, t0:AAL.t0,
+               cid:kSnap ? kSnap.id : null, it:it, turn:used + 1};
   const e = aalLog('ASK', REL_SHORT[rel], {text:text, rel:rel, turn:used + 1, sent:sm.score});
   state.dialog = state.dialog || [];
   state.dialog.push({t:e.t, sid:AAL.me, cond:AAL.cond, aid:AAL.aid, iid:it.id,
@@ -7440,21 +7508,28 @@ async function aalSay(){
       reply = {text:g.text, qfn:TURN_SCHEDULE[Math.min(used, TURN_SCHEDULE.length - 1)],
                sub:null, engine:'llm', blocked:g.blocked, hits:g.hits};
     } catch (err) {
-      reply = agentTurn(AAL.cond, it, used);
+      reply = agentTurn(ctx.cond, it, used);
       reply.fallback = err.message;
     }
   } else {
-    reply = agentTurn(AAL.cond, it, used);
+    reply = agentTurn(ctx.cond, it, used);
   }
 
-  aalTurns(it.id).push({speaker:'agent', text:reply.text, at:Date.now()});
-  const ea = aalLog('AI', 'A', {text:reply.text, qfn:reply.qfn, sub:reply.sub,
-    turn:used + 1, engine:reply.engine, blocked: !!reply.blocked});
-  state.dialog.push({t:ea.t, sid:AAL.me, cond:AAL.cond, aid:AAL.aid, iid:it.id,
-    proc:it.process, turn:used + 1, speaker:'agent', text:reply.text,
-    qfn:reply.qfn, sub:reply.sub, ucode:reply.process || it.process, sent:0});
+  /* 一律走快照，不走 AAL：await 之後 AAL 可能已經是 null，
+     而 aalLog 沒有 itemArg 時會用 aalItem()——學生翻頁的話，
+     同一輪對話的一問一答會被拆到兩題（ASK 記在 R01、AI 記在 R02）。 */
+  const eaT = Date.now();
+  if (!isImpersonating()){
+    logEvent({t:eaT, rel:eaT - ctx.t0, sid:ctx.me, cid:ctx.cid, cond:ctx.cond, lang:'zh',
+      aid:ctx.aid, iid:ctx.it.id, proc:ctx.it.process || 'FR', type:'AI', code:'A',
+      text:reply.text, qfn:reply.qfn, sub:reply.sub, turn:ctx.turn,
+      engine:reply.engine, blocked: !!reply.blocked});
+  }
+  state.dialog.push({t:eaT, sid:ctx.me, cond:ctx.cond, aid:ctx.aid, iid:ctx.it.id,
+    proc:ctx.it.process, turn:ctx.turn, speaker:'agent', text:reply.text,
+    qfn:reply.qfn, sub:reply.sub, ucode:reply.process || ctx.it.process, sent:0});
   save();
-  aalSave();
+  if (AAL) aalSave();   // AAL 可能在等待期間被釋放
 
   /* 守衛放在資料寫入之後、DOM 更新之前：回覆一定要進 state.dialog
      （那是額度與語料的同一份帳），但學生已經翻頁的話就不碰畫面、不 toast。 */
@@ -7499,15 +7574,39 @@ function aalSubmit(){
   const a = getAssignment(AAL.aid), me = currentUser();
   /* 兩種題型分開數。只數選擇題的話，兩題作文整題空白會無聲送出，
      而建構反應題是理解表現的另一半，也是論述層次評定的來源。 */
-  const mcs = AAL.items.filter(function(i){ return i.type === 'mc'; });
-  const crs = AAL.items.filter(function(i){ return i.type === 'cr'; });
-  const missMc = mcs.filter(function(i){ return AAL.answers[i.id] === undefined; }).length;
-  const missCr = crs.filter(function(i){ return !(AAL.texts[i.id] || '').trim(); }).length;
-  if (missMc || missCr){
-    const parts = [];
-    if (missMc) parts.push('還有 ' + missMc + ' 題選擇題沒選');
-    if (missCr) parts.push(missCr + ' 題要打字的題目還是空白的');
-    if (!confirm(parts.join('、') + '，確定要交卷嗎？')) return;
+  /* 安全網原本是反的：有缺答才確認、全部答完反而完全不確認，
+     而〈交卷〉在 tab 序上就緊接著一整節課要按十五次的〈下一題〉。
+     缺答的訊息也只給數量不給題號，按取消之後畫面留在原地、沒有任何標示，
+     要找回缺答的題目只能一路按〈上一題〉——趕時間、能力較弱、
+     以及被對話占掉較多時間的孩子最容易在這裡放棄尋找而按確定，
+     那正是與條件共變的缺失值來源。 */
+  const missIdx = [];
+  AAL.items.forEach(function(i, idx){
+    const blank = (i.type === 'cr')
+      ? !(AAL.texts[i.id] || '').trim()
+      : AAL.answers[i.id] === undefined;
+    if (blank) missIdx.push(idx);
+  });
+
+  if (missIdx.length){
+    const nos = missIdx.map(function(idx){ return '第 ' + (idx + 1) + ' 題'; }).join('、');
+    if (!confirm('還有 ' + missIdx.length + ' 題沒寫完：' + nos +
+                 '。\n\n按「確定」直接交卷，按「取消」回去把它寫完。')){
+      /* 取消不是什麼都不做——把他帶到第一題沒寫完的地方 */
+      AAL.idx = missIdx[0];
+      aalSave();
+      render();
+      const ans = document.getElementById('aalAnswer');
+      if (ans){
+        ans.classList.add('missing');
+        ans.focus({preventScroll:true});
+        ans.scrollIntoView({block:'start'});
+      }
+      toast('帶你回到第 ' + (missIdx[0] + 1) + ' 題。');
+      return;
+    }
+  } else if (!confirm('要交卷了嗎？交出去之後就不能再修改。')){
+    return;
   }
 
   AAL.items.forEach(function(it){
@@ -7545,7 +7644,11 @@ function aalSubmit(){
     } else {
       const c = AAL.answers[it.id];
       state.responses.push({aid:AAL.aid, sid:me.id, iid:it.id,
-        choice: c === undefined ? null : c, correct: c === it.answer});
+        choice: c === undefined ? null : c,
+        /* 沒作答就是 null，不是「答錯」。undefined === answer 恆為 false，
+           會把缺答計成 0 分餵進 Rasch；而缺答率與條件共變（三個 AI 組
+           每題要花對話時間），那會在 RQ1 的組間 θ 比較裡製造與操弄同向的偏誤。 */
+        correct: c === undefined ? null : (c === it.answer)});
     }
   });
   state.submissions = state.submissions.filter(function(s){ return !(s.aid === AAL.aid && s.sid === me.id); });
@@ -7565,6 +7668,42 @@ let SURVEY = null;
 /* 這一份問卷實際要作答的所有題鍵。抬頭的題數與送出前的檢查都吃這一個來源，
    否則會出現「抬頭說 47 題、送出只檢查 41 題」，操弄檢核與使用感受整段留白也送得出去。
    cond 參數不可省：對照組不施操弄檢核，否則會被要求填不存在的三題而永遠送不出去。 */
+/* 表單用 mc_x_i／sys_x_i，儲存用固定 id（mc_tutor、sys_easy…）。
+   兩套鍵並存過一段時間，而只有「寫」的方向做了映射——讀回時整段空白，
+   再送出一次就把原值洗成 null。這兩支是唯一的橋，讀寫都必須經過它們。 */
+function surveyRespToStored(formResp, phase, cond){
+  const out = Object.assign({}, formResp);
+  if (phase !== 'post') return out;
+  if (cond !== 'control'){
+    MANIP_CHECK.forEach(function(m, i){
+      const v = formResp['mc_x_' + i];
+      /* 只有真的作答過才覆寫：保住「鍵存在但值為 null 表示漏答」的語意，
+         同時不讓一次無心的重送抹掉既有值。 */
+      if (v != null) out[m.id] = v;
+      else if (!(m.id in out)) out[m.id] = null;
+      delete out['mc_x_' + i];
+    });
+  }
+  SUS_ITEMS.forEach(function(s, i){
+    const v = formResp['sys_x_' + i];
+    if (v != null) out[s.id] = v;
+    else if (!(s.id in out)) out[s.id] = null;
+    delete out['sys_x_' + i];
+  });
+  return out;
+}
+function surveyRespToForm(storedResp, phase){
+  const out = Object.assign({}, storedResp);
+  if (phase !== 'post') return out;
+  MANIP_CHECK.forEach(function(m, i){
+    if (storedResp[m.id] != null) out['mc_x_' + i] = storedResp[m.id];
+  });
+  SUS_ITEMS.forEach(function(s, i){
+    if (storedResp[s.id] != null) out['sys_x_' + i] = storedResp[s.id];
+  });
+  return out;
+}
+
 function surveyKeys(phase, cond){
   const ks = [];
   constructsFor(phase).forEach(function(c){
@@ -7660,8 +7799,11 @@ function viewSurvey(phase, page){
 
   if (!SURVEY || SURVEY.phase !== phase || SURVEY.sid !== me.id){
     const d = surveyDraftLoad(me.id, phase);
+    /* 讀回已交問卷時要做反向映射。少了它，第 11、12 段（操弄檢核與使用感受）
+       整段空白、抬頭寫「41 / 47」，而且再按一次送出會把原本的 mc_* 洗成 null。
+       操弄檢核是驗證三種角色操弄是否成立的唯一工具。 */
     SURVEY = {phase:phase, sid:me.id,
-              resp: d ? d.resp : (done ? Object.assign({}, done.resp) : {}),
+              resp: d ? d.resp : (done ? surveyRespToForm(done.resp, phase) : {}),
               page: d ? d.page : 1};
   }
   SURVEY.page = Math.max(1, Math.min(page || SURVEY.page || 1, secs.length));
@@ -7766,13 +7908,26 @@ function surveySubmit(phase){
       surveyDraftSave();
       go('#/survey/' + phase + '/' + pg);
       setTimeout(function(){
-        const el = document.querySelector('[data-k="' + miss[0] + '"]');
-        if (el){
+        /* 這一段裡每一題缺答都要標，不是只標第一題——只標一題的話，
+           孩子填完它再按送出，又被退回來一次，不知道還有幾題。 */
+        let first = null, n = 0;
+        miss.forEach(function(k){
+          const el = document.querySelector('[data-k="' + k + '"]');
+          if (!el) return;
           const row = el.closest('.likert');
-          if (row) row.classList.add('missing');
-          el.focus();
-          el.scrollIntoView({block:'center'});
+          if (row){ row.classList.add('missing'); row.setAttribute('aria-invalid', 'true'); }
+          n++;
+          if (!first) first = el;
+        });
+        if (n){
+          const box = document.querySelector('#view .card-p');
+          if (box && !document.getElementById('svMissAlert')){
+            box.insertAdjacentHTML('afterbegin',
+              '<p id="svMissAlert" role="alert" class="small" style="color:var(--crit);font-weight:600">' +
+              '這一段還有 ' + n + ' 題沒有選。</p>');
+          }
         }
+        if (first){ first.focus(); first.scrollIntoView({block:'center'}); }
       }, 0);
       return;
     }
@@ -7781,13 +7936,7 @@ function surveySubmit(phase){
   // 操弄檢核與使用感受用固定鍵存回原本的 id。
   // 未答一律寫成 null，讓分析端能用「鍵存在但值為 null」區分漏答與未施測；
   // 對照組不建 mc_* 鍵，因為那三題本來就不對他施測。
-  const resp = Object.assign({}, SURVEY.resp);
-  if (phase === 'post' && cond !== 'control'){
-    MANIP_CHECK.forEach(function(m, i){ resp[m.id] = SURVEY.resp['mc_x_' + i] || null; });
-  }
-  if (phase === 'post'){
-    SUS_ITEMS.forEach(function(s, i){ resp[s.id] = SURVEY.resp['sys_x_' + i] || null; });
-  }
+  const resp = surveyRespToStored(SURVEY.resp, phase, cond);
 
   state.surveys = (state.surveys || []).filter(function(s){
     return !(s.sid === me.id && s.phase === phase); });
@@ -8734,7 +8883,14 @@ function render(){
   if (ROUTE.name !== 'kb' && ROUTE.name !== 'note' && ROUTE.name !== 'synth') KBSEARCH.q = '';
   /* 離開作答頁就釋放 AAL。順便修掉「換身分之後舊 AAL 還在」的隱患。
      回來時會重跑 aalInit 並補寫一筆 RESUME——那是對的，確實是兩次入座。 */
-  if (AAL && ROUTE.name !== 'aal'){ AAL = null; AAL_LEFT_VIA = 'nav'; }
+  /* 離開作答頁一定要先結清待處理的去抖與節流，再釋放 AAL。
+     render() 綁在 hashchange 上，所以這一行才是所有離開路徑的共同出口——
+     側欄連結、瀏覽器上一頁、平板返回手勢、直接改 hash 都會經過這裡。
+     只在〈交卷〉〈換題〉〈先離開〉三個按鈕上 flush 是不夠的。 */
+  if (AAL && ROUTE.name !== 'aal'){
+    try { flushPendingPicks(); flushLogs(); } catch (e) {}
+    AAL = null; AAL_LEFT_VIA = 'nav';
+  }
   const prevY = window.scrollY;
   /* 內層捲動容器的位置。window.scrollY 還原不了它們——v.innerHTML 一換，
      容器就被重建、scrollTop 歸零。同一篇文章換題時，學生每次都要重新捲回
@@ -8975,7 +9131,8 @@ function bindEvents(){
      marks／checks／notes／texts／answers 都在草稿裡，正常狀況下關分頁
      不會掉資料；只有 aalSave() 寫失敗（配額）時 dirty 才會留著。 */
   window.addEventListener('beforeunload', function(e){
-    if (AAL) flushLogs();
+    /* 關分頁是最後一次寫入機會：待處理的選項、最後一段打字與日誌一起結清 */
+    if (AAL){ try { flushPendingPicks(); } catch (e2) {} flushLogs(); }
     if (AAL && AAL.dirty){ e.preventDefault(); e.returnValue = ''; }
   });
 
@@ -9277,6 +9434,8 @@ function bindEvents(){
     if (e.target.id === 'who'){
       /* 用身分下拉離開代為檢視也要結束模式，否則 impersonate 旗標會留著，
          把整站對「已經回到自己身分」的老師鎖在唯讀狀態，而且沒有任何說明。 */
+      /* 換身分等於離開作答頁，待處理的作答與打字要先結清 */
+      if (AAL){ try { flushPendingPicks(); flushLogs(); } catch (e2) {} }
       state.ui.impersonate = null;
       state.ui.role = e.target.value; save(); renderShell();
       go(isTeacher() ? '#/teacher' : '#/student'); render(); return; }
@@ -9395,6 +9554,7 @@ function bindEvents(){
         aalSave();
       } else {
         aalTypeTelemetry._pendingW = {it:it, len:t.value.length, at:Date.now()};
+        scheduleDraftSave();
       }
       return; }
     if (act === 'aal-note'){
@@ -9407,6 +9567,7 @@ function bindEvents(){
         aalSave();
       } else {
         aalTypeTelemetry._pendingN = {it:it, text:t.value.slice(-80), at:Date.now()};
+        scheduleDraftSave();
       }
       /* 對照組的「已寫 N 字」照 turnLeft 的做法就地更新——
          每打一個字重繪整個面板，會讓對照組的互動延遲曲線與三個 AI 組不同。 */
@@ -9605,7 +9766,8 @@ function submitQuiz(aid){
     } else {
       const c = QUIZ.answers[it.id];
       state.responses.push({aid:aid, sid:me.id, iid:it.id, choice:c === undefined ? null : c,
-        correct: c === it.answer});
+        /* 同 aalSubmit：缺答寫 null，不要寫 false */
+        correct: c === undefined ? null : (c === it.answer)});
     }
   });
   state.submissions = state.submissions.filter(function(s){ return !(s.aid === aid && s.sid === me.id); });

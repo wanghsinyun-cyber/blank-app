@@ -92,7 +92,14 @@ function render(){
   if (ROUTE.name !== 'kb' && ROUTE.name !== 'note' && ROUTE.name !== 'synth') KBSEARCH.q = '';
   /* 離開作答頁就釋放 AAL。順便修掉「換身分之後舊 AAL 還在」的隱患。
      回來時會重跑 aalInit 並補寫一筆 RESUME——那是對的，確實是兩次入座。 */
-  if (AAL && ROUTE.name !== 'aal'){ AAL = null; AAL_LEFT_VIA = 'nav'; }
+  /* 離開作答頁一定要先結清待處理的去抖與節流，再釋放 AAL。
+     render() 綁在 hashchange 上，所以這一行才是所有離開路徑的共同出口——
+     側欄連結、瀏覽器上一頁、平板返回手勢、直接改 hash 都會經過這裡。
+     只在〈交卷〉〈換題〉〈先離開〉三個按鈕上 flush 是不夠的。 */
+  if (AAL && ROUTE.name !== 'aal'){
+    try { flushPendingPicks(); flushLogs(); } catch (e) {}
+    AAL = null; AAL_LEFT_VIA = 'nav';
+  }
   const prevY = window.scrollY;
   /* 內層捲動容器的位置。window.scrollY 還原不了它們——v.innerHTML 一換，
      容器就被重建、scrollTop 歸零。同一篇文章換題時，學生每次都要重新捲回
@@ -333,7 +340,8 @@ function bindEvents(){
      marks／checks／notes／texts／answers 都在草稿裡，正常狀況下關分頁
      不會掉資料；只有 aalSave() 寫失敗（配額）時 dirty 才會留著。 */
   window.addEventListener('beforeunload', function(e){
-    if (AAL) flushLogs();
+    /* 關分頁是最後一次寫入機會：待處理的選項、最後一段打字與日誌一起結清 */
+    if (AAL){ try { flushPendingPicks(); } catch (e2) {} flushLogs(); }
     if (AAL && AAL.dirty){ e.preventDefault(); e.returnValue = ''; }
   });
 
@@ -635,6 +643,8 @@ function bindEvents(){
     if (e.target.id === 'who'){
       /* 用身分下拉離開代為檢視也要結束模式，否則 impersonate 旗標會留著，
          把整站對「已經回到自己身分」的老師鎖在唯讀狀態，而且沒有任何說明。 */
+      /* 換身分等於離開作答頁，待處理的作答與打字要先結清 */
+      if (AAL){ try { flushPendingPicks(); flushLogs(); } catch (e2) {} }
       state.ui.impersonate = null;
       state.ui.role = e.target.value; save(); renderShell();
       go(isTeacher() ? '#/teacher' : '#/student'); render(); return; }
@@ -753,6 +763,7 @@ function bindEvents(){
         aalSave();
       } else {
         aalTypeTelemetry._pendingW = {it:it, len:t.value.length, at:Date.now()};
+        scheduleDraftSave();
       }
       return; }
     if (act === 'aal-note'){
@@ -765,6 +776,7 @@ function bindEvents(){
         aalSave();
       } else {
         aalTypeTelemetry._pendingN = {it:it, text:t.value.slice(-80), at:Date.now()};
+        scheduleDraftSave();
       }
       /* 對照組的「已寫 N 字」照 turnLeft 的做法就地更新——
          每打一個字重繪整個面板，會讓對照組的互動延遲曲線與三個 AI 組不同。 */
@@ -963,7 +975,8 @@ function submitQuiz(aid){
     } else {
       const c = QUIZ.answers[it.id];
       state.responses.push({aid:aid, sid:me.id, iid:it.id, choice:c === undefined ? null : c,
-        correct: c === it.answer});
+        /* 同 aalSubmit：缺答寫 null，不要寫 false */
+        correct: c === undefined ? null : (c === it.answer)});
     }
   });
   state.submissions = state.submissions.filter(function(s){ return !(s.aid === aid && s.sid === me.id); });

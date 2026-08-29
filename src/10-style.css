@@ -476,6 +476,9 @@ input[type=checkbox],input[type=radio]{ width:1.15em; height:1.15em; accent-colo
 .imp-bar span{flex:1}
 .unread-dot{color:var(--accent); margin-right:.25rem}
 .likert.missing{outline:3px solid var(--crit); outline-offset:6px; border-radius:var(--r-m)}
+/* 作答卡被帶回來時的標示。用外框 + 一行文字，不只靠顏色（1.4.1）。 */
+.card.missing{outline:3px solid var(--crit); outline-offset:4px}
+.card.missing .card-h::after{content:"　還沒寫完"; color:var(--crit); font-weight:600; font-size:0.8rem}
 .scale-lab{display:flex; justify-content:space-between; font-size:0.8rem; color:var(--ink-4); margin-top:4px; max-width:13.5rem}
 
 pre.prompt{

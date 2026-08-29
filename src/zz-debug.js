@@ -97,9 +97,13 @@
     ['aal interactions', function(){
       aalMark(0); aalPick(1);
       var it = aalItem();
-      aalTurns(it.id).push({speaker:'student', text:'我覺得作者想告訴我們的是另一件事', rel:'ABOVE', at:Date.now()});
+      /* AAL.turns 已移除：對話唯一的帳本是 state.dialog */
+      state.dialog = state.dialog || [];
+      state.dialog.push({t:Date.now(), sid:AAL.me, cond:AAL.cond, aid:AAL.aid, iid:it.id,
+        turn:1, speaker:'student', text:'我覺得作者想告訴我們的是另一件事', rel:'ABOVE'});
       var a = agentTurn(AAL.cond, it, 0);
-      aalTurns(it.id).push({speaker:'agent', text:a.text, at:Date.now()});
+      state.dialog.push({t:Date.now() + 1, sid:AAL.me, cond:AAL.cond, aid:AAL.aid, iid:it.id,
+        turn:1, speaker:'agent', text:a.text});
       V(viewAaL('a-post'));
       log('   turns=' + aalStudentTurns(it.id) + ' logs=' + state.logs.length); }],
     ['viewAaL control cond', function(){
