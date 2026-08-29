@@ -103,6 +103,11 @@ p{margin:0 0 .8em}
 a{color:var(--accent); text-underline-offset:3px}
 :focus-visible{outline:3px solid var(--focus); outline-offset:2px; border-radius:3px}
 button,input,select,textarea{font:inherit; color:inherit}
+/* <select> 的內建寬度是「最長選項的寬度」，而它幾乎都放在 flex 列裡，
+   min-width 預設 auto——不會縮。390px 實測：頂列的 #classSel 552px、
+   #who 401px，題庫頁的 #bkText 402px（175% 字級時 672px），
+   每一個都足以讓整份文件長出橫向捲軸。選單永遠不該把頁面撐開。 */
+select{min-width:0; max-width:100%; text-overflow:ellipsis}
 .num{font-family:var(--f-mono); font-variant-numeric:tabular-nums}
 
 /* ---------- 外殼 ----------
@@ -115,6 +120,14 @@ button,input,select,textarea{font:inherit; color:inherit}
   position:sticky; top:0; min-height:68px; display:flex; flex-wrap:wrap; align-items:center; gap:14px; padding:0 16px;
   background:var(--card); border-bottom:1px solid var(--rule); z-index:20;
 }
+/* 頂列的兩個下拉選單會撐到最長選項的寬度（班級名、學生姓名），
+   而它們是 flex 項目、min-width 預設是 auto——不會縮。
+   390px × 175% 字級實測：#classSel 552px、#who 401px，
+   於是**每一頁**的 document 都出現橫向捲軸（scrollWidth 568 / clientWidth 390）。
+   側欄早就修過同一個陷阱（見窄版註解：align-self 與 min-width 要一起覆寫），
+   頂列沒跟上。允許它們縮，縮到放不下就用刪節號。 */
+.topbar .row{min-width:0; flex-wrap:wrap}
+#classWrap{min-width:0}
 .brand{display:flex; align-items:baseline; gap:9px; margin-right:4px}
 .brand b{font-family:var(--f-display); font-size:1.2rem; letter-spacing:.06em}
 .brand span{font-size:0.8rem; color:var(--ink-3); letter-spacing:.06em}
@@ -155,6 +168,12 @@ button,input,select,textarea{font:inherit; color:inherit}
 .card-h{display:flex; align-items:center; gap:10px; padding:14px 18px; border-bottom:1px solid var(--rule-soft)}
 .card-h h3{flex:1}
 .grid{display:grid; gap:14px}
+/* 格線與直欄的子項，min-width 預設是 auto——會被內容（寬表格、殘差矩陣、
+   長提示詞）撐開而不肯縮。於是卡片比視窗還寬，裡層的 .tablewrap
+   即使有 overflow-x:auto 也永遠用不到，整頁長出橫向捲軸。
+   .stage 早就設了 min-width:0（見上），它的子項沒有跟上。
+   390px 實測：研究控制台的卡片 451–1269px、KIDMAP 的卡片 383px。 */
+.grid > *, .col > *{min-width:0}
 /* 分欄版面（教師分析、知識建構、儀表板、研究控制台共 10 處）。
    欄寬原本直接寫成 inline style="grid-template-columns:…"，
    而行內樣式的優先權高過任何選擇器——底下的窄版斷點與 [data-narrow]
@@ -202,7 +221,11 @@ input:focus-visible,select:focus-visible,textarea:focus-visible{border-color:tra
 .lk-plain{background:none; border:0; padding:0; font:inherit; color:var(--accent);
   cursor:pointer; text-align:left; text-decoration:underline; text-underline-offset:3px}
 button.pill{font:inherit; font-size:0.8rem; cursor:pointer; border-color:var(--rule-strong)}
-.pill{display:inline-flex; align-items:center; gap:5px; border-radius:100px; padding:1px 9px; font-size:0.8rem; border:1px solid var(--rule); background:var(--shade); color:var(--ink-2); white-space:nowrap}
+/* max-width 是必要的：白色藥丸有 white-space:nowrap，
+   而「內建規則引擎（離線可重現）」在 175% 字級下是 384px——
+   比 390px 視窗的內容區還寬，單獨一顆就把整頁推出橫向捲軸。
+   窄版另外允許它折行（見底下兩個窄版入口）。 */
+.pill{display:inline-flex; align-items:center; gap:5px; border-radius:100px; padding:1px 9px; font-size:0.8rem; border:1px solid var(--rule); background:var(--shade); color:var(--ink-2); white-space:nowrap; max-width:100%}
 /* [hidden] 在 UA 樣式表裡是 display:none，而作者樣式的 .pill{display:inline-flex}
    永遠贏過 UA 來源——所以 hidden 對 .pill 完全無效。每個學生一進作答頁
    就會看到「已標記 0 句」，取消最後一個標記後它也不會消失，
@@ -226,7 +249,14 @@ button.pill{font:inherit; font-size:0.8rem; cursor:pointer; border-color:var(--r
 .stat.good{border-left:3px solid var(--good)}
 .stat.warn{border-left:3px solid var(--warn)}
 
-.tablewrap{overflow-x:auto; -webkit-overflow-scrolling:touch}
+/* position:relative 是必要的，理由同 .tabs a：裡面的 .sr-only 是絕對定位，
+   容器不是已定位元素的話，它會跳過這個捲動區、改以 .stage 為基準停在
+   表格右緣的靜態位置，把整份文件撐出橫向捲軸（儀表板「學生」分頁實測
+   scrollWidth 731 / clientWidth 390，而 #view 裡找不到任何溢出元素）。 */
+.tablewrap{overflow-x:auto; -webkit-overflow-scrolling:touch; position:relative}
+/* 巢狀的 .row 是外層 .row 的 flex 項目，min-width 預設 auto 就不肯縮，
+   外層雖然 flex-wrap:wrap 也救不了它（題庫頁的文本篩選列實測 462px）。 */
+.row .row{min-width:0}
 table{border-collapse:collapse; width:100%; font-size:0.85rem}
 th,td{text-align:left; padding:7px 10px; border-bottom:1px solid var(--rule-soft); vertical-align:middle}
 th{font-size:0.8rem; letter-spacing:.08em; color:var(--ink-4); font-weight:600; white-space:nowrap; background:var(--card)}
@@ -392,6 +422,14 @@ input[type=checkbox],input[type=radio]{ width:1.15em; height:1.15em; accent-colo
   position:absolute; width:1px; height:1px; padding:0; margin:-1px;
   overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; border:0;
 }
+/* .sr-only 是 position:absolute，所以它的**包含區塊**是最近的已定位祖先。
+   分頁列與側欄都是可橫捲的容器，但它們自己不是已定位元素——
+   於是裡面的 sr-only（「（目前顯示中）」「（待填）」）會跳過捲動容器，
+   改以 .stage 為基準停在它的靜態位置。實測 390px × 175% 字級：
+   一個 1px、看不見的 span 停在 x=1117，把 #stage 的 scrollWidth 撐成 1117，
+   整份文件因此長出橫向捲軸——而 .tabs 自己其實好好地捲著（client 362 / scroll 1541）。
+   讓分頁與側欄的連結自己成為包含區塊，span 就留在該待的地方。 */
+.tabs a, .tabs button, .rail a{position:relative}
 /* 跳至主要內容：鍵盤 Tab 第一站 */
 /* 略過連結。用 <button> 而不是 <a href="#...">，因為本站是 hash 路由：
    任何寫進 hash 的錨點都會被 parseRoute() 當成路由名，把畫面打成「找不到這一頁」。 */
@@ -552,6 +590,7 @@ pre.prompt{
   .aal{grid-template-columns:1fr}
   .aal-text{position:static; max-height:none}
   .grid.split{grid-template-columns:1fr}
+  .pill{white-space:normal}
 }
 :root[data-narrow] .main{flex-direction:column; align-items:stretch}
 :root[data-narrow] .rail{position:static; width:100%; flex:0 0 auto; align-self:stretch; min-width:0;
@@ -567,6 +606,7 @@ pre.prompt{
 :root[data-narrow] .aal{grid-template-columns:1fr}
 :root[data-narrow] .aal-text{position:static; max-height:none}
 :root[data-narrow] .grid.split{grid-template-columns:1fr}
+:root[data-narrow] .pill{white-space:normal}
 @media (prefers-reduced-motion:reduce){*{animation:none!important; transition:none!important}}
 @media print{.rail,.topbar,.kb-toolbar{display:none} .app,.main{display:block} .stage{min-height:0}}
 
@@ -644,8 +684,9 @@ pre.prompt{
    作答紀錄存的是「選項索引」，重排選項就等於改變每一筆舊紀錄的意思。
    只要動到 options／answer／why，版號一定要跟著加，否則舊瀏覽器會拿
    舊索引去對新答案鍵，而且不會報錯——只會靜靜地把診斷對到錯的失誤碼。
-   第 6 版：R03／R10／R11／R12 重排選項以平衡正解位置。 */
-const STATE_VERSION = 6;
+   第 6 版：R03／R10／R11／R12 重排選項以平衡正解位置。
+   第 7 版：派題的題目順序改成依文本分組（見 allIds）。 */
+const STATE_VERSION = 7;
 
 /* --- 固定種子亂數（mulberry32），確保示範資料可重現 --- */
 function mulberry32(a){
@@ -1064,7 +1105,31 @@ function buildSeedState(){
   const allClassIds = classes.map(function(c){ return c.id; });
 
   /* 兩次派題：同一份題本、同一次校準，四班共用 → 條件間可比 */
-  const allIds = ITEMS.map(function(it){ return it.id; });
+  /* 依文本分組再排。ITEMS 的宣告順序是 R01…R14 然後 C01、C02，
+     而 C01 掛在 T1、C02 掛在 T2——照原順序派下去，孩子讀的文本會是
+     T1 → T2 → T1 → T2，切換三次。
+     第 15 題（C01）正是要他「把理由連回故事裡的某一段」，卻在他離開那篇
+     六題之後才出現，等於先把文章收走再要他引用。
+     換文本本來就有代價（見 aal-prev／aal-next：文章無聲換掉會讓學生
+     以為自己的標記不見了），而外在認知負荷 cl_ex 是依變項之一——
+     這種可以避免的切換會把它整體墊高，而且與對話占掉多少時間交互作用。
+     改成一篇讀完（含它自己的非選題）再換下一篇，只切換一次。
+     題本內容一題未動，只有順序改變。 */
+  const allIds = TEXTS.map(function(t){ return t.id; }).concat([null])
+    .reduce(function(acc, tid){
+      if (tid === null){
+        /* 保險：沒有掛在任何文本上的題目仍要派出去，不能靜默消失 */
+        ITEMS.forEach(function(it){
+          if (acc.indexOf(it.id) < 0) acc.push(it.id);
+        });
+        return acc;
+      }
+      ITEMS.filter(function(it){ return it.unit === tid && it.type !== 'cr'; })
+           .forEach(function(it){ acc.push(it.id); });
+      ITEMS.filter(function(it){ return it.unit === tid && it.type === 'cr'; })
+           .forEach(function(it){ acc.push(it.id); });
+      return acc;
+    }, []);
   const pre = {
     id:'a-pre', title:'閱讀理解 前測', desc:'先看看大家目前的讀法，答錯沒關係，等一下我們一起討論。',
     classIds: allClassIds, teacherId:'u-t1', itemIds: allIds, phase:'pre',
@@ -2143,18 +2208,24 @@ function toTelemetryCsv(){
 const SCALE6 = {n:6, labels:['非常不同意', '不同意', '有點不同意', '有點同意', '同意', '非常同意']};
 const SCALE5 = {n:5, labels:['完全不符合', '不太符合', '普通', '有點符合', '完全符合']};
 
+/* phase:'both' 的構念在課前與課後各施一次（前測那一份是 ANCOVA 的共變數）。
+   課前那一次，孩子還沒看過任何文章——所以這些題目一個字都不能寫「這篇文章」
+   或「讀得這麼仔細」，那是在問一件還沒發生的事。
+   eff 的第 1 題本來就寫「這樣長度的文章」，用的正是這個通則語氣；
+   其餘四題沒跟上，改成同一個語氣（phase:'post' 的構念不受此限，
+   它們只在課後施測，寫「這篇文章」是對的）。 */
 const CONSTRUCTS = [
   {id:'mot_in',  name:'內在動機',   dim:'學習動機', scale:SCALE6, phase:'both', cls:'sc3',
    src:'MSLQ 內在目標導向', items:[
-    '這篇文章就算不算成績，我也想把它讀懂',
+    '這樣的文章就算不算成績，我也想把它讀懂',
     '遇到讀不太懂的地方，我會想知道自己是哪裡讀錯了',
     '把一段話想清楚的感覺，本身就讓我覺得值得',
     '我喜歡去讀那些一開始看不太懂的文章']},
   {id:'mot_ex',  name:'外在動機',   dim:'學習動機', scale:SCALE6, phase:'both', cls:'sc2',
    src:'MSLQ 外在目標導向', items:[
-    '我認真讀這篇文章，主要是因為會算成績',
+    '我會認真讀這樣的文章，主要是因為會算成績',
     '我希望這次閱讀測驗的表現比班上多數同學好',
-    '如果沒有人會看到結果，我大概不會讀得這麼仔細']},
+    '如果沒有人會看到結果，我大概就不會讀得那麼仔細']},
   {id:'eff',     name:'自我效能',   dim:'自我效能', scale:SCALE6, phase:'both', cls:'sc1',
    src:'MSLQ 學習自我效能', items:[
     '我有把握讀懂這樣長度的文章',
@@ -2164,7 +2235,7 @@ const CONSTRUCTS = [
     '我相信我可以在這次閱讀測驗拿到不錯的成績',
     '就算一開始讀錯了，我也有辦法自己發現並改過來',
     '我能判斷自己的答案有沒有文章的根據',
-    '這篇文章對我來說是讀得懂的']},
+    '這樣的文章對我來說是讀得懂的']},
   {id:'cl_in',   name:'內在負荷',   dim:'認知負荷', scale:SCALE6, phase:'post', cls:'sc4',
    src:'Leppink 三因素·內在', items:[
     '這篇文章的內容對我來說很複雜',
@@ -2184,7 +2255,12 @@ const CONSTRUCTS = [
    src:'Fredricks 三維·行為', items:[
     '整節課我都有跟著在讀',
     '我很少分心去做別的事',
-    '該我回應的時候我都有回應',
+    /* 原本是「該我回應的時候我都有回應」。三個 AI 組會讀成「回應夥伴」，
+       對照組整節課沒有夥伴，只能讀成「回答題目」——同一個量尺點在四個條件
+       指的是不同的行為，而行為投入正是要拿來做四條件比較的依變項。
+       不能刪題（見 surveySections 的註解：正式施測要換成 Fredricks 原量表，
+       刪題就不是那個構念了），所以改成把觸發條件講明白，四個條件同義。 */
+    '需要我回答或寫下想法的時候，我都有做',
     '我把每一題都做完了']},
   {id:'eng_e',   name:'情緒投入',   dim:'學習投入', scale:SCALE5, phase:'post', cls:'sc3',
    src:'Fredricks 三維·情緒', items:[
@@ -4833,7 +4909,11 @@ function renderRail(){
       ? '<span class="badge" aria-hidden="true">' + esc(String(n.b)) + '</span>' +
         '<span class="sr-only">（' + esc(String(n.b)) + '）</span>'
       : '';
-    return '<a href="' + n.h + '"' + cur + '><span class="glyph">' + n.g2 + '</span>' + esc(n.t) +
+    /* 字符是純裝飾的視覺記號，要藏起來。不藏的話報讀器會把它併進連結名稱，
+       念成「業我的作業」「構知識建構空間」「長我的學習軌跡」——
+       旁邊的徽章與 procPill() 的形狀記號本來就都 aria-hidden 了，
+       只有這一處沒跟上。 */
+    return '<a href="' + n.h + '"' + cur + '><span class="glyph" aria-hidden="true">' + n.g2 + '</span>' + esc(n.t) +
       badge + '</a>';
   }).join('');
 }
@@ -6685,7 +6765,7 @@ function viewStudent(){
            示範模式下補一顆「再走一次」，讓人看得到這套流程長什麼樣子；
            正式施測時 demoSeed 為 false，這顆鈕不會出現。 */
         '<div class="row">' + (done
-          ? '<a class="btn" href="#/result/' + a.id + '">查看個人診斷</a>' +
+          ? '<a class="btn" href="#/result/' + a.id + '">看我這次讀得怎麼樣</a>' +
             (state.demoSeed !== false && a.aal && !isImpersonating()
               ? ' <button class="btn sm" data-act="redo-demo" data-id="' + a.id +
                 '">再走一次（示範）</button>' : '')
@@ -6826,7 +6906,7 @@ function viewResult(aid){
   const right = mc.filter(function(r){ return r.correct; }).length;
   const ps = diag && diag.ready ? diag.perStudent.find(function(p){ return p.sid === me.id; }) : null;
 
-  return sectionHead('個人診斷', a.title, '<a class="btn" href="#/student">← 回我的作業</a>') +
+  return sectionHead('我這次讀得怎麼樣', a.title, '<a class="btn" href="#/student">← 回我的作業</a>') +
     /* 學生端不出現 θ、δ (logit)、KIDMAP、迷思象限——十歲孩子看不懂，
        而且「迷思」是個標籤。同一份資料，換一套對他說話的說法；
        底層的 ps.theta、ps.cells 與所有匯出一個字不動。 */
@@ -7552,6 +7632,22 @@ function aalInit(aid){
       AAL_LEFT_VIA = 'reload';
     }
   } catch (e) { /* 草稿壞掉就當作沒有，從頭開始 */ }
+
+  /* 標記和對話回合是同一個形狀：兩本帳。
+     學生端讀 localStorage 的草稿，教師端的唯讀重播讀事件日誌，
+     兩邊會講不同的話——實測標了第 1、3、5 句又取消第 3 句之後，
+     學生的畫面是 [0,4]、老師看到的是 [0,1,4]。
+     清掉瀏覽器資料或換一台平板更嚴重：孩子看到 0 句標記、老師看到 5 句，
+     而畫面上沒有任何線索說明誰才是對的。
+     依 aalDialogOf 已經確立的原則（額度與語料以已落地的紀錄為單一真相來源），
+     標記一律從日誌重建，草稿只是便利。 */
+  try {
+    AAL.marks = {};
+    (AAL.items || []).forEach(function(i){
+      if (AAL.marks[i.unit]) return;
+      AAL.marks[i.unit] = inspectMarks(AAL.me, AAL.aid, i.unit).map(Number);
+    });
+  } catch (e) { AAL.marks = AAL.marks || {}; }
 }
 
 function aalItem(){ return AAL.items[AAL.idx]; }
@@ -7679,8 +7775,12 @@ function viewAaL(aid){
              這個缺陷只吃掉 A 的作答，是只打在鍵盤使用者身上的系統性失分。
              改文案與可見性就好，不要「讓 focus 等於選取」：那會把漏答
              換成錯答，還會用純導覽動作汙染 drafts 的「第一次判斷」。 */
-          '<p class="muted small" style="margin-top:6px">用上下方向鍵選答案，' +
-          '或用空白鍵選你現在停在的那一個。</p>'
+          /* 這句原本只講鍵盤。而這套系統要在教室的平板上跑——
+             平板沒有方向鍵也沒有空白鍵，畫面上唯一的操作說明
+             講的是他做不到的事，而且完全沒提可以用點的。
+             點選寫在前面（那是多數孩子的路徑），鍵盤寫在後面。 */
+          '<p class="muted small" style="margin-top:6px">直接點你要的答案就可以。' +
+          '用鍵盤的話，上下方向鍵移動、空白鍵選起來。</p>'
         : '<div class="field"><label for="crText">寫出你的答案，並說明你的理由</label>' +
           '<textarea id="crText" data-act="aal-text" style="min-height:160px" ' +
           'placeholder="先寫你的看法，再寫你是從文章哪一段看出來的">' +
@@ -8288,6 +8388,16 @@ function surveyDraftLoad(sid, phase){
     return all[sid + '|' + phase] || null;
   } catch (e) { return null; }
 }
+/* 丟掉某位學生在某一份作業上的作答草稿。
+   「再走一次」與施測前清場都要用它——只清 state 而不清草稿的話，
+   下一次進作答頁 aalInit 會把舊的 idx 與答案原封不動還原回來。 */
+function aalDraftDrop(aid, sid){
+  try {
+    const all = JSON.parse(localStorage.getItem(AAL_DRAFT_KEY) || '{}');
+    delete all[aid + '|' + sid];
+    localStorage.setItem(AAL_DRAFT_KEY, JSON.stringify(all));
+  } catch (e) {}
+}
 function surveyDraftDrop(sid, phase){
   try {
     const all = JSON.parse(localStorage.getItem(SURVEY_DRAFT_KEY) || '{}');
@@ -8316,6 +8426,15 @@ function viewSurvey(phase, page){
               page: d ? d.page : 1};
   }
   SURVEY.page = Math.max(1, Math.min(page || SURVEY.page || 1, secs.length));
+  /* 網址與畫面要說同一件事。原本越界的頁碼只在記憶體裡夾回範圍，
+     網址列還停在 #/survey/post/99——重整、加書籤、或把連結給老師看，
+     又會回到那個值；而「第幾段，共幾段」是孩子判斷自己填到哪裡的唯一依據。
+     沒有頁碼的入口（交完卷跳過來的 #/survey/post）也一併補成明確頁碼。
+     replaceState 不觸發 hashchange，所以不會再繞一次 render。 */
+  const wantHash = '#/survey/' + phase + '/' + SURVEY.page;
+  if (location.hash !== wantHash && window.history && history.replaceState){
+    try { history.replaceState(null, '', wantHash); } catch (e) {}
+  }
 
   const keys = surveyKeys(phase, cond);
   const total = keys.length;
@@ -8374,8 +8493,9 @@ function viewSurvey(phase, page){
         '照你真正的感覺選就好。看不懂的題目可以舉手問老師。' +
         '這份問卷分成 ' + secs.length + ' 段，中間可以休息。' +
         /* 量尺與作答頁的選項是同一個 radiogroup 形狀，第一次填時
-           行為完全一樣：Tab 進來會停在第一格但不勾選它。 */
-        '用上下方向鍵選，或用空白鍵選你現在停在的那一格。</p></div>'
+           行為完全一樣：Tab 進來會停在第一格但不勾選它。
+           兩處的說明也要一致：先講點選，再講鍵盤。 */
+        '直接點你要的那一格就可以。用鍵盤的話，上下方向鍵移動、空白鍵選起來。</p></div>'
       : '') +
     (scaleChanged
       ? '<div class="card card-p" style="margin-bottom:14px;border-left:3px solid var(--accent)">' +
@@ -9968,6 +10088,22 @@ function bindEvents(){
       state.submissions = state.submissions.filter(function(s){ return !(s.aid === aid && s.sid === me.id); });
       state.responses   = state.responses.filter(function(r){ return !(r.aid === aid && r.sid === me.id); });
       state.dialog      = (state.dialog || []).filter(function(d){ return !(d.aid === aid && d.sid === me.id); });
+      /* 「再走一次」原本只清這三樣，於是重來的其實只有一半：
+         · state.logs 留著——標記、選項、打字的歷程事件全都還在，
+           而標記現在是從日誌重建的（見 aalInit），孩子會看到上一次的
+           畫線還亮著，卻找不到自己的作答
+         · localStorage 的草稿留著——aalInit 會把他帶回離開的那一題，
+           答案原封不動，而畫面說的是「重新走一次流程」 */
+      state.logs = (state.logs || []).filter(function(e){ return !(e.aid === aid && e.sid === me.id); });
+      /* 種出來的那一半也要一起拿掉。標記是從 allLogs() 重建的，
+         而 allLogs() = DEMO_LOGS + state.logs——只清後者的話，
+         孩子重新進來會看到上一次的畫線還亮著，卻一題答案都沒有。
+         （DEMO_LOGS 在每次載入時重新種出來，所以這是本次工作階段內的清理；
+           對「再走一次」這個示範用的按鈕來說足夠。） */
+      if (typeof DEMO_LOGS !== 'undefined' && DEMO_LOGS.length)
+        DEMO_LOGS = DEMO_LOGS.filter(function(e){ return !(e.aid === aid && e.sid === me.id); });
+      aalDraftDrop(aid, me.id);
+      AAL = null;
       save(); go('#/aal/' + aid); return;
     }
 
@@ -9975,7 +10111,7 @@ function bindEvents(){
        也是教師端所有畫面的來源；清掉的是示範的後測作答與示範問卷。 */
     if (act === 'go-live'){
       if (!isResearcher()) return;
-      if (!confirm('這會清空示範的後測作答、示範問卷，以及知識建構空間裡所有示範的視圖與貼文，讓學生端回到「尚未作答」。\n\n前測資料與 Rasch 校準會保留。\n\n這一步不可復原（要回到示範資料需按「重設」）。確定嗎？')) return;
+      if (!confirm('這會清空示範的後測作答、示範問卷、歷程事件、作答草稿，以及知識建構空間裡所有示範的視圖與貼文，讓學生端回到「尚未作答」。\n\n前測資料與 Rasch 校準會保留。\n\n這一步不可復原（要回到示範資料需按「重設」）。確定嗎？')) return;
       if (!confirm('再確認一次：清空之後，這台瀏覽器上的平台就是準備施測的狀態。')) return;
       state.demoSeed  = false;
       state.surveys   = (state.surveys || []).filter(function(s){ return !s.demo; });
@@ -9987,8 +10123,20 @@ function bindEvents(){
       state.notes = [];
       state.dialog = [];
       DEMO_LOGS = []; DEMO_DIALOG = [];
+      /* DEMO_LOGS 是種出來的那一半，state.logs 是「真的有人在這台機器上操作」
+         產生的那一半——備課、試玩、示範給同事看，全都寫在裡面。
+         留著的話，施測當天的延宕序列分析與 ENA 會把那些事件一起算進去，
+         而歷程序列本身就是依變項。
+         兩份草稿也要清：不清的話，第一個坐下來的孩子按〈開始這節課〉
+         會接到別人示範時留下的答案與問卷進度。 */
+      state.logs = [];
+      try {
+        localStorage.removeItem('kairos-draft');
+        localStorage.removeItem('kairos-survey-draft');
+      } catch (e) {}
+      AAL = null; SURVEY = null; QUIZ = null;
       save(); renderShell(); render();
-      toast('已清空示範作答與示範問卷，可以施測了。');
+      toast('已清空示範作答、示範問卷、歷程事件與作答草稿，可以施測了。');
       return;
     }
   });

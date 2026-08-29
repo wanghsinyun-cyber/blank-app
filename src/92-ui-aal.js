@@ -106,6 +106,22 @@ function aalInit(aid){
       AAL_LEFT_VIA = 'reload';
     }
   } catch (e) { /* 草稿壞掉就當作沒有，從頭開始 */ }
+
+  /* 標記和對話回合是同一個形狀：兩本帳。
+     學生端讀 localStorage 的草稿，教師端的唯讀重播讀事件日誌，
+     兩邊會講不同的話——實測標了第 1、3、5 句又取消第 3 句之後，
+     學生的畫面是 [0,4]、老師看到的是 [0,1,4]。
+     清掉瀏覽器資料或換一台平板更嚴重：孩子看到 0 句標記、老師看到 5 句，
+     而畫面上沒有任何線索說明誰才是對的。
+     依 aalDialogOf 已經確立的原則（額度與語料以已落地的紀錄為單一真相來源），
+     標記一律從日誌重建，草稿只是便利。 */
+  try {
+    AAL.marks = {};
+    (AAL.items || []).forEach(function(i){
+      if (AAL.marks[i.unit]) return;
+      AAL.marks[i.unit] = inspectMarks(AAL.me, AAL.aid, i.unit).map(Number);
+    });
+  } catch (e) { AAL.marks = AAL.marks || {}; }
 }
 
 function aalItem(){ return AAL.items[AAL.idx]; }
@@ -233,8 +249,12 @@ function viewAaL(aid){
              這個缺陷只吃掉 A 的作答，是只打在鍵盤使用者身上的系統性失分。
              改文案與可見性就好，不要「讓 focus 等於選取」：那會把漏答
              換成錯答，還會用純導覽動作汙染 drafts 的「第一次判斷」。 */
-          '<p class="muted small" style="margin-top:6px">用上下方向鍵選答案，' +
-          '或用空白鍵選你現在停在的那一個。</p>'
+          /* 這句原本只講鍵盤。而這套系統要在教室的平板上跑——
+             平板沒有方向鍵也沒有空白鍵，畫面上唯一的操作說明
+             講的是他做不到的事，而且完全沒提可以用點的。
+             點選寫在前面（那是多數孩子的路徑），鍵盤寫在後面。 */
+          '<p class="muted small" style="margin-top:6px">直接點你要的答案就可以。' +
+          '用鍵盤的話，上下方向鍵移動、空白鍵選起來。</p>'
         : '<div class="field"><label for="crText">寫出你的答案，並說明你的理由</label>' +
           '<textarea id="crText" data-act="aal-text" style="min-height:160px" ' +
           'placeholder="先寫你的看法，再寫你是從文章哪一段看出來的">' +
@@ -842,6 +862,16 @@ function surveyDraftLoad(sid, phase){
     return all[sid + '|' + phase] || null;
   } catch (e) { return null; }
 }
+/* 丟掉某位學生在某一份作業上的作答草稿。
+   「再走一次」與施測前清場都要用它——只清 state 而不清草稿的話，
+   下一次進作答頁 aalInit 會把舊的 idx 與答案原封不動還原回來。 */
+function aalDraftDrop(aid, sid){
+  try {
+    const all = JSON.parse(localStorage.getItem(AAL_DRAFT_KEY) || '{}');
+    delete all[aid + '|' + sid];
+    localStorage.setItem(AAL_DRAFT_KEY, JSON.stringify(all));
+  } catch (e) {}
+}
 function surveyDraftDrop(sid, phase){
   try {
     const all = JSON.parse(localStorage.getItem(SURVEY_DRAFT_KEY) || '{}');
@@ -870,6 +900,15 @@ function viewSurvey(phase, page){
               page: d ? d.page : 1};
   }
   SURVEY.page = Math.max(1, Math.min(page || SURVEY.page || 1, secs.length));
+  /* 網址與畫面要說同一件事。原本越界的頁碼只在記憶體裡夾回範圍，
+     網址列還停在 #/survey/post/99——重整、加書籤、或把連結給老師看，
+     又會回到那個值；而「第幾段，共幾段」是孩子判斷自己填到哪裡的唯一依據。
+     沒有頁碼的入口（交完卷跳過來的 #/survey/post）也一併補成明確頁碼。
+     replaceState 不觸發 hashchange，所以不會再繞一次 render。 */
+  const wantHash = '#/survey/' + phase + '/' + SURVEY.page;
+  if (location.hash !== wantHash && window.history && history.replaceState){
+    try { history.replaceState(null, '', wantHash); } catch (e) {}
+  }
 
   const keys = surveyKeys(phase, cond);
   const total = keys.length;
@@ -928,8 +967,9 @@ function viewSurvey(phase, page){
         '照你真正的感覺選就好。看不懂的題目可以舉手問老師。' +
         '這份問卷分成 ' + secs.length + ' 段，中間可以休息。' +
         /* 量尺與作答頁的選項是同一個 radiogroup 形狀，第一次填時
-           行為完全一樣：Tab 進來會停在第一格但不勾選它。 */
-        '用上下方向鍵選，或用空白鍵選你現在停在的那一格。</p></div>'
+           行為完全一樣：Tab 進來會停在第一格但不勾選它。
+           兩處的說明也要一致：先講點選，再講鍵盤。 */
+        '直接點你要的那一格就可以。用鍵盤的話，上下方向鍵移動、空白鍵選起來。</p></div>'
       : '') +
     (scaleChanged
       ? '<div class="card card-p" style="margin-bottom:14px;border-left:3px solid var(--accent)">' +

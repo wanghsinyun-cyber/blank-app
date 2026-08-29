@@ -276,7 +276,11 @@ function renderRail(){
       ? '<span class="badge" aria-hidden="true">' + esc(String(n.b)) + '</span>' +
         '<span class="sr-only">（' + esc(String(n.b)) + '）</span>'
       : '';
-    return '<a href="' + n.h + '"' + cur + '><span class="glyph">' + n.g2 + '</span>' + esc(n.t) +
+    /* 字符是純裝飾的視覺記號，要藏起來。不藏的話報讀器會把它併進連結名稱，
+       念成「業我的作業」「構知識建構空間」「長我的學習軌跡」——
+       旁邊的徽章與 procPill() 的形狀記號本來就都 aria-hidden 了，
+       只有這一處沒跟上。 */
+    return '<a href="' + n.h + '"' + cur + '><span class="glyph" aria-hidden="true">' + n.g2 + '</span>' + esc(n.t) +
       badge + '</a>';
   }).join('');
 }

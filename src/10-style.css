@@ -95,6 +95,11 @@ p{margin:0 0 .8em}
 a{color:var(--accent); text-underline-offset:3px}
 :focus-visible{outline:3px solid var(--focus); outline-offset:2px; border-radius:3px}
 button,input,select,textarea{font:inherit; color:inherit}
+/* <select> 的內建寬度是「最長選項的寬度」，而它幾乎都放在 flex 列裡，
+   min-width 預設 auto——不會縮。390px 實測：頂列的 #classSel 552px、
+   #who 401px，題庫頁的 #bkText 402px（175% 字級時 672px），
+   每一個都足以讓整份文件長出橫向捲軸。選單永遠不該把頁面撐開。 */
+select{min-width:0; max-width:100%; text-overflow:ellipsis}
 .num{font-family:var(--f-mono); font-variant-numeric:tabular-nums}
 
 /* ---------- 外殼 ----------
@@ -107,6 +112,14 @@ button,input,select,textarea{font:inherit; color:inherit}
   position:sticky; top:0; min-height:68px; display:flex; flex-wrap:wrap; align-items:center; gap:14px; padding:0 16px;
   background:var(--card); border-bottom:1px solid var(--rule); z-index:20;
 }
+/* 頂列的兩個下拉選單會撐到最長選項的寬度（班級名、學生姓名），
+   而它們是 flex 項目、min-width 預設是 auto——不會縮。
+   390px × 175% 字級實測：#classSel 552px、#who 401px，
+   於是**每一頁**的 document 都出現橫向捲軸（scrollWidth 568 / clientWidth 390）。
+   側欄早就修過同一個陷阱（見窄版註解：align-self 與 min-width 要一起覆寫），
+   頂列沒跟上。允許它們縮，縮到放不下就用刪節號。 */
+.topbar .row{min-width:0; flex-wrap:wrap}
+#classWrap{min-width:0}
 .brand{display:flex; align-items:baseline; gap:9px; margin-right:4px}
 .brand b{font-family:var(--f-display); font-size:1.2rem; letter-spacing:.06em}
 .brand span{font-size:0.8rem; color:var(--ink-3); letter-spacing:.06em}
@@ -147,6 +160,12 @@ button,input,select,textarea{font:inherit; color:inherit}
 .card-h{display:flex; align-items:center; gap:10px; padding:14px 18px; border-bottom:1px solid var(--rule-soft)}
 .card-h h3{flex:1}
 .grid{display:grid; gap:14px}
+/* 格線與直欄的子項，min-width 預設是 auto——會被內容（寬表格、殘差矩陣、
+   長提示詞）撐開而不肯縮。於是卡片比視窗還寬，裡層的 .tablewrap
+   即使有 overflow-x:auto 也永遠用不到，整頁長出橫向捲軸。
+   .stage 早就設了 min-width:0（見上），它的子項沒有跟上。
+   390px 實測：研究控制台的卡片 451–1269px、KIDMAP 的卡片 383px。 */
+.grid > *, .col > *{min-width:0}
 /* 分欄版面（教師分析、知識建構、儀表板、研究控制台共 10 處）。
    欄寬原本直接寫成 inline style="grid-template-columns:…"，
    而行內樣式的優先權高過任何選擇器——底下的窄版斷點與 [data-narrow]
@@ -194,7 +213,11 @@ input:focus-visible,select:focus-visible,textarea:focus-visible{border-color:tra
 .lk-plain{background:none; border:0; padding:0; font:inherit; color:var(--accent);
   cursor:pointer; text-align:left; text-decoration:underline; text-underline-offset:3px}
 button.pill{font:inherit; font-size:0.8rem; cursor:pointer; border-color:var(--rule-strong)}
-.pill{display:inline-flex; align-items:center; gap:5px; border-radius:100px; padding:1px 9px; font-size:0.8rem; border:1px solid var(--rule); background:var(--shade); color:var(--ink-2); white-space:nowrap}
+/* max-width 是必要的：白色藥丸有 white-space:nowrap，
+   而「內建規則引擎（離線可重現）」在 175% 字級下是 384px——
+   比 390px 視窗的內容區還寬，單獨一顆就把整頁推出橫向捲軸。
+   窄版另外允許它折行（見底下兩個窄版入口）。 */
+.pill{display:inline-flex; align-items:center; gap:5px; border-radius:100px; padding:1px 9px; font-size:0.8rem; border:1px solid var(--rule); background:var(--shade); color:var(--ink-2); white-space:nowrap; max-width:100%}
 /* [hidden] 在 UA 樣式表裡是 display:none，而作者樣式的 .pill{display:inline-flex}
    永遠贏過 UA 來源——所以 hidden 對 .pill 完全無效。每個學生一進作答頁
    就會看到「已標記 0 句」，取消最後一個標記後它也不會消失，
@@ -218,7 +241,14 @@ button.pill{font:inherit; font-size:0.8rem; cursor:pointer; border-color:var(--r
 .stat.good{border-left:3px solid var(--good)}
 .stat.warn{border-left:3px solid var(--warn)}
 
-.tablewrap{overflow-x:auto; -webkit-overflow-scrolling:touch}
+/* position:relative 是必要的，理由同 .tabs a：裡面的 .sr-only 是絕對定位，
+   容器不是已定位元素的話，它會跳過這個捲動區、改以 .stage 為基準停在
+   表格右緣的靜態位置，把整份文件撐出橫向捲軸（儀表板「學生」分頁實測
+   scrollWidth 731 / clientWidth 390，而 #view 裡找不到任何溢出元素）。 */
+.tablewrap{overflow-x:auto; -webkit-overflow-scrolling:touch; position:relative}
+/* 巢狀的 .row 是外層 .row 的 flex 項目，min-width 預設 auto 就不肯縮，
+   外層雖然 flex-wrap:wrap 也救不了它（題庫頁的文本篩選列實測 462px）。 */
+.row .row{min-width:0}
 table{border-collapse:collapse; width:100%; font-size:0.85rem}
 th,td{text-align:left; padding:7px 10px; border-bottom:1px solid var(--rule-soft); vertical-align:middle}
 th{font-size:0.8rem; letter-spacing:.08em; color:var(--ink-4); font-weight:600; white-space:nowrap; background:var(--card)}
@@ -384,6 +414,14 @@ input[type=checkbox],input[type=radio]{ width:1.15em; height:1.15em; accent-colo
   position:absolute; width:1px; height:1px; padding:0; margin:-1px;
   overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; border:0;
 }
+/* .sr-only 是 position:absolute，所以它的**包含區塊**是最近的已定位祖先。
+   分頁列與側欄都是可橫捲的容器，但它們自己不是已定位元素——
+   於是裡面的 sr-only（「（目前顯示中）」「（待填）」）會跳過捲動容器，
+   改以 .stage 為基準停在它的靜態位置。實測 390px × 175% 字級：
+   一個 1px、看不見的 span 停在 x=1117，把 #stage 的 scrollWidth 撐成 1117，
+   整份文件因此長出橫向捲軸——而 .tabs 自己其實好好地捲著（client 362 / scroll 1541）。
+   讓分頁與側欄的連結自己成為包含區塊，span 就留在該待的地方。 */
+.tabs a, .tabs button, .rail a{position:relative}
 /* 跳至主要內容：鍵盤 Tab 第一站 */
 /* 略過連結。用 <button> 而不是 <a href="#...">，因為本站是 hash 路由：
    任何寫進 hash 的錨點都會被 parseRoute() 當成路由名，把畫面打成「找不到這一頁」。 */
@@ -544,6 +582,7 @@ pre.prompt{
   .aal{grid-template-columns:1fr}
   .aal-text{position:static; max-height:none}
   .grid.split{grid-template-columns:1fr}
+  .pill{white-space:normal}
 }
 :root[data-narrow] .main{flex-direction:column; align-items:stretch}
 :root[data-narrow] .rail{position:static; width:100%; flex:0 0 auto; align-self:stretch; min-width:0;
@@ -559,6 +598,7 @@ pre.prompt{
 :root[data-narrow] .aal{grid-template-columns:1fr}
 :root[data-narrow] .aal-text{position:static; max-height:none}
 :root[data-narrow] .grid.split{grid-template-columns:1fr}
+:root[data-narrow] .pill{white-space:normal}
 @media (prefers-reduced-motion:reduce){*{animation:none!important; transition:none!important}}
 @media print{.rail,.topbar,.kb-toolbar{display:none} .app,.main{display:block} .stage{min-height:0}}
 

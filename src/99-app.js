@@ -663,6 +663,22 @@ function bindEvents(){
       state.submissions = state.submissions.filter(function(s){ return !(s.aid === aid && s.sid === me.id); });
       state.responses   = state.responses.filter(function(r){ return !(r.aid === aid && r.sid === me.id); });
       state.dialog      = (state.dialog || []).filter(function(d){ return !(d.aid === aid && d.sid === me.id); });
+      /* 「再走一次」原本只清這三樣，於是重來的其實只有一半：
+         · state.logs 留著——標記、選項、打字的歷程事件全都還在，
+           而標記現在是從日誌重建的（見 aalInit），孩子會看到上一次的
+           畫線還亮著，卻找不到自己的作答
+         · localStorage 的草稿留著——aalInit 會把他帶回離開的那一題，
+           答案原封不動，而畫面說的是「重新走一次流程」 */
+      state.logs = (state.logs || []).filter(function(e){ return !(e.aid === aid && e.sid === me.id); });
+      /* 種出來的那一半也要一起拿掉。標記是從 allLogs() 重建的，
+         而 allLogs() = DEMO_LOGS + state.logs——只清後者的話，
+         孩子重新進來會看到上一次的畫線還亮著，卻一題答案都沒有。
+         （DEMO_LOGS 在每次載入時重新種出來，所以這是本次工作階段內的清理；
+           對「再走一次」這個示範用的按鈕來說足夠。） */
+      if (typeof DEMO_LOGS !== 'undefined' && DEMO_LOGS.length)
+        DEMO_LOGS = DEMO_LOGS.filter(function(e){ return !(e.aid === aid && e.sid === me.id); });
+      aalDraftDrop(aid, me.id);
+      AAL = null;
       save(); go('#/aal/' + aid); return;
     }
 
@@ -670,7 +686,7 @@ function bindEvents(){
        也是教師端所有畫面的來源；清掉的是示範的後測作答與示範問卷。 */
     if (act === 'go-live'){
       if (!isResearcher()) return;
-      if (!confirm('這會清空示範的後測作答、示範問卷，以及知識建構空間裡所有示範的視圖與貼文，讓學生端回到「尚未作答」。\n\n前測資料與 Rasch 校準會保留。\n\n這一步不可復原（要回到示範資料需按「重設」）。確定嗎？')) return;
+      if (!confirm('這會清空示範的後測作答、示範問卷、歷程事件、作答草稿，以及知識建構空間裡所有示範的視圖與貼文，讓學生端回到「尚未作答」。\n\n前測資料與 Rasch 校準會保留。\n\n這一步不可復原（要回到示範資料需按「重設」）。確定嗎？')) return;
       if (!confirm('再確認一次：清空之後，這台瀏覽器上的平台就是準備施測的狀態。')) return;
       state.demoSeed  = false;
       state.surveys   = (state.surveys || []).filter(function(s){ return !s.demo; });
@@ -682,8 +698,20 @@ function bindEvents(){
       state.notes = [];
       state.dialog = [];
       DEMO_LOGS = []; DEMO_DIALOG = [];
+      /* DEMO_LOGS 是種出來的那一半，state.logs 是「真的有人在這台機器上操作」
+         產生的那一半——備課、試玩、示範給同事看，全都寫在裡面。
+         留著的話，施測當天的延宕序列分析與 ENA 會把那些事件一起算進去，
+         而歷程序列本身就是依變項。
+         兩份草稿也要清：不清的話，第一個坐下來的孩子按〈開始這節課〉
+         會接到別人示範時留下的答案與問卷進度。 */
+      state.logs = [];
+      try {
+        localStorage.removeItem('kairos-draft');
+        localStorage.removeItem('kairos-survey-draft');
+      } catch (e) {}
+      AAL = null; SURVEY = null; QUIZ = null;
       save(); renderShell(); render();
-      toast('已清空示範作答與示範問卷，可以施測了。');
+      toast('已清空示範作答、示範問卷、歷程事件與作答草稿，可以施測了。');
       return;
     }
   });

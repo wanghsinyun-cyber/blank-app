@@ -15,8 +15,9 @@
    作答紀錄存的是「選項索引」，重排選項就等於改變每一筆舊紀錄的意思。
    只要動到 options／answer／why，版號一定要跟著加，否則舊瀏覽器會拿
    舊索引去對新答案鍵，而且不會報錯——只會靜靜地把診斷對到錯的失誤碼。
-   第 6 版：R03／R10／R11／R12 重排選項以平衡正解位置。 */
-const STATE_VERSION = 6;
+   第 6 版：R03／R10／R11／R12 重排選項以平衡正解位置。
+   第 7 版：派題的題目順序改成依文本分組（見 allIds）。 */
+const STATE_VERSION = 7;
 
 /* --- 固定種子亂數（mulberry32），確保示範資料可重現 --- */
 function mulberry32(a){
@@ -435,7 +436,31 @@ function buildSeedState(){
   const allClassIds = classes.map(function(c){ return c.id; });
 
   /* 兩次派題：同一份題本、同一次校準，四班共用 → 條件間可比 */
-  const allIds = ITEMS.map(function(it){ return it.id; });
+  /* 依文本分組再排。ITEMS 的宣告順序是 R01…R14 然後 C01、C02，
+     而 C01 掛在 T1、C02 掛在 T2——照原順序派下去，孩子讀的文本會是
+     T1 → T2 → T1 → T2，切換三次。
+     第 15 題（C01）正是要他「把理由連回故事裡的某一段」，卻在他離開那篇
+     六題之後才出現，等於先把文章收走再要他引用。
+     換文本本來就有代價（見 aal-prev／aal-next：文章無聲換掉會讓學生
+     以為自己的標記不見了），而外在認知負荷 cl_ex 是依變項之一——
+     這種可以避免的切換會把它整體墊高，而且與對話占掉多少時間交互作用。
+     改成一篇讀完（含它自己的非選題）再換下一篇，只切換一次。
+     題本內容一題未動，只有順序改變。 */
+  const allIds = TEXTS.map(function(t){ return t.id; }).concat([null])
+    .reduce(function(acc, tid){
+      if (tid === null){
+        /* 保險：沒有掛在任何文本上的題目仍要派出去，不能靜默消失 */
+        ITEMS.forEach(function(it){
+          if (acc.indexOf(it.id) < 0) acc.push(it.id);
+        });
+        return acc;
+      }
+      ITEMS.filter(function(it){ return it.unit === tid && it.type !== 'cr'; })
+           .forEach(function(it){ acc.push(it.id); });
+      ITEMS.filter(function(it){ return it.unit === tid && it.type === 'cr'; })
+           .forEach(function(it){ acc.push(it.id); });
+      return acc;
+    }, []);
   const pre = {
     id:'a-pre', title:'閱讀理解 前測', desc:'先看看大家目前的讀法，答錯沒關係，等一下我們一起討論。',
     classIds: allClassIds, teacherId:'u-t1', itemIds: allIds, phase:'pre',

@@ -81,7 +81,7 @@ function viewStudent(){
            示範模式下補一顆「再走一次」，讓人看得到這套流程長什麼樣子；
            正式施測時 demoSeed 為 false，這顆鈕不會出現。 */
         '<div class="row">' + (done
-          ? '<a class="btn" href="#/result/' + a.id + '">查看個人診斷</a>' +
+          ? '<a class="btn" href="#/result/' + a.id + '">看我這次讀得怎麼樣</a>' +
             (state.demoSeed !== false && a.aal && !isImpersonating()
               ? ' <button class="btn sm" data-act="redo-demo" data-id="' + a.id +
                 '">再走一次（示範）</button>' : '')
@@ -222,7 +222,7 @@ function viewResult(aid){
   const right = mc.filter(function(r){ return r.correct; }).length;
   const ps = diag && diag.ready ? diag.perStudent.find(function(p){ return p.sid === me.id; }) : null;
 
-  return sectionHead('個人診斷', a.title, '<a class="btn" href="#/student">← 回我的作業</a>') +
+  return sectionHead('我這次讀得怎麼樣', a.title, '<a class="btn" href="#/student">← 回我的作業</a>') +
     /* 學生端不出現 θ、δ (logit)、KIDMAP、迷思象限——十歲孩子看不懂，
        而且「迷思」是個標籤。同一份資料，換一套對他說話的說法；
        底層的 ps.theta、ps.cells 與所有匯出一個字不動。 */
