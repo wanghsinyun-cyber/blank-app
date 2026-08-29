@@ -40,7 +40,7 @@ function rDesign(){
     '這個設計讓「提問功能跨角色恆定、僅社會框架隨角色而異」成為可以逐字查核的事實，' +
     '也讓鷹架機會、資訊量與任務目標在三個條件之間保持恆定。</p></div>' +
 
-    '<div class="grid" style="grid-template-columns:minmax(0,1fr) minmax(320px,.85fr);gap:16px">' +
+    '<div class="grid split" style="--cols:minmax(0,1fr) minmax(320px,.85fr);gap:16px">' +
     '<div class="col">' +
       '<div class="card"><div class="card-h"><h3>模組 0 · 系統骨幹</h3>' +
       '<span class="pill">四條件共用</span></div>' +
@@ -216,7 +216,7 @@ function rLSA(){
     }).join('') + '</select>' +
     '<span class="muted small">序列 ' + r.nSeq + ' 段 · 事件 ' + r.nEvent + ' 次 · 轉移 ' + r.N + ' 次</span></div></div>' +
 
-    '<div class="grid" style="grid-template-columns:minmax(0,1.1fr) minmax(300px,.9fr);gap:16px">' +
+    '<div class="grid split" style="--cols:minmax(0,1.1fr) minmax(300px,.9fr);gap:16px">' +
     '<div class="card"><div class="card-h"><h3>調整殘差矩陣</h3>' +
     '<span class="muted small">列＝前一個行為，欄＝後一個行為</span></div>' +
     '<div class="tablewrap"><table><thead><tr><th>z</th>' +
@@ -269,7 +269,7 @@ function rENA(){
     '<p class="muted small">節點採固定圓形佈局；正式分析請以 R 的 <code>rENA</code> 套件重跑並採用共註冊佈局，' +
     '本平台的「資料匯出」已提供符合其輸入格式的寬表 CSV。</p></div>' +
 
-    '<div class="grid" style="grid-template-columns:minmax(0,1fr) minmax(320px,.9fr);gap:16px">' +
+    '<div class="grid split" style="--cols:minmax(0,1fr) minmax(320px,.9fr);gap:16px">' +
     '<div class="card"><div class="card-h"><h3>單位投影空間</h3>' +
     (proj ? '<span class="pill">SVD1 ' + pct(proj.var1) + ' · SVD2 ' + pct(proj.var2) + '</span>' : '') +
     '</div><div class="card-p">' + (proj ? enaSVG(proj) : '<div class="muted small">資料不足。</div>') +
@@ -499,7 +499,7 @@ function rStats(){
     (o.cov ? '<span class="muted small">共變數：' + esc(o.covName) + '</span>'
            : '<span class="muted small">無共變數（單因子變異數分析）</span>') + '</div></div>' +
 
-    (res ? '<div class="grid" style="grid-template-columns:minmax(0,1fr) minmax(300px,.85fr);gap:16px">' +
+    (res ? '<div class="grid split" style="--cols:minmax(0,1fr) minmax(300px,.85fr);gap:16px">' +
     '<div class="card"><div class="card-h"><h3>' + esc(o.name) + '</h3>' +
     '<span class="pill' + (res.p < .05 ? ' q1' : '') + '">F(' + res.df1 + ', ' + res.df2 + ') = ' +
     res.F.toFixed(2) + '　p ' + fmtP(res.p) + '　ηp² = ' + res.eta.toFixed(3) + '</span></div>' +

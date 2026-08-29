@@ -217,6 +217,12 @@ function initCanvasDrag(){
     if (KBSEL){
       if (KBPICK[id]) delete KBPICK[id]; else KBPICK[id] = true;
       render();
+      /* render() 把整塊白板重建，正握有焦點的那張便利貼連同它一起被丟掉，
+         焦點掉回 <body>。躍升要先選五、六則貼文，於是只用鍵盤的孩子
+         每選一則就得從頭 Tab 過整片白板才能選下一則——
+         上一輪補了 Enter 能選，但沒補選完之後人還在不在原地。 */
+      const again = document.querySelector('.note[data-note="' + id + '"]');
+      if (again) again.focus({preventScroll:true});
     } else {
       go('#/note/' + id);
     }
@@ -491,7 +497,7 @@ function bindEvents(){
     if (act === 'save-note'){ saveEditor(); return; }
     if (act === 'del-note'){ if (confirm('刪除這則貼文？延伸它的貼文會失去連結，這個動作無法復原。')){
       if (!deleteNote(id)){ toast('代為檢視時不能替學生刪貼文。'); return; }
-      closeModal(); EDIT = null; go('#/kb'); render(); toast('已刪除。'); } return; }
+      closeModal(); EDIT = null; replaceHash('#/kb'); toast('已刪除。'); } return; }
     if (act === 'add-ann'){ const ta = $('#annText');
       /* 空白時原本什麼都不做——沒有訊息、焦點也不回到輸入框，
          使用者只會覺得按鈕壞了。 */
@@ -712,8 +718,19 @@ function bindEvents(){
         const input = lb.querySelector('input');
         lb.classList.toggle('on', !!(input && input.checked));
       });
+      /* 標紅要跟著答案一起解除，aria-invalid 也一樣。原本只拿掉 class：
+         螢幕報讀軟體會一路把這一列念成「無效」，孩子明明已經填好了。 */
       const row = t.closest('.likert');
-      if (row) row.classList.remove('missing');
+      if (row){ row.classList.remove('missing'); row.removeAttribute('aria-invalid'); }
+      /* 頁首那句「這一段還有 N 題沒有選」插進去之後就不再更新，
+         數字凍在最初那一次。孩子全部補完，它還在說有 3 題沒選——
+         重算剩幾題，歸零就撤掉。 */
+      const svAlert = document.getElementById('svMissAlert');
+      if (svAlert){
+        const left = document.querySelectorAll('#view .likert.missing').length;
+        if (left) svAlert.textContent = '這一段還有 ' + left + ' 題沒有選。';
+        else svAlert.remove();
+      }
       const d = document.getElementById('svDone');
       if (d) d.textContent = surveyKeys(SURVEY.phase, conditionOfStudent(currentUser().id))
         .filter(function(k2){ return SURVEY.resp[k2]; }).length;
@@ -799,6 +816,11 @@ function bindEvents(){
       if (AAL.texts[it.id] === undefined) AAL.drafts[it.id] = {first: t.value, final: t.value};
       AAL.texts[it.id] = t.value;
       if (AAL.drafts[it.id]) AAL.drafts[it.id].final = t.value;
+      /* 非選題有字就不算空白（見 missIdx），把「還沒寫完」解除。
+         只解除、不重新加：這個標記的意思是「你剛剛被退回這一題」，
+         不是即時驗證。全選重打的中途會有一瞬間是空的，
+         那時候閃一下紅框只會嚇到人。 */
+      if (t.value.trim()) aalClearMissing();
       /* 4 秒節流。被節流掉的那一段字要記在 _pendingW，換題或交卷時由
          flushTypeTelemetry() 補寫，否則每一題的最後一段打字都會漏。 */
       if (!aalTypeTelemetry._last || Date.now() - aalTypeTelemetry._last > 4000){

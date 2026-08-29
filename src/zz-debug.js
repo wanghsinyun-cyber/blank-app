@@ -182,9 +182,26 @@ window.diffConditionCopy = function(){
     const k = state.classes.find(function(x){ return x.condition === cond; });
     return k ? k.studentIds[0] : null;
   }
+  /* 作答頁必須讓四個條件停在同一題。AAL 會從 localStorage 的草稿還原 idx，
+     所以只要有人（真的學生，或先前跑過的另一支測試）在某一題離開，
+     那個條件就從第 15 題開始、別的條件從第 1 題開始——
+     卡片數一樣、字數差 1.6%，但高度差 48px，看起來像版面不對等。
+     實際踩過一次：非選題那一題留下的草稿讓 tutor 停在 C01，
+     四列全部報紅，而版面根本沒問題。
+     快照與還原（DRAFT0）只保證「跑完不留痕跡」，不保證「跑之前是乾淨的」。 */
+  function clearDraftFor(sid){
+    try {
+      const all = JSON.parse(localStorage.getItem('kairos-draft') || '{}');
+      Object.keys(all).forEach(function(k){ if (k.indexOf('|' + sid) >= 0) delete all[k]; });
+      localStorage.setItem('kairos-draft', JSON.stringify(all));
+    } catch (e){}
+  }
   function shot(sid, hash){
     state.ui.role = sid; renderShell();
+    if (String(hash).indexOf('#/aal/') === 0) clearDraftFor(sid);
     location.hash = hash; render();
+    /* 草稿是在 aalInit 時讀的，清掉之後要讓它重新開一次才會落在第 1 題 */
+    if (typeof AAL !== 'undefined' && AAL && AAL.idx){ AAL.idx = 0; render(); }
     const v = document.getElementById('view');
     return {cards: v.querySelectorAll('.card').length,
             chars: v.innerText.replace(/\s/g, '').length,

@@ -11,12 +11,66 @@ let state = null;
    守門下沉之後，逐點的 isImpersonating() 變成第二道保險而不是唯一防線。
    唯一的例外是 state.ui 本身的變更（切換身分、結束檢視），
    由 99-app.js 在呼叫前後掀開 _allowUiWrite。 */
+/* --- 分頁之間的覆寫 ---
+   save() 把整個 state 序列化寫出去，所以兩個分頁就是「最後寫的贏」：
+   老師在 A 分頁批改非選、B 分頁開著儀表板，B 的任何一次寫入
+   都會把剛打好的分數整批蓋掉，而且沒有任何提示。
+   做法是每次寫出都帶上版次與分頁識別；別的分頁寫了就同步過來並說一聲。
+   （這不是合併——同一秒改同一筆仍以後寫者為準；
+     要守住的是「不要無聲地掉東西」。） */
+const TAB_ID = 'tab-' + Math.random().toString(36).slice(2, 10) + '-' + Date.now().toString(36);
+const REV_KEY = STORE_KEY + ':rev';
+let STATE_REV = 0;
+
+/* 版次要跨分頁單調遞增，所以取自磁碟而不是自己的計數器
+   （兩個分頁各自 ++ 會撞號）。另存一支小鍵，免得每次寫入都要
+   把整份 state 反序列化回來讀一個數字。 */
+function nextRev(){
+  let disk = 0;
+  try { disk = parseInt(localStorage.getItem(REV_KEY) || '0', 10) || 0; } catch (e) {}
+  STATE_REV = Math.max(disk, STATE_REV) + 1;
+  try { localStorage.setItem(REV_KEY, String(STATE_REV)); } catch (e) {}
+  return STATE_REV;
+}
+
+function adoptForeignState(next){
+  if (!next || typeof next !== 'object') return;
+  STATE_REV = next.rev || 0;
+  const hash = location.hash;
+  state = next;
+  try {
+    if (typeof renderShell === 'function') renderShell();
+    if (typeof render === 'function'){ location.hash = hash; render(); }
+    if (typeof toast === 'function') toast('另一個分頁更新了資料，這一頁已經同步。');
+  } catch (e) { /* 還沒開始渲染就收到事件：資料已換好，等首次 render 即可 */ }
+}
+
+if (typeof window !== 'undefined' && window.addEventListener){
+  window.addEventListener('storage', function(e){
+    if (e.key !== STORE_KEY || !e.newValue) return;
+    let next = null;
+    try { next = JSON.parse(e.newValue); } catch (err) { return; }
+    if (!next || next.writer === TAB_ID) return;      // 自己寫的不用理
+    if ((next.rev || 0) <= STATE_REV) return;         // 不是更新的版本
+    /* 代為檢視中不要被外部狀態拉走身分——那會讓老師莫名其妙跳出檢視 */
+    if (isImpersonating()){
+      if (typeof console !== 'undefined' && console.warn)
+        console.warn('[KAIROS] 代為檢視期間收到另一個分頁的更新，暫不同步。');
+      return;
+    }
+    adoptForeignState(next);
+  });
+}
+
 function save(){
   if (isImpersonating() && !save._allowUiWrite){
     if (typeof console !== 'undefined' && console.warn)
       console.warn('[KAIROS] 代為檢視期間的落地被擋下', new Error().stack);
     return;
   }
+  /* 版次要在序列化之前掛上去，兩個分支寫出的物件才都帶得到 */
+  state.rev = nextRev();
+  state.writer = TAB_ID;
   try {
     /* 代為檢視是一個「模式」，不是身分變更：模式本身不能落地。
        否則老師關掉分頁、隔天開機還是學生身分，而且不知道怎麼回來。 */
@@ -44,6 +98,10 @@ function saveUiOnly(){
     const prev = JSON.parse(raw);
     const imp = state.ui && state.ui.impersonate;
     prev.ui = Object.assign({}, state.ui, imp ? {role: imp.realRole, impersonate: undefined} : {});
+    /* 這也是一次寫出，版次一樣要往前推——否則別的分頁看到 rev 沒變
+       就不會同步，而磁碟上的 ui 已經換人了。 */
+    prev.rev = nextRev();
+    prev.writer = TAB_ID;
     localStorage.setItem(STORE_KEY, JSON.stringify(prev));
   } catch (e) { /* 無痕模式等情況：僅存在記憶體 */ }
 }
@@ -71,7 +129,11 @@ function loadState(){
       const s = JSON.parse(raw);
       // 版號不符（示範資料改版）→ 重新產生
       if (s && s.version === STATE_VERSION){
-        if (responsesMatchKey(s)) return s;
+        if (responsesMatchKey(s)){
+          /* 接上磁碟上的版次，這個分頁之後寫出的版次才會比它大 */
+          STATE_REV = s.rev || 0;
+          return s;
+        }
         console.warn('[KAIROS] 作答紀錄與現行題本的答案鍵不一致，已重新產生示範資料。');
       }
     }
@@ -288,8 +350,12 @@ function notesForViewer(){
    橋接：由 KIDMAP 迷思題產生知識建構視圖
    —— 這是兩個平台真正接起來的地方 ——
    ========================================================================== */
+/* 這個班有沒有為這一題開過共構視圖。
+   原本掃全站：c-1 先為第 5 題開了視圖，c-2 的老師就看到「進入共構視圖 →」，
+   點下去被 viewVisible() 擋掉——而且〈開啟共構視圖〉的按鈕永遠不出現，
+   他再也沒辦法為自己班開這一題。那不是死連結，是功能被別班鎖住。 */
 function bridgeExists(aid, iid){
-  return state.views.find(function(v){
+  return viewsForViewer().find(function(v){
     return v.origin && v.origin.aid === aid && v.origin.iid === iid;
   });
 }

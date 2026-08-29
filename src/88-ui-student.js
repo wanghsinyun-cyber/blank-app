@@ -60,6 +60,7 @@ function viewStudent(){
     '<div class="col">' + asgs.map(function(a){
       const done = submitted(a.id, me.id);
       const n = a.itemIds.length;
+      const draftN = (!done && a.aal) ? aalDraftProgress(a.id, me.id) : 0;
       const right = state.responses.filter(function(r){
         return r.aid === a.id && r.sid === me.id && r.correct === true; }).length;
       return '<div class="card"><div class="card-p"><div class="row" style="justify-content:space-between">' +
@@ -68,7 +69,12 @@ function viewStudent(){
         '<div class="row small muted" style="margin-top:6px;gap:12px">' +
           '<span>' + n + ' 題</span>' +
           '<span>截止 ' + fmtDate(a.due) + '</span>' +
+          /* 三種狀態，不是兩種。原本只有「已完成／尚未作答」：
+             鐘響、平板沒電、被叫走——寫到一半離開的孩子回來看到「尚未作答」，
+             按鈕還寫著「開始這節課」，兩句都不是真的，而「開始」讀起來
+             像要從頭來過。草稿一直都在 localStorage，只是首頁沒有講。 */
           (done ? '<span class="pill q1"><span class="dot"></span>已完成 · 選擇題答對 ' + right + '</span>'
+                : draftN ? '<span class="pill q4"><span class="dot"></span>寫到一半 · 已寫 ' + draftN + ' / ' + n + ' 題</span>'
                 : '<span class="pill">尚未作答</span>') +
         '</div></div>' +
         /* 示範資料把 96 人的後測都交完了，於是沒有任何一條路徑走得到作答頁。
@@ -80,7 +86,7 @@ function viewStudent(){
               ? ' <button class="btn sm" data-act="redo-demo" data-id="' + a.id +
                 '">再走一次（示範）</button>' : '')
           : '<a class="btn primary" href="#/' + (a.aal ? 'aal' : 'quiz') + '/' + a.id + '">' +
-            (a.aal ? '開始這節課 →' : '開始作答 →') + '</a>') + '</div>' +
+            (draftN ? '接著上次繼續 →' : (a.aal ? '開始這節課 →' : '開始作答 →')) + '</a>') + '</div>' +
         '</div></div></div>';
     }).join('') + '</div>' +
     '<div class="card" style="margin-top:16px"><div class="card-p">' +
@@ -247,7 +253,9 @@ function viewResult(aid){
         '找找看你當時是漏了哪一句。</p>' +
         '<ul>' + ps.cells.filter(function(c){ return c.q === 2; }).map(function(c){
           const it = getItem(c.iid);
-          const v = state.views.find(function(v){ return v.origin && v.origin.iid === it.id; });
+          /* 只找本班的視圖。掃全站的話，c-3 的孩子會看到「全班正在討論這題 →」
+             指向 c-1 的白板，點下去被守門擋掉——而那句話是對他說的。 */
+          const v = viewsForViewer().find(function(v){ return v.origin && v.origin.iid === it.id; });
           return '<li>第 ' + it.no + ' 題：' + esc(shortStem(it.stem)) +
             (v ? '　<a href="#/kb/' + v.id + '">全班正在討論這題 →</a>' : '') + '</li>';
         }).join('') + '</ul></div>' : '') +

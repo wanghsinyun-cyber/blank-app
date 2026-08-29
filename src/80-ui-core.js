@@ -8,6 +8,20 @@ const $$ = function(s, r){ return Array.prototype.slice.call((r || document).que
 let ROUTE = {name:'teacher', args:[]};
 
 function go(hash){ location.hash = hash; }
+/* 有些跳轉之後，原本停留的那一頁已經不成立了：交完卷的作答頁、
+   送出後的問卷、刪掉之後的貼文詳頁。用 go() 疊一筆歷史紀錄的話，
+   按〈上一頁〉會回到一個已經不存在的狀態——而按上一頁正是孩子
+   最直覺的動作。這種跳轉要「換掉」目前這一筆，不是疊上去。
+   replaceState 不會觸發 hashchange，所以要自己叫 render()。 */
+function replaceHash(hash){
+  if (location.hash === hash){ if (typeof render === 'function') render(); return; }
+  if (window.history && history.replaceState){
+    history.replaceState(null, '', hash);
+    if (typeof render === 'function') render();
+  } else {
+    location.replace(location.pathname + location.search + hash);
+  }
+}
 /* 已知路由白名單。逐條抄自 99-app.js 的 render() switch；
    新增 case 時這裡要同步，否則新路由會被當成未知而不重繪。
    有這道白名單，頁內錨點（#stage、#anything）就不會把畫面打成 404。 */

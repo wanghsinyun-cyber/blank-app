@@ -35,7 +35,7 @@ function dashDual(){
   const dt = dualTrack();
   const zones = ['A','B','C','D'];
   const counts = {}; zones.forEach(function(z){ counts[z] = dt.rows.filter(function(r){ return r.zone === z; }).length; });
-  return '<div class="grid" style="grid-template-columns:minmax(0,1.15fr) minmax(300px,.85fr);gap:16px">' +
+  return '<div class="grid split" style="--cols:minmax(0,1.15fr) minmax(300px,.85fr);gap:16px">' +
     '<div class="card"><div class="card-h"><h3>能力變化 × 論述參與</h3>' +
       '<span class="muted small">分界線為 ' + esc(kbClass().name) + ' 的中位數</span></div>' +
       '<div class="card-p">' + dualSVG(dt) + '</div></div>' +
@@ -103,7 +103,7 @@ function dashStudents(){
 function dashSNA(){
   const g = snaGraph();
   const top = g.ids.slice().sort(function(a, b){ return (g.deg[b].in + g.deg[b].out) - (g.deg[a].in + g.deg[a].out); }).slice(0, 8);
-  return '<div class="grid" style="grid-template-columns:minmax(0,1.2fr) minmax(280px,.8fr);gap:16px">' +
+  return '<div class="grid split" style="--cols:minmax(0,1.2fr) minmax(280px,.8fr);gap:16px">' +
     '<div class="card"><div class="card-h"><h3>誰延伸誰的想法</h3>' +
       '<span class="muted small">線的粗細＝延伸次數</span></div><div class="card-p">' + snaSVG(g) +
       '<div class="legend" style="margin-top:8px">' +

@@ -248,7 +248,7 @@ function viewNote(nid){
     '<p class="small" style="margin:0">代為檢視中，只能看不能改——編輯、刪除、加註記與' +
     '「重做這節課」都停用了，' +
     '你的操作不會記到這位學生名下。</p></div>' : '') +
-  '<div class="grid" style="grid-template-columns:minmax(0,1.6fr) minmax(280px,1fr);gap:16px">' +
+  '<div class="grid split" style="--cols:minmax(0,1.6fr) minmax(280px,1fr);gap:16px">' +
   '<div class="col">' +
     noteFullHTML(n, true) +
     '<div class="card"><div class="card-h"><h3>這條想法串</h3>' +
@@ -464,7 +464,7 @@ function viewSynth(vid){
       return '<button class="btn sm' + (r.id === sel ? ' primary' : '') + '" data-act="synth-sel" data-id="' + r.id + '">' +
         esc(shortStem(r.title)) + '</button>';
     }).join('') + '</div>' +
-    '<div class="grid" style="grid-template-columns:minmax(0,1fr) minmax(300px,.9fr);gap:16px">' +
+    '<div class="grid split" style="--cols:minmax(0,1fr) minmax(300px,.9fr);gap:16px">' +
     '<div class="card"><div class="card-h"><h3>想法改進軌跡</h3>' +
       '<span class="pill">' + esc(ii.arc) + '</span></div><div class="card-p col">' +
       ii.steps.map(function(s){

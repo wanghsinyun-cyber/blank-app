@@ -27,10 +27,15 @@
   --focus:    #2e6be6;
   --shadow:   0 1px 2px rgba(18,22,28,.06), 0 8px 24px -16px rgba(18,22,28,.22);
 
-  --q1:#2e7d5b; --q1-bg:#e3f0e9; --q1-line:#a8d3bf;
-  --q2:#be3a2b; --q2-bg:#f9e7e4; --q2-line:#e5b0a8;
-  --q3:#78829a; --q3-bg:#eceff4; --q3-line:#c3cad6;
-  --q4:#4a72ae; --q4-bg:#e6edf7; --q4-line:#b3c6e0;
+  /* 四象限的前景色都印在自己的 -bg 上（.q1….q4 同時設 color 與 background）。
+     淺色主題原本只有 q2 過得了 AA 正文 4.5：q1 4.26、q4 4.14、q3 只有 3.34。
+     這幾個色塊承載的是 KIDMAP 的診斷語意——孩子與老師都要靠它讀懂
+     「可惜的題目」是哪一類，不是裝飾。深色主題本來就在 5.02–6.50，不動。
+     只把明度壓下去，色相維持，四格之間仍分得開。 */
+  --q1:#2a7254; --q1-bg:#e3f0e9; --q1-line:#a8d3bf;   /* 4.93 */
+  --q2:#b63628; --q2-bg:#f9e7e4; --q2-line:#e5b0a8;   /* 原 4.59，餘裕太薄 */
+  --q3:#5f6879; --q3-bg:#eceff4; --q3-line:#c3cad6;   /* 4.87 */
+  --q4:#42679d; --q4-bg:#e6edf7; --q4-line:#b3c6e0;   /* 4.87 */
 
   --sc-1:#3e6fb0; --sc-2:#8a5a12; --sc-3:#2e7d5b;
   --sc-4:#be3a2b; --sc-5:#6a4a9e; --sc-6:#0e7c86;
@@ -142,6 +147,13 @@ button,input,select,textarea{font:inherit; color:inherit}
 .card-h{display:flex; align-items:center; gap:10px; padding:14px 18px; border-bottom:1px solid var(--rule-soft)}
 .card-h h3{flex:1}
 .grid{display:grid; gap:14px}
+/* 分欄版面（教師分析、知識建構、儀表板、研究控制台共 10 處）。
+   欄寬原本直接寫成 inline style="grid-template-columns:…"，
+   而行內樣式的優先權高過任何選擇器——底下的窄版斷點與 [data-narrow]
+   都推不動它，於是 360px 寬時那些兩欄版面仍然硬撐成兩欄
+   （230px + 剩下的，右欄只剩十個中文字寬）。
+   改成由 --cols 帶欄寬、由這條類別套用，斷點才有機會覆寫。 */
+.grid.split{grid-template-columns:var(--cols)}
 .g2{grid-template-columns:repeat(auto-fit,minmax(340px,1fr))}
 .g3{grid-template-columns:repeat(auto-fit,minmax(250px,1fr))}
 .g4{grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}
@@ -531,6 +543,7 @@ pre.prompt{
   .brand span{display:none}
   .aal{grid-template-columns:1fr}
   .aal-text{position:static; max-height:none}
+  .grid.split{grid-template-columns:1fr}
 }
 :root[data-narrow] .main{flex-direction:column; align-items:stretch}
 :root[data-narrow] .rail{position:static; width:100%; flex:0 0 auto; align-self:stretch; min-width:0;
@@ -545,6 +558,7 @@ pre.prompt{
 :root[data-narrow] .brand span{display:none}
 :root[data-narrow] .aal{grid-template-columns:1fr}
 :root[data-narrow] .aal-text{position:static; max-height:none}
+:root[data-narrow] .grid.split{grid-template-columns:1fr}
 @media (prefers-reduced-motion:reduce){*{animation:none!important; transition:none!important}}
 @media print{.rail,.topbar,.kb-toolbar{display:none} .app,.main{display:block} .stage{min-height:0}}
 

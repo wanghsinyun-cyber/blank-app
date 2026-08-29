@@ -15,6 +15,27 @@ const AAL_DRAFT_KEY = 'kairos-draft';
 
 function aalDraftId(){ return AAL.aid + '|' + AAL.me; }
 
+/* 某位學生在某一份作業上留下的草稿（不需要 AAL 正在執行也讀得到）。
+   作業卡片要靠它分辨「還沒開始」與「寫到一半」——原本兩者都印
+   「尚未作答」，按鈕都寫「開始這節課」，對已經寫了十二題的孩子而言
+   兩句話都是假的，而且「開始」聽起來像要從頭來過。 */
+function aalDraftOf(aid, sid){
+  try {
+    const all = JSON.parse(localStorage.getItem(AAL_DRAFT_KEY) || '{}');
+    return all[aid + '|' + sid] || null;
+  } catch (e) { return null; }
+}
+/* 草稿裡已經寫了幾題（選擇題有選 + 非選題有字） */
+function aalDraftProgress(aid, sid){
+  const d = aalDraftOf(aid, sid);
+  if (!d) return 0;
+  const picked = Object.keys(d.answers || {}).filter(function(k){
+    return d.answers[k] !== undefined && d.answers[k] !== null; }).length;
+  const written = Object.keys(d.texts || {}).filter(function(k){
+    return String(d.texts[k] || '').trim(); }).length;
+  return picked + written;
+}
+
 function aalSave(){
   if (isImpersonating()) return;
   if (!AAL) return;
@@ -344,6 +365,13 @@ function aalMark(i){
    停留超過這個時間才算真的作答。序列分析用到毫秒級間隔時要註記這個延遲。 */
 const OPTION_DEBOUNCE_MS = 350;
 
+/* 解除作答卡片的「還沒寫完」標記。選擇題與非選題兩條寫入路徑共用一份，
+   免得只在其中一條解除（這一輪的缺失正是「加了沒有對應的減」）。 */
+function aalClearMissing(){
+  const card = document.getElementById('aalAnswer');
+  if (card) card.classList.remove('missing');
+}
+
 function aalPick(k){
   const it = aalItem();
   AAL.answers[it.id] = k;
@@ -355,6 +383,11 @@ function aalPick(k){
     const mark = lb.querySelector('b');
     if (mark) mark.textContent = String.fromCharCode(65 + idx) + (idx === k ? '✓' : '');
   });
+  /* 交卷被退回來時，這張卡片會標紅並在標題後面加「還沒寫完」。
+     aal-pick 刻意不走 render（高頻互動不重繪整頁），所以要自己解除——
+     否則孩子剛選完答案，卡片還掛著「還沒寫完」，看起來像沒存到。
+     選擇題只要選了就不算空白（見 missIdx 的判定），解除是對的。 */
+  aalClearMissing();
 
   /* 計時器以題目為鍵。共用單一變數的話，350ms 內翻到下一題再點，
      clearTimeout 會把上一題的回呼整個取消——上一題永遠沒有 OPTION 事件，
@@ -494,39 +527,65 @@ async function aalSay(){
   }
   aalSave();
 
+  /* 產生回覆的整段都要包起來。原本只有 llmChat 那一段有 try：
+     規則引擎那一條（agentTurn → pickSubprocess → leakGuard）是裸的，
+     而 LLM 失敗時的退路也是同一支 agentTurn——它一旦拋例外，
+     整個 async 函式就以 rejected 收場，於是
+     「正在想…」永遠留在畫面上、輸入框永遠是 readonly、送出鈕永遠 disabled。
+     孩子這一題再也講不了話，畫面上卻沒有任何訊息說明發生什麼事，
+     而額度已經扣掉了。任何情況都必須走到下面的還原流程。 */
   let reply;
-  if (aiEngine() === 'llm'){
-    try {
-      const raw = await llmChat([
-        {role:'system', content: composePrompt(AAL.cond, it.process || 'FR', TURN_SCHEDULE[Math.min(used, TURN_SCHEDULE.length - 1)])},
-        {role:'user', content:'【題目】' + it.stem + '\n【學生剛剛說】' + text}
-      ], {max_tokens:200, temperature:0.7});
-      const g = leakGuard(raw, it);
-      reply = {text:g.text, qfn:TURN_SCHEDULE[Math.min(used, TURN_SCHEDULE.length - 1)],
-               sub:null, engine:'llm', blocked:g.blocked, hits:g.hits};
-    } catch (err) {
+  const qfnNow = TURN_SCHEDULE[Math.min(used, TURN_SCHEDULE.length - 1)];
+  try {
+    if (aiEngine() === 'llm'){
+      try {
+        const raw = await llmChat([
+          {role:'system', content: composePrompt(AAL.cond, it.process || 'FR', qfnNow)},
+          {role:'user', content:'【題目】' + it.stem + '\n【學生剛剛說】' + text}
+        ], {max_tokens:200, temperature:0.7});
+        const g = leakGuard(raw, it);
+        reply = {text:g.text, qfn:qfnNow,
+                 sub:null, engine:'llm', blocked:g.blocked, hits:g.hits};
+      } catch (err) {
+        reply = agentTurn(ctx.cond, it, used);
+        reply.fallback = err.message;
+      }
+    } else {
       reply = agentTurn(ctx.cond, it, used);
-      reply.fallback = err.message;
     }
-  } else {
-    reply = agentTurn(ctx.cond, it, used);
+  } catch (err) {
+    if (typeof console !== 'undefined' && console.error)
+      console.error('[KAIROS] aalSay 產生回覆失敗，改用固定回覆', err);
+    /* 這一句不帶任何提問功能，也不標子歷程——它不是一個對話輪，
+       是一次故障。engine:'error' 讓分析階段可以把它整批排除。 */
+    reply = {text:'我剛剛沒聽清楚，你可以再說一次嗎？', qfn:null, sub:null,
+             engine:'error', error: String((err && err.message) || err)};
   }
 
   /* 一律走快照，不走 AAL：await 之後 AAL 可能已經是 null，
      而 aalLog 沒有 itemArg 時會用 aalItem()——學生翻頁的話，
      同一輪對話的一問一答會被拆到兩題（ASK 記在 R01、AI 記在 R02）。 */
   const eaT = Date.now();
-  if (!isImpersonating()){
-    logEvent({t:eaT, rel:eaT - ctx.t0, sid:ctx.me, cid:ctx.cid, cond:ctx.cond, lang:'zh',
-      aid:ctx.aid, iid:ctx.it.id, proc:ctx.it.process || 'FR', type:'AI', code:'A',
-      text:reply.text, qfn:reply.qfn, sub:reply.sub, turn:ctx.turn,
-      engine:reply.engine, blocked: !!reply.blocked});
+  /* 落地也要包起來：這裡拋例外的話，下面的還原不會執行，
+     結果和產生回覆失敗一模一樣——畫面卡在「正在想…」。
+     資料寫不進去是嚴重的事，但把孩子鎖在一個不會動的畫面上更嚴重，
+     所以記錄到 console 之後照樣把輸入框還給他。 */
+  try {
+    if (!isImpersonating()){
+      logEvent({t:eaT, rel:eaT - ctx.t0, sid:ctx.me, cid:ctx.cid, cond:ctx.cond, lang:'zh',
+        aid:ctx.aid, iid:ctx.it.id, proc:ctx.it.process || 'FR', type:'AI', code:'A',
+        text:reply.text, qfn:reply.qfn, sub:reply.sub, turn:ctx.turn,
+        engine:reply.engine, blocked: !!reply.blocked});
+    }
+    state.dialog.push({t:eaT, sid:ctx.me, cond:ctx.cond, aid:ctx.aid, iid:ctx.it.id,
+      proc:ctx.it.process, turn:ctx.turn, speaker:'agent', text:reply.text,
+      qfn:reply.qfn, sub:reply.sub, ucode:reply.process || ctx.it.process, sent:0});
+    save();
+    if (AAL) aalSave();   // AAL 可能在等待期間被釋放
+  } catch (err) {
+    if (typeof console !== 'undefined' && console.error)
+      console.error('[KAIROS] aalSay 落地失敗', err);
   }
-  state.dialog.push({t:eaT, sid:ctx.me, cond:ctx.cond, aid:ctx.aid, iid:ctx.it.id,
-    proc:ctx.it.process, turn:ctx.turn, speaker:'agent', text:reply.text,
-    qfn:reply.qfn, sub:reply.sub, ucode:reply.process || ctx.it.process, sent:0});
-  save();
-  if (AAL) aalSave();   // AAL 可能在等待期間被釋放
 
   /* 守衛放在資料寫入之後、DOM 更新之前：回覆一定要進 state.dialog
      （那是額度與語料的同一份帳），但學生已經翻頁的話就不碰畫面、不 toast。 */
@@ -661,7 +720,7 @@ function aalSubmit(){
   aalDropDraft();          // 交出去了，草稿不用留
   AAL = null;
   toast('已交卷。接下來是這節課的問卷。');
-  go('#/survey/post');
+  replaceHash('#/survey/post');
 }
 
 /* ==========================================================================
@@ -954,7 +1013,7 @@ function surveySubmit(phase){
   surveyDraftDrop(me.id, phase);
   SURVEY = null;
   toast('問卷已送出，謝謝你。');
-  go('#/student');
+  replaceHash('#/student');
 }
 
 /* ==========================================================================

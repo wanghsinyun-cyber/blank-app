@@ -11,7 +11,10 @@ function viewTeacher(){
   const cs = communitySummary();
   const diag = diagnose(state, 'a-pre');
   const flagged = diag && diag.ready ? diag.flagged.length : 0;
-  const bridged = state.views.filter(function(v){ return v.origin; }).length;
+  /* 這一排統計卡必須同一個範圍。「社群貼文」已經是本班（communitySummary），
+     「共構視圖」原本卻是四班合計——同一排相鄰的兩張卡各講各的。 */
+  const myViews = viewsForViewer();
+  const bridged = myViews.filter(function(v){ return v.origin; }).length;
   const nAll = state.classes.reduce(function(a, c){ return a + c.studentIds.length; }, 0);
 
   return sectionHead('教師後台',
@@ -30,7 +33,7 @@ function viewTeacher(){
     statCard('全體樣本', nAll + ' 人', state.classes.length + ' 班 · 四條件叢集分派') +
     statCard('待處理迷思題', flagged, '前測 · 全體 · 迷思比例 ≥ ' + state.settings.misThreshold + '%',
              flagged ? 'crit' : '') +
-    statCard('共構視圖', state.views.length, '其中 ' + bridged + ' 個由迷思開啟') +
+    statCard('共構視圖', myViews.length, '其中 ' + bridged + ' 個由迷思開啟') +
     statCard('社群貼文', cs.notes, '延伸 ' + cs.buildOns + ' · 躍升 ' + cs.riseAbove) +
   '</div>' +
 
@@ -71,7 +74,7 @@ function viewTeacher(){
       '<p class="muted small" style="margin-top:12px">點任一位同學會以他的視角唯讀檢視（你的閱讀與貼文不會記到他名下），畫面上方會出現結束檢視的按鈕。</p>' +
     '</div></div>' +
     '<div class="card"><div class="card-h"><h3>從迷思開啟的共構視圖</h3></div><div class="card-p col">' +
-      (state.views.filter(function(v){ return v.origin; }).map(function(v){
+      (myViews.filter(function(v){ return v.origin; }).map(function(v){
         const it = getItem(v.origin.iid);
         return '<div class="row" style="justify-content:space-between;border-bottom:1px solid var(--rule-soft);padding-bottom:8px">' +
           '<div><a href="#/kb/' + v.id + '"><b>' + esc(v.title) + '</b></a>' +
@@ -222,7 +225,7 @@ function tabOverview(diag){
       nItems + ' 題，共 ' + (nAll * nItems) + ' 題次）</h3>' +
       '<span class="muted small">排列方式與 KIDMAP 圖一致</span></div><div class="card-p">' +
       // 依 KIDMAP 圖上的位置排列：左上 III、右上 I、左下 II、右下 IV
-      '<div class="grid" style="grid-template-columns:repeat(2,minmax(0,1fr))">' + [3,1,2,4].map(function(q){
+      '<div class="grid split" style="--cols:repeat(2,minmax(0,1fr))">' + [3,1,2,4].map(function(q){
         return '<div class="stat"><div class="k">' + QUAD[q].roman + ' ' + QUAD[q].name + '</div>' +
           '<div class="v" style="color:var(--' + QUAD[q].key + ')">' + diag.totals[q] +
           '<span class="s" style="font-size:.6em"> 題次</span></div>' +
@@ -401,7 +404,7 @@ function tabKidmap(diag){
     ? tabKidmap.sel : ranked[0].sid;
   tabKidmap.sel = sel;
   const ps = diag.perStudent.find(function(p){ return p.sid === sel; }) || ranked[0];
-  return '<div class="grid" style="grid-template-columns:230px minmax(0,1fr);gap:16px">' +
+  return '<div class="grid split" style="--cols:230px minmax(0,1fr);gap:16px">' +
     '<div class="card" style="max-height:660px;overflow:auto"><div class="card-h"><h3>學生</h3>' +
     '<span class="muted small">依迷思題數排序</span></div>' +
     '<div style="padding:8px">' + ranked.map(function(p){
@@ -556,17 +559,28 @@ function tabCR(diag){
     '<div class="card-p col">' + answers.map(function(r){
       const k = classOfStudent(r.sid);
       const isMine = k && k.id === mine.id;
+      /* 每一列的控制項要有自己的 id，label 的 for 才接得上 */
+      const rowKey = (r.sid + '-' + it.id).replace(/[^A-Za-z0-9_-]/g, '');
+      const scoreId = 'crScore-' + rowKey, noteId = 'crNote-' + rowKey;
       return '<div class="note-full"' + (isMine ? ' style="border-left:3px solid var(--accent)"' : '') + '>' +
         '<div class="row" style="justify-content:space-between;margin-bottom:8px">' +
         '<span class="row"><b>' + esc(userName(r.sid)) + '</b>' +
         '<span class="pill">' + esc((k || {}).name || '—') + '</span></span>' +
-        '<span class="row"><label class="small muted">給分（滿分 6）</label>' +
-        '<input type="number" min="0" max="6" step="1" style="width:72px" value="' + (r.score === null ? '' : r.score) +
+        /* 這兩個 label 原本既沒有 for、也沒有包住控制項——純粹是視覺上擺在旁邊。
+           一頁 24 位學生 × 2 題＝48 個控制項，報讀軟體全部念成無名的
+           spin button 與 text area。而且每一列的標籤字一模一樣，
+           光是關聯起來還不夠：得把學生名字放進可及名稱，
+           老師才知道游標停在誰的分數上。（可及名稱包含可見文字，
+           符合 WCAG 2.5.3 label in name。） */
+        '<span class="row"><label class="small muted" for="' + scoreId + '">給分（滿分 6）</label>' +
+        '<input type="number" min="0" max="6" step="1" style="width:72px" id="' + scoreId +
+        '" aria-label="' + esc(userName(r.sid)) + ' 的給分（滿分 6）" value="' + (r.score === null ? '' : r.score) +
         '" data-act="cr-score" data-sid="' + r.sid + '" data-iid="' + it.id + '" data-aid="' + diag.assignment.id + '">' +
         '</span></div>' +
         '<div class="ai-out" style="white-space:pre-wrap;font-family:var(--f-mono);font-size:0.78rem">' + esc(r.text || '（未作答）') + '</div>' +
-        '<div class="field" style="margin-top:8px"><label>給學生的評語</label>' +
-        '<textarea style="min-height:56px" data-act="cr-comment" data-sid="' + r.sid + '" data-iid="' + it.id +
+        '<div class="field" style="margin-top:8px"><label for="' + noteId + '">給學生的評語</label>' +
+        '<textarea style="min-height:56px" id="' + noteId +
+        '" aria-label="給 ' + esc(userName(r.sid)) + ' 的評語" data-act="cr-comment" data-sid="' + r.sid + '" data-iid="' + it.id +
         '" data-aid="' + diag.assignment.id + '" placeholder="可留空">' + esc(r.comment || '') + '</textarea></div>' +
         '</div>';
     }).join('') + '</div></div>';

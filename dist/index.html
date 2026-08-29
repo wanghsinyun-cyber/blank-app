@@ -35,10 +35,15 @@
   --focus:    #2e6be6;
   --shadow:   0 1px 2px rgba(18,22,28,.06), 0 8px 24px -16px rgba(18,22,28,.22);
 
-  --q1:#2e7d5b; --q1-bg:#e3f0e9; --q1-line:#a8d3bf;
-  --q2:#be3a2b; --q2-bg:#f9e7e4; --q2-line:#e5b0a8;
-  --q3:#78829a; --q3-bg:#eceff4; --q3-line:#c3cad6;
-  --q4:#4a72ae; --q4-bg:#e6edf7; --q4-line:#b3c6e0;
+  /* 四象限的前景色都印在自己的 -bg 上（.q1….q4 同時設 color 與 background）。
+     淺色主題原本只有 q2 過得了 AA 正文 4.5：q1 4.26、q4 4.14、q3 只有 3.34。
+     這幾個色塊承載的是 KIDMAP 的診斷語意——孩子與老師都要靠它讀懂
+     「可惜的題目」是哪一類，不是裝飾。深色主題本來就在 5.02–6.50，不動。
+     只把明度壓下去，色相維持，四格之間仍分得開。 */
+  --q1:#2a7254; --q1-bg:#e3f0e9; --q1-line:#a8d3bf;   /* 4.93 */
+  --q2:#b63628; --q2-bg:#f9e7e4; --q2-line:#e5b0a8;   /* 原 4.59，餘裕太薄 */
+  --q3:#5f6879; --q3-bg:#eceff4; --q3-line:#c3cad6;   /* 4.87 */
+  --q4:#42679d; --q4-bg:#e6edf7; --q4-line:#b3c6e0;   /* 4.87 */
 
   --sc-1:#3e6fb0; --sc-2:#8a5a12; --sc-3:#2e7d5b;
   --sc-4:#be3a2b; --sc-5:#6a4a9e; --sc-6:#0e7c86;
@@ -150,6 +155,13 @@ button,input,select,textarea{font:inherit; color:inherit}
 .card-h{display:flex; align-items:center; gap:10px; padding:14px 18px; border-bottom:1px solid var(--rule-soft)}
 .card-h h3{flex:1}
 .grid{display:grid; gap:14px}
+/* 分欄版面（教師分析、知識建構、儀表板、研究控制台共 10 處）。
+   欄寬原本直接寫成 inline style="grid-template-columns:…"，
+   而行內樣式的優先權高過任何選擇器——底下的窄版斷點與 [data-narrow]
+   都推不動它，於是 360px 寬時那些兩欄版面仍然硬撐成兩欄
+   （230px + 剩下的，右欄只剩十個中文字寬）。
+   改成由 --cols 帶欄寬、由這條類別套用，斷點才有機會覆寫。 */
+.grid.split{grid-template-columns:var(--cols)}
 .g2{grid-template-columns:repeat(auto-fit,minmax(340px,1fr))}
 .g3{grid-template-columns:repeat(auto-fit,minmax(250px,1fr))}
 .g4{grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}
@@ -539,6 +551,7 @@ pre.prompt{
   .brand span{display:none}
   .aal{grid-template-columns:1fr}
   .aal-text{position:static; max-height:none}
+  .grid.split{grid-template-columns:1fr}
 }
 :root[data-narrow] .main{flex-direction:column; align-items:stretch}
 :root[data-narrow] .rail{position:static; width:100%; flex:0 0 auto; align-self:stretch; min-width:0;
@@ -553,6 +566,7 @@ pre.prompt{
 :root[data-narrow] .brand span{display:none}
 :root[data-narrow] .aal{grid-template-columns:1fr}
 :root[data-narrow] .aal-text{position:static; max-height:none}
+:root[data-narrow] .grid.split{grid-template-columns:1fr}
 @media (prefers-reduced-motion:reduce){*{animation:none!important; transition:none!important}}
 @media print{.rail,.topbar,.kb-toolbar{display:none} .app,.main{display:block} .stage{min-height:0}}
 
@@ -2559,12 +2573,66 @@ let state = null;
    守門下沉之後，逐點的 isImpersonating() 變成第二道保險而不是唯一防線。
    唯一的例外是 state.ui 本身的變更（切換身分、結束檢視），
    由 99-app.js 在呼叫前後掀開 _allowUiWrite。 */
+/* --- 分頁之間的覆寫 ---
+   save() 把整個 state 序列化寫出去，所以兩個分頁就是「最後寫的贏」：
+   老師在 A 分頁批改非選、B 分頁開著儀表板，B 的任何一次寫入
+   都會把剛打好的分數整批蓋掉，而且沒有任何提示。
+   做法是每次寫出都帶上版次與分頁識別；別的分頁寫了就同步過來並說一聲。
+   （這不是合併——同一秒改同一筆仍以後寫者為準；
+     要守住的是「不要無聲地掉東西」。） */
+const TAB_ID = 'tab-' + Math.random().toString(36).slice(2, 10) + '-' + Date.now().toString(36);
+const REV_KEY = STORE_KEY + ':rev';
+let STATE_REV = 0;
+
+/* 版次要跨分頁單調遞增，所以取自磁碟而不是自己的計數器
+   （兩個分頁各自 ++ 會撞號）。另存一支小鍵，免得每次寫入都要
+   把整份 state 反序列化回來讀一個數字。 */
+function nextRev(){
+  let disk = 0;
+  try { disk = parseInt(localStorage.getItem(REV_KEY) || '0', 10) || 0; } catch (e) {}
+  STATE_REV = Math.max(disk, STATE_REV) + 1;
+  try { localStorage.setItem(REV_KEY, String(STATE_REV)); } catch (e) {}
+  return STATE_REV;
+}
+
+function adoptForeignState(next){
+  if (!next || typeof next !== 'object') return;
+  STATE_REV = next.rev || 0;
+  const hash = location.hash;
+  state = next;
+  try {
+    if (typeof renderShell === 'function') renderShell();
+    if (typeof render === 'function'){ location.hash = hash; render(); }
+    if (typeof toast === 'function') toast('另一個分頁更新了資料，這一頁已經同步。');
+  } catch (e) { /* 還沒開始渲染就收到事件：資料已換好，等首次 render 即可 */ }
+}
+
+if (typeof window !== 'undefined' && window.addEventListener){
+  window.addEventListener('storage', function(e){
+    if (e.key !== STORE_KEY || !e.newValue) return;
+    let next = null;
+    try { next = JSON.parse(e.newValue); } catch (err) { return; }
+    if (!next || next.writer === TAB_ID) return;      // 自己寫的不用理
+    if ((next.rev || 0) <= STATE_REV) return;         // 不是更新的版本
+    /* 代為檢視中不要被外部狀態拉走身分——那會讓老師莫名其妙跳出檢視 */
+    if (isImpersonating()){
+      if (typeof console !== 'undefined' && console.warn)
+        console.warn('[KAIROS] 代為檢視期間收到另一個分頁的更新，暫不同步。');
+      return;
+    }
+    adoptForeignState(next);
+  });
+}
+
 function save(){
   if (isImpersonating() && !save._allowUiWrite){
     if (typeof console !== 'undefined' && console.warn)
       console.warn('[KAIROS] 代為檢視期間的落地被擋下', new Error().stack);
     return;
   }
+  /* 版次要在序列化之前掛上去，兩個分支寫出的物件才都帶得到 */
+  state.rev = nextRev();
+  state.writer = TAB_ID;
   try {
     /* 代為檢視是一個「模式」，不是身分變更：模式本身不能落地。
        否則老師關掉分頁、隔天開機還是學生身分，而且不知道怎麼回來。 */
@@ -2592,6 +2660,10 @@ function saveUiOnly(){
     const prev = JSON.parse(raw);
     const imp = state.ui && state.ui.impersonate;
     prev.ui = Object.assign({}, state.ui, imp ? {role: imp.realRole, impersonate: undefined} : {});
+    /* 這也是一次寫出，版次一樣要往前推——否則別的分頁看到 rev 沒變
+       就不會同步，而磁碟上的 ui 已經換人了。 */
+    prev.rev = nextRev();
+    prev.writer = TAB_ID;
     localStorage.setItem(STORE_KEY, JSON.stringify(prev));
   } catch (e) { /* 無痕模式等情況：僅存在記憶體 */ }
 }
@@ -2619,7 +2691,11 @@ function loadState(){
       const s = JSON.parse(raw);
       // 版號不符（示範資料改版）→ 重新產生
       if (s && s.version === STATE_VERSION){
-        if (responsesMatchKey(s)) return s;
+        if (responsesMatchKey(s)){
+          /* 接上磁碟上的版次，這個分頁之後寫出的版次才會比它大 */
+          STATE_REV = s.rev || 0;
+          return s;
+        }
         console.warn('[KAIROS] 作答紀錄與現行題本的答案鍵不一致，已重新產生示範資料。');
       }
     }
@@ -2836,8 +2912,12 @@ function notesForViewer(){
    橋接：由 KIDMAP 迷思題產生知識建構視圖
    —— 這是兩個平台真正接起來的地方 ——
    ========================================================================== */
+/* 這個班有沒有為這一題開過共構視圖。
+   原本掃全站：c-1 先為第 5 題開了視圖，c-2 的老師就看到「進入共構視圖 →」，
+   點下去被 viewVisible() 擋掉——而且〈開啟共構視圖〉的按鈕永遠不出現，
+   他再也沒辦法為自己班開這一題。那不是死連結，是功能被別班鎖住。 */
 function bridgeExists(aid, iid){
-  return state.views.find(function(v){
+  return viewsForViewer().find(function(v){
     return v.origin && v.origin.aid === aid && v.origin.iid === iid;
   });
 }
@@ -4485,6 +4565,20 @@ const $$ = function(s, r){ return Array.prototype.slice.call((r || document).que
 let ROUTE = {name:'teacher', args:[]};
 
 function go(hash){ location.hash = hash; }
+/* 有些跳轉之後，原本停留的那一頁已經不成立了：交完卷的作答頁、
+   送出後的問卷、刪掉之後的貼文詳頁。用 go() 疊一筆歷史紀錄的話，
+   按〈上一頁〉會回到一個已經不存在的狀態——而按上一頁正是孩子
+   最直覺的動作。這種跳轉要「換掉」目前這一筆，不是疊上去。
+   replaceState 不會觸發 hashchange，所以要自己叫 render()。 */
+function replaceHash(hash){
+  if (location.hash === hash){ if (typeof render === 'function') render(); return; }
+  if (window.history && history.replaceState){
+    history.replaceState(null, '', hash);
+    if (typeof render === 'function') render();
+  } else {
+    location.replace(location.pathname + location.search + hash);
+  }
+}
 /* 已知路由白名單。逐條抄自 99-app.js 的 render() switch；
    新增 case 時這裡要同步，否則新路由會被當成未知而不重繪。
    有這道白名單，頁內錨點（#stage、#anything）就不會把畫面打成 404。 */
@@ -5051,7 +5145,10 @@ function viewTeacher(){
   const cs = communitySummary();
   const diag = diagnose(state, 'a-pre');
   const flagged = diag && diag.ready ? diag.flagged.length : 0;
-  const bridged = state.views.filter(function(v){ return v.origin; }).length;
+  /* 這一排統計卡必須同一個範圍。「社群貼文」已經是本班（communitySummary），
+     「共構視圖」原本卻是四班合計——同一排相鄰的兩張卡各講各的。 */
+  const myViews = viewsForViewer();
+  const bridged = myViews.filter(function(v){ return v.origin; }).length;
   const nAll = state.classes.reduce(function(a, c){ return a + c.studentIds.length; }, 0);
 
   return sectionHead('教師後台',
@@ -5070,7 +5167,7 @@ function viewTeacher(){
     statCard('全體樣本', nAll + ' 人', state.classes.length + ' 班 · 四條件叢集分派') +
     statCard('待處理迷思題', flagged, '前測 · 全體 · 迷思比例 ≥ ' + state.settings.misThreshold + '%',
              flagged ? 'crit' : '') +
-    statCard('共構視圖', state.views.length, '其中 ' + bridged + ' 個由迷思開啟') +
+    statCard('共構視圖', myViews.length, '其中 ' + bridged + ' 個由迷思開啟') +
     statCard('社群貼文', cs.notes, '延伸 ' + cs.buildOns + ' · 躍升 ' + cs.riseAbove) +
   '</div>' +
 
@@ -5111,7 +5208,7 @@ function viewTeacher(){
       '<p class="muted small" style="margin-top:12px">點任一位同學會以他的視角唯讀檢視（你的閱讀與貼文不會記到他名下），畫面上方會出現結束檢視的按鈕。</p>' +
     '</div></div>' +
     '<div class="card"><div class="card-h"><h3>從迷思開啟的共構視圖</h3></div><div class="card-p col">' +
-      (state.views.filter(function(v){ return v.origin; }).map(function(v){
+      (myViews.filter(function(v){ return v.origin; }).map(function(v){
         const it = getItem(v.origin.iid);
         return '<div class="row" style="justify-content:space-between;border-bottom:1px solid var(--rule-soft);padding-bottom:8px">' +
           '<div><a href="#/kb/' + v.id + '"><b>' + esc(v.title) + '</b></a>' +
@@ -5262,7 +5359,7 @@ function tabOverview(diag){
       nItems + ' 題，共 ' + (nAll * nItems) + ' 題次）</h3>' +
       '<span class="muted small">排列方式與 KIDMAP 圖一致</span></div><div class="card-p">' +
       // 依 KIDMAP 圖上的位置排列：左上 III、右上 I、左下 II、右下 IV
-      '<div class="grid" style="grid-template-columns:repeat(2,minmax(0,1fr))">' + [3,1,2,4].map(function(q){
+      '<div class="grid split" style="--cols:repeat(2,minmax(0,1fr))">' + [3,1,2,4].map(function(q){
         return '<div class="stat"><div class="k">' + QUAD[q].roman + ' ' + QUAD[q].name + '</div>' +
           '<div class="v" style="color:var(--' + QUAD[q].key + ')">' + diag.totals[q] +
           '<span class="s" style="font-size:.6em"> 題次</span></div>' +
@@ -5441,7 +5538,7 @@ function tabKidmap(diag){
     ? tabKidmap.sel : ranked[0].sid;
   tabKidmap.sel = sel;
   const ps = diag.perStudent.find(function(p){ return p.sid === sel; }) || ranked[0];
-  return '<div class="grid" style="grid-template-columns:230px minmax(0,1fr);gap:16px">' +
+  return '<div class="grid split" style="--cols:230px minmax(0,1fr);gap:16px">' +
     '<div class="card" style="max-height:660px;overflow:auto"><div class="card-h"><h3>學生</h3>' +
     '<span class="muted small">依迷思題數排序</span></div>' +
     '<div style="padding:8px">' + ranked.map(function(p){
@@ -5596,17 +5693,28 @@ function tabCR(diag){
     '<div class="card-p col">' + answers.map(function(r){
       const k = classOfStudent(r.sid);
       const isMine = k && k.id === mine.id;
+      /* 每一列的控制項要有自己的 id，label 的 for 才接得上 */
+      const rowKey = (r.sid + '-' + it.id).replace(/[^A-Za-z0-9_-]/g, '');
+      const scoreId = 'crScore-' + rowKey, noteId = 'crNote-' + rowKey;
       return '<div class="note-full"' + (isMine ? ' style="border-left:3px solid var(--accent)"' : '') + '>' +
         '<div class="row" style="justify-content:space-between;margin-bottom:8px">' +
         '<span class="row"><b>' + esc(userName(r.sid)) + '</b>' +
         '<span class="pill">' + esc((k || {}).name || '—') + '</span></span>' +
-        '<span class="row"><label class="small muted">給分（滿分 6）</label>' +
-        '<input type="number" min="0" max="6" step="1" style="width:72px" value="' + (r.score === null ? '' : r.score) +
+        /* 這兩個 label 原本既沒有 for、也沒有包住控制項——純粹是視覺上擺在旁邊。
+           一頁 24 位學生 × 2 題＝48 個控制項，報讀軟體全部念成無名的
+           spin button 與 text area。而且每一列的標籤字一模一樣，
+           光是關聯起來還不夠：得把學生名字放進可及名稱，
+           老師才知道游標停在誰的分數上。（可及名稱包含可見文字，
+           符合 WCAG 2.5.3 label in name。） */
+        '<span class="row"><label class="small muted" for="' + scoreId + '">給分（滿分 6）</label>' +
+        '<input type="number" min="0" max="6" step="1" style="width:72px" id="' + scoreId +
+        '" aria-label="' + esc(userName(r.sid)) + ' 的給分（滿分 6）" value="' + (r.score === null ? '' : r.score) +
         '" data-act="cr-score" data-sid="' + r.sid + '" data-iid="' + it.id + '" data-aid="' + diag.assignment.id + '">' +
         '</span></div>' +
         '<div class="ai-out" style="white-space:pre-wrap;font-family:var(--f-mono);font-size:0.78rem">' + esc(r.text || '（未作答）') + '</div>' +
-        '<div class="field" style="margin-top:8px"><label>給學生的評語</label>' +
-        '<textarea style="min-height:56px" data-act="cr-comment" data-sid="' + r.sid + '" data-iid="' + it.id +
+        '<div class="field" style="margin-top:8px"><label for="' + noteId + '">給學生的評語</label>' +
+        '<textarea style="min-height:56px" id="' + noteId +
+        '" aria-label="給 ' + esc(userName(r.sid)) + ' 的評語" data-act="cr-comment" data-sid="' + r.sid + '" data-iid="' + it.id +
         '" data-aid="' + diag.assignment.id + '" placeholder="可留空">' + esc(r.comment || '') + '</textarea></div>' +
         '</div>';
     }).join('') + '</div></div>';
@@ -5932,7 +6040,7 @@ function viewNote(nid){
     '<p class="small" style="margin:0">代為檢視中，只能看不能改——編輯、刪除、加註記與' +
     '「重做這節課」都停用了，' +
     '你的操作不會記到這位學生名下。</p></div>' : '') +
-  '<div class="grid" style="grid-template-columns:minmax(0,1.6fr) minmax(280px,1fr);gap:16px">' +
+  '<div class="grid split" style="--cols:minmax(0,1.6fr) minmax(280px,1fr);gap:16px">' +
   '<div class="col">' +
     noteFullHTML(n, true) +
     '<div class="card"><div class="card-h"><h3>這條想法串</h3>' +
@@ -6148,7 +6256,7 @@ function viewSynth(vid){
       return '<button class="btn sm' + (r.id === sel ? ' primary' : '') + '" data-act="synth-sel" data-id="' + r.id + '">' +
         esc(shortStem(r.title)) + '</button>';
     }).join('') + '</div>' +
-    '<div class="grid" style="grid-template-columns:minmax(0,1fr) minmax(300px,.9fr);gap:16px">' +
+    '<div class="grid split" style="--cols:minmax(0,1fr) minmax(300px,.9fr);gap:16px">' +
     '<div class="card"><div class="card-h"><h3>想法改進軌跡</h3>' +
       '<span class="pill">' + esc(ii.arc) + '</span></div><div class="card-p col">' +
       ii.steps.map(function(s){
@@ -6214,7 +6322,7 @@ function dashDual(){
   const dt = dualTrack();
   const zones = ['A','B','C','D'];
   const counts = {}; zones.forEach(function(z){ counts[z] = dt.rows.filter(function(r){ return r.zone === z; }).length; });
-  return '<div class="grid" style="grid-template-columns:minmax(0,1.15fr) minmax(300px,.85fr);gap:16px">' +
+  return '<div class="grid split" style="--cols:minmax(0,1.15fr) minmax(300px,.85fr);gap:16px">' +
     '<div class="card"><div class="card-h"><h3>能力變化 × 論述參與</h3>' +
       '<span class="muted small">分界線為 ' + esc(kbClass().name) + ' 的中位數</span></div>' +
       '<div class="card-p">' + dualSVG(dt) + '</div></div>' +
@@ -6282,7 +6390,7 @@ function dashStudents(){
 function dashSNA(){
   const g = snaGraph();
   const top = g.ids.slice().sort(function(a, b){ return (g.deg[b].in + g.deg[b].out) - (g.deg[a].in + g.deg[a].out); }).slice(0, 8);
-  return '<div class="grid" style="grid-template-columns:minmax(0,1.2fr) minmax(280px,.8fr);gap:16px">' +
+  return '<div class="grid split" style="--cols:minmax(0,1.2fr) minmax(280px,.8fr);gap:16px">' +
     '<div class="card"><div class="card-h"><h3>誰延伸誰的想法</h3>' +
       '<span class="muted small">線的粗細＝延伸次數</span></div><div class="card-p">' + snaSVG(g) +
       '<div class="legend" style="margin-top:8px">' +
@@ -6556,6 +6664,7 @@ function viewStudent(){
     '<div class="col">' + asgs.map(function(a){
       const done = submitted(a.id, me.id);
       const n = a.itemIds.length;
+      const draftN = (!done && a.aal) ? aalDraftProgress(a.id, me.id) : 0;
       const right = state.responses.filter(function(r){
         return r.aid === a.id && r.sid === me.id && r.correct === true; }).length;
       return '<div class="card"><div class="card-p"><div class="row" style="justify-content:space-between">' +
@@ -6564,7 +6673,12 @@ function viewStudent(){
         '<div class="row small muted" style="margin-top:6px;gap:12px">' +
           '<span>' + n + ' 題</span>' +
           '<span>截止 ' + fmtDate(a.due) + '</span>' +
+          /* 三種狀態，不是兩種。原本只有「已完成／尚未作答」：
+             鐘響、平板沒電、被叫走——寫到一半離開的孩子回來看到「尚未作答」，
+             按鈕還寫著「開始這節課」，兩句都不是真的，而「開始」讀起來
+             像要從頭來過。草稿一直都在 localStorage，只是首頁沒有講。 */
           (done ? '<span class="pill q1"><span class="dot"></span>已完成 · 選擇題答對 ' + right + '</span>'
+                : draftN ? '<span class="pill q4"><span class="dot"></span>寫到一半 · 已寫 ' + draftN + ' / ' + n + ' 題</span>'
                 : '<span class="pill">尚未作答</span>') +
         '</div></div>' +
         /* 示範資料把 96 人的後測都交完了，於是沒有任何一條路徑走得到作答頁。
@@ -6576,7 +6690,7 @@ function viewStudent(){
               ? ' <button class="btn sm" data-act="redo-demo" data-id="' + a.id +
                 '">再走一次（示範）</button>' : '')
           : '<a class="btn primary" href="#/' + (a.aal ? 'aal' : 'quiz') + '/' + a.id + '">' +
-            (a.aal ? '開始這節課 →' : '開始作答 →') + '</a>') + '</div>' +
+            (draftN ? '接著上次繼續 →' : (a.aal ? '開始這節課 →' : '開始作答 →')) + '</a>') + '</div>' +
         '</div></div></div>';
     }).join('') + '</div>' +
     '<div class="card" style="margin-top:16px"><div class="card-p">' +
@@ -6743,7 +6857,9 @@ function viewResult(aid){
         '找找看你當時是漏了哪一句。</p>' +
         '<ul>' + ps.cells.filter(function(c){ return c.q === 2; }).map(function(c){
           const it = getItem(c.iid);
-          const v = state.views.find(function(v){ return v.origin && v.origin.iid === it.id; });
+          /* 只找本班的視圖。掃全站的話，c-3 的孩子會看到「全班正在討論這題 →」
+             指向 c-1 的白板，點下去被守門擋掉——而那句話是對他說的。 */
+          const v = viewsForViewer().find(function(v){ return v.origin && v.origin.iid === it.id; });
           return '<li>第 ' + it.no + ' 題：' + esc(shortStem(it.stem)) +
             (v ? '　<a href="#/kb/' + v.id + '">全班正在討論這題 →</a>' : '') + '</li>';
         }).join('') + '</ul></div>' : '') +
@@ -7345,6 +7461,27 @@ const AAL_DRAFT_KEY = 'kairos-draft';
 
 function aalDraftId(){ return AAL.aid + '|' + AAL.me; }
 
+/* 某位學生在某一份作業上留下的草稿（不需要 AAL 正在執行也讀得到）。
+   作業卡片要靠它分辨「還沒開始」與「寫到一半」——原本兩者都印
+   「尚未作答」，按鈕都寫「開始這節課」，對已經寫了十二題的孩子而言
+   兩句話都是假的，而且「開始」聽起來像要從頭來過。 */
+function aalDraftOf(aid, sid){
+  try {
+    const all = JSON.parse(localStorage.getItem(AAL_DRAFT_KEY) || '{}');
+    return all[aid + '|' + sid] || null;
+  } catch (e) { return null; }
+}
+/* 草稿裡已經寫了幾題（選擇題有選 + 非選題有字） */
+function aalDraftProgress(aid, sid){
+  const d = aalDraftOf(aid, sid);
+  if (!d) return 0;
+  const picked = Object.keys(d.answers || {}).filter(function(k){
+    return d.answers[k] !== undefined && d.answers[k] !== null; }).length;
+  const written = Object.keys(d.texts || {}).filter(function(k){
+    return String(d.texts[k] || '').trim(); }).length;
+  return picked + written;
+}
+
 function aalSave(){
   if (isImpersonating()) return;
   if (!AAL) return;
@@ -7674,6 +7811,13 @@ function aalMark(i){
    停留超過這個時間才算真的作答。序列分析用到毫秒級間隔時要註記這個延遲。 */
 const OPTION_DEBOUNCE_MS = 350;
 
+/* 解除作答卡片的「還沒寫完」標記。選擇題與非選題兩條寫入路徑共用一份，
+   免得只在其中一條解除（這一輪的缺失正是「加了沒有對應的減」）。 */
+function aalClearMissing(){
+  const card = document.getElementById('aalAnswer');
+  if (card) card.classList.remove('missing');
+}
+
 function aalPick(k){
   const it = aalItem();
   AAL.answers[it.id] = k;
@@ -7685,6 +7829,11 @@ function aalPick(k){
     const mark = lb.querySelector('b');
     if (mark) mark.textContent = String.fromCharCode(65 + idx) + (idx === k ? '✓' : '');
   });
+  /* 交卷被退回來時，這張卡片會標紅並在標題後面加「還沒寫完」。
+     aal-pick 刻意不走 render（高頻互動不重繪整頁），所以要自己解除——
+     否則孩子剛選完答案，卡片還掛著「還沒寫完」，看起來像沒存到。
+     選擇題只要選了就不算空白（見 missIdx 的判定），解除是對的。 */
+  aalClearMissing();
 
   /* 計時器以題目為鍵。共用單一變數的話，350ms 內翻到下一題再點，
      clearTimeout 會把上一題的回呼整個取消——上一題永遠沒有 OPTION 事件，
@@ -7824,39 +7973,65 @@ async function aalSay(){
   }
   aalSave();
 
+  /* 產生回覆的整段都要包起來。原本只有 llmChat 那一段有 try：
+     規則引擎那一條（agentTurn → pickSubprocess → leakGuard）是裸的，
+     而 LLM 失敗時的退路也是同一支 agentTurn——它一旦拋例外，
+     整個 async 函式就以 rejected 收場，於是
+     「正在想…」永遠留在畫面上、輸入框永遠是 readonly、送出鈕永遠 disabled。
+     孩子這一題再也講不了話，畫面上卻沒有任何訊息說明發生什麼事，
+     而額度已經扣掉了。任何情況都必須走到下面的還原流程。 */
   let reply;
-  if (aiEngine() === 'llm'){
-    try {
-      const raw = await llmChat([
-        {role:'system', content: composePrompt(AAL.cond, it.process || 'FR', TURN_SCHEDULE[Math.min(used, TURN_SCHEDULE.length - 1)])},
-        {role:'user', content:'【題目】' + it.stem + '\n【學生剛剛說】' + text}
-      ], {max_tokens:200, temperature:0.7});
-      const g = leakGuard(raw, it);
-      reply = {text:g.text, qfn:TURN_SCHEDULE[Math.min(used, TURN_SCHEDULE.length - 1)],
-               sub:null, engine:'llm', blocked:g.blocked, hits:g.hits};
-    } catch (err) {
+  const qfnNow = TURN_SCHEDULE[Math.min(used, TURN_SCHEDULE.length - 1)];
+  try {
+    if (aiEngine() === 'llm'){
+      try {
+        const raw = await llmChat([
+          {role:'system', content: composePrompt(AAL.cond, it.process || 'FR', qfnNow)},
+          {role:'user', content:'【題目】' + it.stem + '\n【學生剛剛說】' + text}
+        ], {max_tokens:200, temperature:0.7});
+        const g = leakGuard(raw, it);
+        reply = {text:g.text, qfn:qfnNow,
+                 sub:null, engine:'llm', blocked:g.blocked, hits:g.hits};
+      } catch (err) {
+        reply = agentTurn(ctx.cond, it, used);
+        reply.fallback = err.message;
+      }
+    } else {
       reply = agentTurn(ctx.cond, it, used);
-      reply.fallback = err.message;
     }
-  } else {
-    reply = agentTurn(ctx.cond, it, used);
+  } catch (err) {
+    if (typeof console !== 'undefined' && console.error)
+      console.error('[KAIROS] aalSay 產生回覆失敗，改用固定回覆', err);
+    /* 這一句不帶任何提問功能，也不標子歷程——它不是一個對話輪，
+       是一次故障。engine:'error' 讓分析階段可以把它整批排除。 */
+    reply = {text:'我剛剛沒聽清楚，你可以再說一次嗎？', qfn:null, sub:null,
+             engine:'error', error: String((err && err.message) || err)};
   }
 
   /* 一律走快照，不走 AAL：await 之後 AAL 可能已經是 null，
      而 aalLog 沒有 itemArg 時會用 aalItem()——學生翻頁的話，
      同一輪對話的一問一答會被拆到兩題（ASK 記在 R01、AI 記在 R02）。 */
   const eaT = Date.now();
-  if (!isImpersonating()){
-    logEvent({t:eaT, rel:eaT - ctx.t0, sid:ctx.me, cid:ctx.cid, cond:ctx.cond, lang:'zh',
-      aid:ctx.aid, iid:ctx.it.id, proc:ctx.it.process || 'FR', type:'AI', code:'A',
-      text:reply.text, qfn:reply.qfn, sub:reply.sub, turn:ctx.turn,
-      engine:reply.engine, blocked: !!reply.blocked});
+  /* 落地也要包起來：這裡拋例外的話，下面的還原不會執行，
+     結果和產生回覆失敗一模一樣——畫面卡在「正在想…」。
+     資料寫不進去是嚴重的事，但把孩子鎖在一個不會動的畫面上更嚴重，
+     所以記錄到 console 之後照樣把輸入框還給他。 */
+  try {
+    if (!isImpersonating()){
+      logEvent({t:eaT, rel:eaT - ctx.t0, sid:ctx.me, cid:ctx.cid, cond:ctx.cond, lang:'zh',
+        aid:ctx.aid, iid:ctx.it.id, proc:ctx.it.process || 'FR', type:'AI', code:'A',
+        text:reply.text, qfn:reply.qfn, sub:reply.sub, turn:ctx.turn,
+        engine:reply.engine, blocked: !!reply.blocked});
+    }
+    state.dialog.push({t:eaT, sid:ctx.me, cond:ctx.cond, aid:ctx.aid, iid:ctx.it.id,
+      proc:ctx.it.process, turn:ctx.turn, speaker:'agent', text:reply.text,
+      qfn:reply.qfn, sub:reply.sub, ucode:reply.process || ctx.it.process, sent:0});
+    save();
+    if (AAL) aalSave();   // AAL 可能在等待期間被釋放
+  } catch (err) {
+    if (typeof console !== 'undefined' && console.error)
+      console.error('[KAIROS] aalSay 落地失敗', err);
   }
-  state.dialog.push({t:eaT, sid:ctx.me, cond:ctx.cond, aid:ctx.aid, iid:ctx.it.id,
-    proc:ctx.it.process, turn:ctx.turn, speaker:'agent', text:reply.text,
-    qfn:reply.qfn, sub:reply.sub, ucode:reply.process || ctx.it.process, sent:0});
-  save();
-  if (AAL) aalSave();   // AAL 可能在等待期間被釋放
 
   /* 守衛放在資料寫入之後、DOM 更新之前：回覆一定要進 state.dialog
      （那是額度與語料的同一份帳），但學生已經翻頁的話就不碰畫面、不 toast。 */
@@ -7991,7 +8166,7 @@ function aalSubmit(){
   aalDropDraft();          // 交出去了，草稿不用留
   AAL = null;
   toast('已交卷。接下來是這節課的問卷。');
-  go('#/survey/post');
+  replaceHash('#/survey/post');
 }
 
 /* ==========================================================================
@@ -8284,7 +8459,7 @@ function surveySubmit(phase){
   surveyDraftDrop(me.id, phase);
   SURVEY = null;
   toast('問卷已送出，謝謝你。');
-  go('#/student');
+  replaceHash('#/student');
 }
 
 /* ==========================================================================
@@ -8561,7 +8736,7 @@ function rDesign(){
     '這個設計讓「提問功能跨角色恆定、僅社會框架隨角色而異」成為可以逐字查核的事實，' +
     '也讓鷹架機會、資訊量與任務目標在三個條件之間保持恆定。</p></div>' +
 
-    '<div class="grid" style="grid-template-columns:minmax(0,1fr) minmax(320px,.85fr);gap:16px">' +
+    '<div class="grid split" style="--cols:minmax(0,1fr) minmax(320px,.85fr);gap:16px">' +
     '<div class="col">' +
       '<div class="card"><div class="card-h"><h3>模組 0 · 系統骨幹</h3>' +
       '<span class="pill">四條件共用</span></div>' +
@@ -8737,7 +8912,7 @@ function rLSA(){
     }).join('') + '</select>' +
     '<span class="muted small">序列 ' + r.nSeq + ' 段 · 事件 ' + r.nEvent + ' 次 · 轉移 ' + r.N + ' 次</span></div></div>' +
 
-    '<div class="grid" style="grid-template-columns:minmax(0,1.1fr) minmax(300px,.9fr);gap:16px">' +
+    '<div class="grid split" style="--cols:minmax(0,1.1fr) minmax(300px,.9fr);gap:16px">' +
     '<div class="card"><div class="card-h"><h3>調整殘差矩陣</h3>' +
     '<span class="muted small">列＝前一個行為，欄＝後一個行為</span></div>' +
     '<div class="tablewrap"><table><thead><tr><th>z</th>' +
@@ -8790,7 +8965,7 @@ function rENA(){
     '<p class="muted small">節點採固定圓形佈局；正式分析請以 R 的 <code>rENA</code> 套件重跑並採用共註冊佈局，' +
     '本平台的「資料匯出」已提供符合其輸入格式的寬表 CSV。</p></div>' +
 
-    '<div class="grid" style="grid-template-columns:minmax(0,1fr) minmax(320px,.9fr);gap:16px">' +
+    '<div class="grid split" style="--cols:minmax(0,1fr) minmax(320px,.9fr);gap:16px">' +
     '<div class="card"><div class="card-h"><h3>單位投影空間</h3>' +
     (proj ? '<span class="pill">SVD1 ' + pct(proj.var1) + ' · SVD2 ' + pct(proj.var2) + '</span>' : '') +
     '</div><div class="card-p">' + (proj ? enaSVG(proj) : '<div class="muted small">資料不足。</div>') +
@@ -9020,7 +9195,7 @@ function rStats(){
     (o.cov ? '<span class="muted small">共變數：' + esc(o.covName) + '</span>'
            : '<span class="muted small">無共變數（單因子變異數分析）</span>') + '</div></div>' +
 
-    (res ? '<div class="grid" style="grid-template-columns:minmax(0,1fr) minmax(300px,.85fr);gap:16px">' +
+    (res ? '<div class="grid split" style="--cols:minmax(0,1fr) minmax(300px,.85fr);gap:16px">' +
     '<div class="card"><div class="card-h"><h3>' + esc(o.name) + '</h3>' +
     '<span class="pill' + (res.p < .05 ? ' q1' : '') + '">F(' + res.df1 + ', ' + res.df2 + ') = ' +
     res.F.toFixed(2) + '　p ' + fmtP(res.p) + '　ηp² = ' + res.eta.toFixed(3) + '</span></div>' +
@@ -9347,6 +9522,12 @@ function initCanvasDrag(){
     if (KBSEL){
       if (KBPICK[id]) delete KBPICK[id]; else KBPICK[id] = true;
       render();
+      /* render() 把整塊白板重建，正握有焦點的那張便利貼連同它一起被丟掉，
+         焦點掉回 <body>。躍升要先選五、六則貼文，於是只用鍵盤的孩子
+         每選一則就得從頭 Tab 過整片白板才能選下一則——
+         上一輪補了 Enter 能選，但沒補選完之後人還在不在原地。 */
+      const again = document.querySelector('.note[data-note="' + id + '"]');
+      if (again) again.focus({preventScroll:true});
     } else {
       go('#/note/' + id);
     }
@@ -9621,7 +9802,7 @@ function bindEvents(){
     if (act === 'save-note'){ saveEditor(); return; }
     if (act === 'del-note'){ if (confirm('刪除這則貼文？延伸它的貼文會失去連結，這個動作無法復原。')){
       if (!deleteNote(id)){ toast('代為檢視時不能替學生刪貼文。'); return; }
-      closeModal(); EDIT = null; go('#/kb'); render(); toast('已刪除。'); } return; }
+      closeModal(); EDIT = null; replaceHash('#/kb'); toast('已刪除。'); } return; }
     if (act === 'add-ann'){ const ta = $('#annText');
       /* 空白時原本什麼都不做——沒有訊息、焦點也不回到輸入框，
          使用者只會覺得按鈕壞了。 */
@@ -9842,8 +10023,19 @@ function bindEvents(){
         const input = lb.querySelector('input');
         lb.classList.toggle('on', !!(input && input.checked));
       });
+      /* 標紅要跟著答案一起解除，aria-invalid 也一樣。原本只拿掉 class：
+         螢幕報讀軟體會一路把這一列念成「無效」，孩子明明已經填好了。 */
       const row = t.closest('.likert');
-      if (row) row.classList.remove('missing');
+      if (row){ row.classList.remove('missing'); row.removeAttribute('aria-invalid'); }
+      /* 頁首那句「這一段還有 N 題沒有選」插進去之後就不再更新，
+         數字凍在最初那一次。孩子全部補完，它還在說有 3 題沒選——
+         重算剩幾題，歸零就撤掉。 */
+      const svAlert = document.getElementById('svMissAlert');
+      if (svAlert){
+        const left = document.querySelectorAll('#view .likert.missing').length;
+        if (left) svAlert.textContent = '這一段還有 ' + left + ' 題沒有選。';
+        else svAlert.remove();
+      }
       const d = document.getElementById('svDone');
       if (d) d.textContent = surveyKeys(SURVEY.phase, conditionOfStudent(currentUser().id))
         .filter(function(k2){ return SURVEY.resp[k2]; }).length;
@@ -9929,6 +10121,11 @@ function bindEvents(){
       if (AAL.texts[it.id] === undefined) AAL.drafts[it.id] = {first: t.value, final: t.value};
       AAL.texts[it.id] = t.value;
       if (AAL.drafts[it.id]) AAL.drafts[it.id].final = t.value;
+      /* 非選題有字就不算空白（見 missIdx），把「還沒寫完」解除。
+         只解除、不重新加：這個標記的意思是「你剛剛被退回這一題」，
+         不是即時驗證。全選重打的中途會有一瞬間是空的，
+         那時候閃一下紅框只會嚇到人。 */
+      if (t.value.trim()) aalClearMissing();
       /* 4 秒節流。被節流掉的那一段字要記在 _pendingW，換題或交卷時由
          flushTypeTelemetry() 補寫，否則每一題的最後一段打字都會漏。 */
       if (!aalTypeTelemetry._last || Date.now() - aalTypeTelemetry._last > 4000){
