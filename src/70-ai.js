@@ -360,7 +360,7 @@ function builtinRubric(item){
 /* ==========================================================================
    4. 相似題生成
    ========================================================================== */
-async function aiSimilarItems(item, force){
+async function aiSimilarItems(item, force, exclude){
   if (!force){ const c = cacheGet('similar', item.id); if (c) return c; }
   let out;
   if (aiEngine() === 'llm'){
@@ -376,7 +376,7 @@ async function aiSimilarItems(item, force){
     if (!m) throw new Error('回傳的格式不正確，請再試一次。');
     out = JSON.parse(m[0]).items;
   } else {
-    out = builtinSimilar(item);
+    out = builtinSimilar(item, exclude);
   }
   /* 相似題也要過洩答篩檢。這條通道原本一次都沒過，而 #/about 對老師寫著
      「每一則回應送出前都會過一次篩檢，攔截次數本身即為忠實度指標」——
@@ -393,19 +393,31 @@ async function aiSimilarItems(item, force){
 /* 內建引擎不「生成」新題——閱讀題離不開文本，憑空造題會造出沒有文本依據的題目。
    改為從現有題庫挑出「測同一項理解歷程」的題目：先取同一篇文本的，不足再跨文本補，
    讓老師拿得到可以直接用的替代題，而不是一段看起來像題目的生成文字。 */
-function builtinSimilar(item){
-  const sameProc = function(i){ return i.type === 'mc' && i.id !== item.id && i.process === item.process; };
+/* 離線引擎不會憑空造閱讀題——它是從題庫裡挑同一項理解歷程的既有題目。
+   那些題目正在施測中（前後測是同一份 16 題），所以每一題都要帶著
+   來源 id 與所屬派題出去，讓呼叫端可以明明白白告訴老師。
+   exclude 讓〈再出 3 題〉真的換一批，而不是把同樣三題再列一次。 */
+function builtinSimilar(item, exclude){
+  const ex = exclude || [];
+  const sameProc = function(i){
+    return i.type === 'mc' && i.id !== item.id && i.process === item.process && ex.indexOf(i.id) < 0;
+  };
   const near = ITEMS.filter(function(i){ return sameProc(i) && i.unit === item.unit; });
   const far  = ITEMS.filter(function(i){ return sameProc(i) && i.unit !== item.unit; });
   const alt = near.concat(far).slice(0, 3).map(function(i){
+    const inUse = state.assignments.filter(function(a){ return a.itemIds.indexOf(i.id) >= 0; });
     return {stem:i.stem, options:i.options, answer:i.answer,
+            itemId:i.id, itemNo:i.no,
+            inUse: inUse.map(function(a){ return a.title; }),
             hint:'同樣測「' + processName(i.process) + '」' +
                  (i.unit === item.unit ? '，同一篇文本' : '，取自' + textTitle(i.unit)) +
                  '。' + (i.note || '')};
   });
-  return alt.length ? alt : [{stem:'（題庫裡沒有其他測同一項理解歷程的選擇題。' +
+  return alt.length ? alt : [{stem:'（題庫裡測同一項理解歷程的選擇題已經全部列出了。' +
       '切換到外部語言模型可以依這篇文本即時生成；離線模式不會憑空造閱讀題。）',
-    options:['—','—','—','—'], answer:0, hint:'到「系統設定」填入 OpenAI 相容端點與 API key。'}];
+    options:['—','—','—','—'], answer:0, exhausted:true,
+    /* 「系統設定」在 RESEARCHER_ONLY，教師點不進去——不要給一條死路 */
+    hint:'請研究者在「系統設定」切換引擎。'}];
 }
 
 /* ==========================================================================
@@ -457,7 +469,7 @@ function builtinNoteFeedback(n){
   L.push('#### 你可以試試看');
   if (lv <= 1) L.push('- 你可以試試看在句子後面加一句「因為……」，把你為什麼這樣想寫出來，別人才有東西可以接。');
   else if (lv === 2) L.push('- 你可以試試看舉一個具體的數字例子，或找一個「照你的說法會說不通」的情況，把理由變成可以檢驗的東西。');
-  else if (lv === 3) L.push('- 你可以試試看用「更好的理論」支架，把你和前面同學的說法合併寫成一個新版本，並說明新版本改掉了什麼。');
+  else if (lv === 3) L.push('- 你可以試試看用「' + scaffoldLabel('s5') + '」支架，把你和前面同學的說法合併寫成一個新版本，並說明新版本改掉了什麼。');
   else L.push('- 你可以試試看把這個版本貼回原本的問題貼文下面，並標出「還沒解決的部分」，讓討論有下一步。');
   if (!kids.length && n.kind !== 'problem') L.push('- 這則還沒有人延伸。你可以試試看主動去讀兩則別人的貼文並回應，通常也會有人回來讀你的。');
   L.push('');
@@ -508,7 +520,7 @@ function builtinThreadSynthesis(rootId){
   } else {
     L.push('- 這條串裡沒有人用「我需要理解」支架。請刻意邀請學生把還不懂的地方寫出來——沒有問題，想法就不會再往前。');
   }
-  if (!ii.hasChallenge) L.push('- **缺少挑戰**：沒有人使用「這個理論無法解釋」。可以直接問：有沒有哪一個情況照現在的說法會說不通？');
+  if (!ii.hasChallenge) L.push('- **缺少挑戰**：沒有人使用「' + scaffoldLabel('s4') + '」。可以直接問：有沒有哪一個情況照現在的說法會說不通？');
   if (!ii.hasBetter) L.push('- **缺少改進**：還沒有人把大家的說法合併成新版本。');
   L.push('');
   L.push('#### 躍升貼文草稿');

@@ -275,12 +275,14 @@ td.n,th.n{text-align:right; font-family:var(--f-mono); font-variant-numeric:tabu
 
 /* ---------- 知識建構 ---------- */
 .kb-toolbar{display:flex; gap:9px; align-items:center; flex-wrap:wrap; padding:10px 14px; background:var(--card); border:1px solid var(--rule); border-radius:var(--r-l); margin-bottom:14px; box-shadow:var(--shadow)}
+/* 畫布與貼文座標都用 rem。貼文寬度本來就隨字級長（264→462px），
+   而畫布與座標寫死 px，於是 175% 時貼文重疊對數從 2 暴增到 22。 */
 .canvas{
-  position:relative; height:660px; border:1px solid var(--rule); border-radius:var(--r-l);
+  position:relative; height:33rem; border:1px solid var(--rule); border-radius:var(--r-l);
   background:var(--card); background-image:radial-gradient(var(--grid) 1.1px,transparent 1.1px); background-size:19px 19px;
   overflow:auto; touch-action:pan-x pan-y;
 }
-.canvas-inner{position:relative; width:1600px; height:1100px}
+.canvas-inner{position:relative; width:80rem; height:55rem}
 .note{
   position:absolute; width:13.2rem; background:var(--card); border:1px solid var(--rule);
   border-left:4px solid var(--ink-4); border-radius:var(--r-m); padding:9px 11px; cursor:grab;
@@ -443,6 +445,15 @@ input[type=checkbox],input[type=radio]{ width:1.15em; height:1.15em; accent-colo
 .aal-chat .pane-bar{min-height:2.35rem; align-items:center}
 .aal-chat .pane-foot{min-height:4.2rem}
 .chat{display:flex; flex-direction:column; gap:8px; height:var(--pane-h); overflow-y:auto; padding-right:4px}
+/* 對話區要能用鍵盤捲。三個 AI 組讀不回自己講過什麼，而對照組同一個位置
+   是 textarea、上下鍵就能讀完整份筆記——那是以條件為單位發生的介面差異。 */
+.chat:focus-visible{outline:3px solid var(--accent); outline-offset:2px}
+
+/* scrollIntoView 的落點要避開黏在頂部的那一條。全份 CSS 原本沒有任何
+   scroll-margin-top：按〈下一題〉之後 #aalAnswer 的 top 是 0、頂列的 bottom
+   是 100（175% 時 209），題號與題幹整個在頂列後面（WCAG 2.4.11），
+   而那正是孩子換題後要讀的第一樣東西，16 題每題至少一次。 */
+[tabindex="-1"], .likert, .modal{ scroll-margin-top: calc(var(--sticky-top) + 12px) }
 .msg{max-width:88%; padding:8px 12px; border-radius:12px; font-size:1rem; line-height:1.6}
 .msg b{display:block; font-size:0.8rem; letter-spacing:.04em; color:var(--ink-4); font-weight:600; margin-bottom:2px}
 .msg.agent{align-self:flex-start; background:var(--shade); border:1px solid var(--rule-soft); border-bottom-left-radius:3px}
@@ -457,8 +468,12 @@ input[type=checkbox],input[type=radio]{ width:1.15em; height:1.15em; accent-colo
    拿回原生語意（radiogroup + 方向鍵），Tab 停留點是「一題」而非「一格」。
    每一格都印出文字——原本只放在 title 裡，平板沒有 hover，等於不存在。
    尺寸用 rem，字級放大時六格才不會擠爆。 */
-.scale{display:flex; gap:6px; flex-wrap:wrap}
-.lk{min-width:3.4rem; flex:1 1 3.4rem; min-height:2.6rem; border:1px solid var(--rule-strong);
+/* 用 grid 等分而不是 flex 換行。原本 175% + 768px 時六格會斷成 5+1，
+   第六格「非常同意」獨佔第二列、寬度 687px——最極端的正向端點變成畫面上
+   最大最好按的目標，而且只發生在需要放大字級的那一群受試者身上。
+   grid-auto-columns 會依實際格數自動等分，五點量尺不用另外寫。 */
+.scale{display:grid; grid-auto-flow:column; grid-auto-columns:minmax(0,1fr); gap:6px}
+.lk{min-width:0; min-height:2.6rem; border:1px solid var(--rule-strong);
     background:var(--card); border-radius:var(--r-m); cursor:pointer; color:var(--ink-2);
     display:inline-flex; flex-direction:column; align-items:center; justify-content:center;
     gap:1px; padding:4px 2px; text-align:center}
@@ -498,8 +513,16 @@ pre.prompt{
        一開，右欄會被壓到十個中文字寬卻不觸發斷點。 */
 @media (max-width:900px){
   .main{flex-direction:column; align-items:stretch}
-  .rail{position:static; width:auto; flex:0 0 auto; max-height:none; min-height:0;
-        flex-direction:row; overflow-x:auto; border-right:0; border-bottom:1px solid var(--rule); padding:8px 10px; gap:6px}
+  /* align-self 與 min-width 一定要一起覆寫。只改 position／width／flex 的話，
+     寬版的 align-self:flex-start 還留著，側欄會把整份文件撐出橫向捲軸
+     （768px 實測 clientWidth 753 / scrollWidth 962），而被推到畫面外的正是
+     「課後問卷」與「系統說明」——側欄自己的 overflow-x 永遠不會啟動。
+     改成 wrap 而不是只消掉橫捲：橫捲那一條沒有可捲提示，六個入口仍有
+     三個要先學會橫向滑。 */
+  .rail{position:static; width:100%; flex:0 0 auto; align-self:stretch; min-width:0;
+        max-height:none; min-height:0;
+        flex-flow:row wrap; overflow-x:visible; border-right:0;
+        border-bottom:1px solid var(--rule); padding:8px 10px; gap:6px}
   .stage{min-height:0}
   .rail-group{display:inline-flex; align-items:center; padding:0 8px; font-size:0.7rem; opacity:.6}
   .rail a{white-space:nowrap}
@@ -510,8 +533,10 @@ pre.prompt{
   .aal-text{position:static; max-height:none}
 }
 :root[data-narrow] .main{flex-direction:column; align-items:stretch}
-:root[data-narrow] .rail{position:static; width:auto; flex:0 0 auto; max-height:none; min-height:0;
-      flex-direction:row; overflow-x:auto; border-right:0; border-bottom:1px solid var(--rule); padding:8px 10px; gap:6px}
+:root[data-narrow] .rail{position:static; width:100%; flex:0 0 auto; align-self:stretch; min-width:0;
+      max-height:none; min-height:0;
+      flex-flow:row wrap; overflow-x:visible; border-right:0;
+      border-bottom:1px solid var(--rule); padding:8px 10px; gap:6px}
 :root[data-narrow] .stage{min-height:0}
 :root[data-narrow] .rail-group{display:inline-flex; align-items:center; padding:0 8px; font-size:0.7rem; opacity:.6}
 :root[data-narrow] .rail a{white-space:nowrap}
@@ -522,3 +547,7 @@ pre.prompt{
 :root[data-narrow] .aal-text{position:static; max-height:none}
 @media (prefers-reduced-motion:reduce){*{animation:none!important; transition:none!important}}
 @media print{.rail,.topbar,.kb-toolbar{display:none} .app,.main{display:block} .stage{min-height:0}}
+
+/* 暗星用形狀（☆）區分，顏色只是輔助。原本靠 inline opacity:.25，
+   對比 1.73:1，而且高對比模式的覆寫進不去 inline style。 */
+.star-dim{ color:var(--ink-4) }

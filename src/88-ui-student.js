@@ -34,7 +34,7 @@ function viewStudent(){
         '<div class="eyebrow">這節課的進行方式</div>' +
         '<h3 style="margin-top:4px">我的筆記</h3>' +
         '<p class="small" style="margin-top:6px">這節課你自己讀、自己想。' +
-        '右邊是「我的筆記」，把想到的、卡住的地方寫下來。</p>' +
+        '這一頁有一塊「我的筆記」，把想到的、卡住的地方寫下來。</p>' +
         '<p class="muted small">筆記只有你和老師看得到，不會打分數。' +
         '一題一頁，換題會換新的。</p></div>') +
     (needPre ? '<div class="card card-p" style="margin-bottom:16px;border-left:3px solid var(--warn)">' +
@@ -84,7 +84,7 @@ function viewStudent(){
     }).join('') + '</div>' +
     '<div class="card" style="margin-top:16px"><div class="card-p">' +
     '<h4>作答之後會發生什麼</h4>' +
-    '<p class="small" style="margin-top:6px;max-width:70ch">系統會用全班的作答估出每題的難度與你的能力，' +
+    '<p class="small" style="margin-top:6px;max-width:70ch">系統會用所有做過這份題目的同學（四個班一起）估出每題的難度與你的能力，' +
     '把「你本來應該答得出來卻答錯」的題目標出來。這些題目不會只變成一個紅色叉叉——' +
     '系統會把它整理出來變成全班的共同問題，貼到知識建構空間，讓大家一起把它想清楚。</p></div></div>';
 }
@@ -150,8 +150,13 @@ function viewQuiz(aid){
 function readingStars(theta, mean){
   const d = theta - (mean || 0);
   const n = d >= 1 ? 5 : d >= 0.35 ? 4 : d >= -0.35 ? 3 : d >= -1 ? 2 : 1;
-  return '<span data-theta="' + fx(theta) + '" aria-label="五顆星裡的第 ' + n + ' 顆">' +
-    '★★★★★'.slice(0, n) + '<span style="opacity:.25">' + '★★★★★'.slice(n) + '</span></span>';
+  /* role="img" + aria-label：沒有 role 的 <span> 是 generic，
+     ARIA 禁止替它命名，報讀器只會唸出五個星星符號。
+     暗星原本只靠 inline opacity:.25（對比 1.73:1，而且高對比模式覆寫不到），
+     改用實心／空心的形狀差異，不只靠顏色（1.4.1）。 */
+  return '<span role="img" data-theta="' + fx(theta) + '" aria-label="五顆星裡的第 ' + n + ' 顆">' +
+    '<span aria-hidden="true">' + '★★★★★'.slice(0, n) +
+    '<span class="star-dim">' + '☆☆☆☆☆'.slice(n) + '</span></span></span>';
 }
 
 /* --- 個人診斷 --- */
@@ -197,7 +202,7 @@ function viewResult(aid){
         return pct(right / Math.max(1, mc.length)) + (miss ? '　另外 ' + miss + ' 題沒有作答' : '');
       })()) +
       statCard('我這次的閱讀力', ps ? readingStars(ps.theta, diag.meanTheta) : '—',
-        ps ? '和班上比起來的位置' : '需要更多人完成') +
+        ps ? '和所有做過的同學比起來的位置' : '需要更多人完成') +
       statCard('可惜的題目', ps ? ps.q[2] : '—', '這幾題你其實讀得懂，只是這次沒答對') +
       statCard('厲害的題目', ps ? ps.q[1] : '—', '這幾題比較難，你答對了', 'good') +
     '</div>' +
@@ -280,27 +285,49 @@ function crResultBlock(aid, sid, keyLocked){
 }
 
 /* --- 相似題練習 --- */
-async function showSimilar(iid){
+/* 離線引擎挑出來的「相似題」是題庫裡的**現役題目**，不是新生成的。
+   前後測用的是同一份 16 題，老師把它們印成隔天的練習卷就是先發答案卡，
+   而他原本沒有任何線索知道自己踩到了——介面從頭到尾用「出題／生成」
+   的措辭，唯一的線索藏在要另外展開的〈解題思路〉裡。 */
+showSimilar._seen = {};
+async function showSimilar(iid, force){
   const box = document.getElementById('sim-' + iid);
   if (!box) return;
-  box.innerHTML = '<p class="muted small" style="margin-top:8px">出題中……</p>';
+  box.innerHTML = '<p class="muted small" style="margin-top:8px">整理中……</p>';
+  if (!force) showSimilar._seen[iid] = [];
   try {
-    const items = await aiSimilarItems(getItem(iid));
-    box.innerHTML = '<div class="col" style="margin-top:10px">' + items.map(function(x, i){
-      return '<div class="item" style="background:var(--shade)"><div class="eyebrow">相似題 ' + (i + 1) + '</div>' +
+    const items = await aiSimilarItems(getItem(iid), !!force, showSimilar._seen[iid] || []);
+    const exhausted = items.length === 1 && items[0].exhausted;
+    (items || []).forEach(function(x){
+      if (x.itemId && (showSimilar._seen[iid] || []).indexOf(x.itemId) < 0) showSimilar._seen[iid].push(x.itemId);
+    });
+    box.innerHTML = '<div class="col" style="margin-top:10px">' +
+      (exhausted ? '' :
+        '<div class="card card-p" style="border-left:3px solid var(--crit)">' +
+        '<p class="small" style="margin:0"><strong>這些是題庫裡的現役題目，不是新生成的。</strong>' +
+        '前測與後測用的是同一份題本——把它們印給學生練習，等於先發答案卡。' +
+        '這一區只供你自己備課參考。</p></div>') +
+      items.map(function(x, i){
+      return '<div class="item" style="background:var(--shade)">' +
+        '<div class="eyebrow">' + (x.itemId
+          ? '題庫第 ' + x.itemNo + ' 題（' + esc(x.itemId) + '）' +
+            (x.inUse && x.inUse.length ? '　·　目前用於：' + esc(x.inUse.join('、')) : '')
+          : '參考題 ' + (i + 1)) + '</div>' +
         '<div class="stem">' + esc(x.stem) + '</div>' +
         '<div class="opts">' + x.options.map(function(o, k){
           return '<label class="opt" data-act="sim-pick" data-i="' + i + '" data-k="' + k + '" data-ans="' + x.answer +
             '" data-iid="' + iid + '"><b>' + String.fromCharCode(65 + k) + '</b><span>' + esc(o) + '</span></label>';
         }).join('') + '</div>' +
         '<div class="small muted" id="simfb-' + iid + '-' + i + '" style="margin-top:6px"></div>' +
-        '<details style="margin-top:6px"><summary class="small muted" style="cursor:pointer">解題思路</summary>' +
+        '<details style="margin-top:6px"><summary class="small muted" style="cursor:pointer">命題備註</summary>' +
         '<div class="small" style="margin-top:4px">' + esc(x.hint || '') + '</div></details>' +
         '</div>';
     }).join('') + '<div class="row"><span class="muted small">引擎：' + esc(engineLabel()) + '</span>' +
-    '<button class="btn sm" data-act="similar-again" data-id="' + iid + '">再出 3 題</button></div></div>';
+    /* 一顆按不動的按鈕比一顆按了沒反應的按鈕誠實 */
+    '<button class="btn sm" data-act="similar-again" data-id="' + iid + '"' +
+      (exhausted ? ' disabled' : '') + '>換一批</button></div></div>';
   } catch (e) {
-    box.innerHTML = '<p class="small" style="margin-top:8px"><strong>出題失敗：</strong>' + esc(e.message) + '</p>';
+    box.innerHTML = '<p class="small" style="margin-top:8px"><strong>取不到題目：</strong>' + esc(e.message) + '</p>';
   }
 }
 
@@ -338,6 +365,9 @@ function initPads(){
     });
     cv.addEventListener('pointerup', function(){ cur = null; if (QUIZ) QUIZ.strokes[id] = PADS[id].strokes; });
     cv.addEventListener('pointerleave', function(){ cur = null; });
+    /* 與畫布同一個坑：手勢被瀏覽器接管時會送 pointercancel，
+       不處理的話同一次捲動會在計算紙上留下一條假筆畫。 */
+    cv.addEventListener('pointercancel', function(){ cur = null; });
   });
 }
 function redraw(id){

@@ -44,7 +44,7 @@ function render(){
         '<a href="#/dash">雙軌評量儀表板</a>。</p>' +
         '<a class="btn" href="#/teacher">回教師後台</a></div>'
       : '<div class="empty"><h3>這一頁不是給你看的</h3>' +
-        '<p style="max-width:60ch">你的作業、討論與學習軌跡都在左邊的選單裡。</p>' +
+        '<p style="max-width:60ch">你的作業、討論與學習軌跡都在導覽選單裡。</p>' +
         '<a class="btn" href="#/student">回我的作業</a></div>';
     renderRail();
     return;
@@ -52,7 +52,7 @@ function render(){
   if (TEACHER_ONLY[ROUTE.name] && !isTeacher()){
     stage.className = 'stage';
     $('#view').innerHTML = '<div class="empty"><h3>這一頁是老師看的</h3>' +
-      '<p style="max-width:60ch">你的作業、討論與學習軌跡都在左邊的選單裡。</p>' +
+      '<p style="max-width:60ch">你的作業、討論與學習軌跡都在導覽選單裡。</p>' +
       '<a class="btn" href="#/student">回我的作業</a></div>';
     renderRail();
     return;
@@ -86,6 +86,9 @@ function render(){
      不再是這裡的對象。） */
   const key = ROUTE.name + '/' + a.join('/');
   const samePage = (key === LAST_ROUTE_KEY);
+  /* 換頁時關掉還開著的彈窗。留著的話，aria-modal 與焦點陷阱會掛在
+     一個屬於別頁的對話框上——Tab 被鎖在裡面，而它談的東西已經不在畫面上。 */
+  if (!samePage && $('#modalRoot').firstChild){ closeModal(); EDIT = null; }
   /* 離開知識建構空間就把選取模式與搜尋清掉。進 #/note、#/synth 再回來時
      殘留的狀態會與畫面脫節。 */
   if (ROUTE.name !== 'kb' && KBSEL){ KBSEL = null; KBPICK = {}; }
@@ -156,25 +159,45 @@ function render(){
 function initCanvasDrag(){
   const inner = $('#canvasInner'); if (!inner) return;
   let drag = null;
+  /* 座標存的是 viewBox 單位（100% 字級的 px），畫面上用 rem。 */
+  const U = 20;
+  function px2unit(v){ return Math.round(v); }
+
+  /* 手指一開始捲動，瀏覽器會送 pointercancel 並收回 capture，
+     但閉包裡的 drag 仍非 null——接下來的 pointermove/up 會把全班共用的
+     貼文搬走並存檔。捲一次畫面就改掉別人的版面。 */
+  function endDrag(){
+    if (!drag) return;
+    drag.el.style.left = (drag.ox / U) + 'rem';
+    drag.el.style.top  = (drag.oy / U) + 'rem';
+    drag = null;
+  }
+  inner.addEventListener('pointercancel', endDrag);
+  inner.addEventListener('lostpointercapture', endDrag);
+
   inner.addEventListener('pointerdown', function(e){
     const el = e.target.closest('.note'); if (!el) return;
     const n = getNote(el.dataset.note); if (!n) return;
-    drag = {el:el, n:n, sx:e.clientX, sy:e.clientY, ox:n.x, oy:n.y, moved:false};
+    /* 觸控的抖動比滑鼠大得多。曼哈頓距離 4px 會讓「右 3、下 2」的輕點
+       就算成拖曳——實測輕點一下貼文位置就變了，而且詳頁沒有打開。 */
+    drag = {el:el, n:n, sx:e.clientX, sy:e.clientY, ox:n.x, oy:n.y, moved:false,
+            slop: e.pointerType === 'touch' ? 10 : 4};
     el.setPointerCapture(e.pointerId);
   });
   inner.addEventListener('pointermove', function(e){
     if (!drag) return;
     const dx = e.clientX - drag.sx, dy = e.clientY - drag.sy;
-    if (Math.abs(dx) + Math.abs(dy) > 4) drag.moved = true;
+    if (Math.hypot(dx, dy) > drag.slop) drag.moved = true;
     if (!drag.moved) return;
-    drag.el.style.left = Math.max(0, drag.ox + dx) + 'px';
-    drag.el.style.top = Math.max(0, drag.oy + dy) + 'px';
+    drag.el.style.left = (Math.max(0, drag.ox + dx) / U) + 'rem';
+    drag.el.style.top  = (Math.max(0, drag.oy + dy) / U) + 'rem';
   });
   inner.addEventListener('pointerup', function(e){
     if (!drag) return;
     const d = drag; drag = null;
     if (d.moved){
-      moveNote(d.n.id, parseInt(d.el.style.left, 10), parseInt(d.el.style.top, 10));
+      const dx = e.clientX - d.sx, dy = e.clientY - d.sy;
+      moveNote(d.n.id, px2unit(Math.max(0, d.ox + dx)), px2unit(Math.max(0, d.oy + dy)));
       render();
     } else if (KBSEL){
       if (KBPICK[d.n.id]) delete KBPICK[d.n.id]; else KBPICK[d.n.id] = true;
@@ -183,9 +206,20 @@ function initCanvasDrag(){
       go('#/note/' + d.n.id);
     }
   });
+  /* 鍵盤要與指標對稱。原本 Enter 一律 go()，於是只用鍵盤的孩子
+     完全做不到躍升——而躍升是知識建構空間的核心動作（2.1.1 無替代路徑）。 */
   inner.addEventListener('keydown', function(e){
     const el = e.target.closest('.note');
-    if (el && (e.key === 'Enter' || e.key === ' ')){ e.preventDefault(); go('#/note/' + el.dataset.note); }
+    if (!el) return;
+    if (e.key !== 'Enter' && e.key !== ' ' && e.key !== 'Spacebar') return;
+    e.preventDefault();
+    const id = el.dataset.note;
+    if (KBSEL){
+      if (KBPICK[id]) delete KBPICK[id]; else KBPICK[id] = true;
+      render();
+    } else {
+      go('#/note/' + id);
+    }
   });
 }
 
@@ -459,11 +493,17 @@ function bindEvents(){
       if (!deleteNote(id)){ toast('代為檢視時不能替學生刪貼文。'); return; }
       closeModal(); EDIT = null; go('#/kb'); render(); toast('已刪除。'); } return; }
     if (act === 'add-ann'){ const ta = $('#annText');
-      if (ta && ta.value.trim()){
-        const ok = addAnnotation(id, ta.value);
-        render();
-        toast(ok ? '已加上註記。' : '代為檢視時不能加註記。');
-      } return; }
+      /* 空白時原本什麼都不做——沒有訊息、焦點也不回到輸入框，
+         使用者只會覺得按鈕壞了。 */
+      if (!ta || !ta.value.trim()){
+        toast('先寫幾個字再送出。');
+        if (ta) ta.focus();
+        return;
+      }
+      const ok = addAnnotation(id, ta.value);
+      render();
+      toast(ok ? '已加上註記。' : '代為檢視時不能加註記。');
+      return; }
     if (act === 'search-clear'){ KBSEARCH.q = ''; render(); return; }
     if (act === 'synth-sel'){ viewSynth.sel = id; render(); return; }
 
@@ -474,7 +514,8 @@ function bindEvents(){
     /* 相似題只給教師備課用。它原本印在學生的診斷頁上、四個條件都給、
        不限次數、完全在 MAX_TURNS 之外——那會讓對照組拿到一顆無限次的 AI
        按鈕，變成第四種處理，RQ1 的組間比較失去基準。 */
-    if (act === 'similar' || act === 'similar-again'){ if (!isTeacher()) return; showSimilar(id); return; }
+    if (act === 'similar' || act === 'similar-again'){ if (!isTeacher()) return;
+      showSimilar(id, act === 'similar-again'); return; }
     if (act === 'sim-pick'){
       if (!isTeacher()) return;
       const ok = +t.dataset.k === +t.dataset.ans;
@@ -508,7 +549,7 @@ function bindEvents(){
       render();
       const nu = aalItem().unit;
       if (nu !== oldUnit){
-        toast('第 ' + (AAL.idx + 1) + ' 題換了一篇文章：〈' + getText(nu).title + '〉，左邊已經換過來了。');
+        toast('第 ' + (AAL.idx + 1) + ' 題換了一篇文章：〈' + getText(nu).title + '〉，文章已經換過來了。');
         /* 換了文章，左欄要從頭開始——否則學生會在新文章的中段醒來 */
         const p = document.querySelector('.aal-text > .card-p');
         if (p) p.scrollTop = 0;
@@ -542,6 +583,10 @@ function bindEvents(){
     if (act === 'back-to-passage'){
       const h = document.getElementById('passageTitle');
       if (h){ h.focus(); h.scrollIntoView({block:'start'}); }
+      return; }
+    if (act === 'back-to-nav'){
+      const nv = document.getElementById('aalNav');
+      if (nv){ nv.focus(); nv.scrollIntoView({block:'start'}); }
       return; }
 
     /* 教師／研究者的唯讀檢視：換題不寫任何日誌 */

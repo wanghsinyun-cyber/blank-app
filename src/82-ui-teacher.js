@@ -354,9 +354,17 @@ function tabProcess(diag){
     inClass.map(function(sid){
       const pr = processProfile(diag, [sid]);
       const rows = PROCESSES.map(function(p){ return {p:p, b:pr[p.id]}; }).filter(function(x){ return x.b.n; });
-      const worst = rows.slice().sort(function(a, b){ return a.b.rate - b.b.rate; })[0];
-      return {sid:sid, pr:pr, rows:rows, worst:worst};
-    }).sort(function(a, b){ return (a.worst ? a.worst.b.rate : 1) - (b.worst ? b.worst.b.rate : 1); })
+      /* 並列與滿分都要處理。取 [0] 的話：三項並列 0% 只會顯示 PROCESSES
+         陣列裡排最前面的那一項，四項全對的學生也會被印一個「最弱」——
+         而這一欄的副標寫著「優先看需要介入的人」，那個排序建立在一個
+         任意的 tie-break 上。 */
+      const minRate = rows.length ? Math.min.apply(null, rows.map(function(x){ return x.b.rate; })) : 1;
+      const worsts = rows.filter(function(x){ return x.b.rate === minRate; });
+      return {sid:sid, pr:pr, rows:rows, minRate:minRate, worsts:worsts};
+    }).sort(function(a, b){
+      /* 先看最弱的答對率，再看並列了幾項——並列越多代表越全面地卡住 */
+      return (a.minRate - b.minRate) || (b.worsts.length - a.worsts.length);
+    })
     .map(function(x){
       return '<tr><td>' + esc(userName(x.sid)) + '</td>' +
         PROCESSES.map(function(p){
@@ -368,9 +376,14 @@ function tabProcess(diag){
           return '<i style="width:' + (100 / x.rows.length) + '%;background:var(--' +
             r.p.cls.replace('sc', 'sc-') + ');opacity:' + (0.25 + 0.75 * r.b.rate).toFixed(2) + '"></i>';
         }).join('') + '</div></td>' +
-        '<td class="n"><span class="pill ' + (x.worst ? x.worst.p.cls : '') + '">' +
-        '<span aria-hidden="true">' + (x.worst ? x.worst.p.mark : '') + '</span>' +
-        esc(x.worst ? x.worst.p.name : '—') + '</span></td></tr>';
+        '<td class="n">' + (
+          x.minRate === 1
+            ? '<span class="pill">—　四項都答對</span>'
+            : x.worsts.map(function(w){
+                return '<span class="pill ' + w.p.cls + '">' +
+                  '<span aria-hidden="true">' + w.p.mark + '</span>' + esc(w.p.name) + '</span>';
+              }).join(' ')
+        ) + '</td></tr>';
     }).join('') + '</tbody></table></div>' +
     '<div class="card-p"><p class="muted small">剖面條的每一段代表一項歷程，顏色深淺代表答對率高低；' +
     '同時附上數字與「最弱」文字標籤，不以顏色單獨傳達訊息。' +
@@ -446,7 +459,7 @@ function tabItems(diag){
     '<div class="card-p"><div class="row">' + quadLegend() + '</div>' +
     /* 相似題原本印在學生的診斷頁上，四個條件都拿得到、不限次數，
        等於在 MAX_TURNS 之外多開一條鷹架通道。移到教師端備課用。 */
-    '<p class="muted small" style="margin-top:10px">「相似題」是給你備課用的，' +
+    '<p class="muted small" style="margin-top:10px">「相似題」是給你備課用的，<strong>它挑出來的是題庫裡的現役題目，不是新生成的</strong>——前後測同一份題本，印給學生練習等於先發答案卡。' +
     '<strong>不計入學生的鷹架劑量</strong>——學生端看不到這顆按鈕。</p>' +
     '<p class="muted small" style="margin-top:10px">Outfit MNSQ 接近 1 代表該題與 Rasch 模式相符；明顯大於 1.3 表示有異常作答型態，' +
     '通常正是迷思或猜測造成的，值得優先檢視。</p></div></div>';

@@ -188,7 +188,7 @@ function viewAboutStudent(){
       ? '<div class="card card-p">' +
           '<h3>你自己的筆記</h3>' +
           '<p class="lead" style="margin-top:8px">這節課你自己讀、自己想。' +
-          '畫面右邊是「我的筆記」，把你想到的、卡住的地方寫下來。</p>' +
+          '這一頁有一塊「我的筆記」，把你想到的、卡住的地方寫下來。</p>' +
         '</div>'
       : '<div class="card card-p">' +
           '<h3>你旁邊的夥伴</h3>' +

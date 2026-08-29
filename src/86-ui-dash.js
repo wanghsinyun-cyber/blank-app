@@ -47,6 +47,13 @@ function dashDual(){
         '<span class="pill ' + Z.cls + '"><span class="dot"></span>' + z + '　' + Z.name + '</span>' +
         '<span class="num" style="font-size:1rem;font-weight:600">' + counts[z] + '</span></div>' +
         '<p class="small muted">' + esc(Z.desc) + '</p>' +
+        /* 處方卡不能只給人數：這一格裡有幾位的 Δθ 根本在測量誤差範圍內，
+           老師要先知道，才不會照著一個不可信的數字安排介入。 */
+        (function(){
+          const ns = rows.filter(function(r){ return r.delta != null && !r.sig; }).length;
+          return ns ? '<p class="small" style="color:var(--warn);margin:4px 0 0">其中 ' + ns +
+            ' 位的變化在測量誤差範圍內，不宜當成真的進步或退步。</p>' : '';
+        })() +
         '<div class="row" style="gap:5px;margin-top:6px">' + rows.map(function(r){
           return '<button type="button" class="pill" data-act="asrole" data-id="' + r.sid + '">' +
             esc(userName(r.sid)) + '</button>'; }).join('') + '</div>' +
@@ -68,6 +75,7 @@ function dashStudents(){
     '<span class="muted small">點姓名可切換成該學生視角</span></div>' +
     '<div class="tablewrap"><table><thead><tr>' +
     '<th>學生</th><th class="n">θ 前測</th><th class="n">θ 後測</th><th class="n">Δθ</th>' +
+    '<th class="n">Δθ 的誤差（±2SE）</th>' +
     '<th class="n">前測迷思</th><th class="n">後測迷思</th>' +
     '<th class="n">貼文</th><th class="n">延伸</th><th class="n">被延伸</th><th class="n">支架</th>' +
     '<th class="n">論述層次</th><th class="n">KB 指數</th><th>分區</th></tr></thead><tbody>' +
@@ -78,6 +86,8 @@ function dashStudents(){
       return '<tr><td><button type="button" class="lk-plain" data-act="asrole" data-id="' + r.sid + '">' + esc(userName(r.sid)) + '<span class="sr-only">：以這位學生的視角唯讀檢視</span></button></td>' +
         '<td class="n">' + fx(r.thetaPre) + '</td><td class="n">' + fx(r.thetaPost) + '</td>' +
         '<td class="n delta ' + cls + '">' + (d == null ? '—' : (d > 0 ? '+' : '') + fx(d)) + '</td>' +
+        '<td class="n">' + (r.seDelta == null ? '—' : '±' + fx(2 * r.seDelta)) +
+          (r.delta != null && !r.sig ? '<span class="sr-only">：這位學生的變化在測量誤差範圍內</span>' : '') + '</td>' +
         '<td class="n">' + r.q2Pre + '</td><td class="n">' + r.q2Post + '</td>' +
         '<td class="n">' + (s.notes || 0) + '</td><td class="n">' + (s.buildMade || 0) + '</td>' +
         '<td class="n">' + (s.buildGot || 0) + '</td><td class="n">' + (s.scaffoldKinds || 0) + '/6</td>' +
@@ -290,7 +300,7 @@ function viewMyGrowth(){
       '<div class="card-p col">' + (myNotes.map(function(n){
         return '<div class="row" style="justify-content:space-between;border-bottom:1px solid var(--rule-soft);padding-bottom:6px">' +
           '<a href="#/note/' + n.id + '">' + esc(n.title) + '</a>' +
-          '<span class="pill">第 ' + epistemicLevel(n) + ' 級</span></div>';
+          '<span class="pill">' + esc(epiLabelFor(n)) + '</span></div>';
       }).join('') || '<div class="muted small">還沒貼過想法。到知識建構空間貼第一則吧。</div>') + '</div></div>' +
     '</div>';
 }

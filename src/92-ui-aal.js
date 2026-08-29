@@ -149,7 +149,10 @@ function viewAaL(aid){
          AAL.cond 與日誌的 cond 欄位照舊寫入，拿掉的只是畫面上的字。 */
       '<div class="muted small">' + esc(me.name) + '　·　' +
       esc((classOfStudent(me.id) || {}).name || '') + '</div></div>' +
-      '<div class="row">' +
+      /* tabindex="-1"：〈回到題目導覽〉的焦點落在這個容器上，
+         而不是落在某一顆按鈕。落在容器上，下一次 Tab 才依序碰到
+         〈上一題〉〈下一題〉〈交卷〉——不會讓鍵盤使用者一按 Enter 就交卷。 */
+      '<div class="row" id="aalNav" tabindex="-1">' +
       '<button class="btn sm" data-act="aal-leave">← 先離開（進度會保留）</button>' +
       '<span class="pill">第 ' + (AAL.idx + 1) + ' / ' + AAL.items.length + ' 題</span>' +
       '<span class="pill">' + esc(text.title) + '</span>' +
@@ -202,7 +205,15 @@ function viewAaL(aid){
               '<b aria-hidden="true">' + String.fromCharCode(65 + k) + (on ? '✓' : '') +
               '</b><span>' + esc(o) + '</span></label>';
           }).join('') + '</fieldset>' +
-          '<p class="sr-only">用上下方向鍵聽過每個選項，停在你要的答案上就算選好。</p>'
+          /* 原本這句是 sr-only，而且說「停在你要的答案上就算選好」——
+             那是錯的：原生 radiogroup 在一顆都沒選時，Tab 進來會把焦點
+             放在第一顆但不勾選它。照著做的孩子那一題是空白的，
+             而想選 B/C/D 的必須按方向鍵、反而被正確記錄——
+             這個缺陷只吃掉 A 的作答，是只打在鍵盤使用者身上的系統性失分。
+             改文案與可見性就好，不要「讓 focus 等於選取」：那會把漏答
+             換成錯答，還會用純導覽動作汙染 drafts 的「第一次判斷」。 */
+          '<p class="muted small" style="margin-top:6px">用上下方向鍵選答案，' +
+          '或用空白鍵選你現在停在的那一個。</p>'
         : '<div class="field"><label for="crText">寫出你的答案，並說明你的理由</label>' +
           '<textarea id="crText" data-act="aal-text" style="min-height:160px" ' +
           'placeholder="先寫你的看法，再寫你是從文章哪一段看出來的">' +
@@ -218,7 +229,12 @@ function viewAaL(aid){
           return '<label class="opt" style="align-items:center"><input type="checkbox" data-act="aal-check" data-i="' + i + '"' +
             (on ? ' checked' : '') + '><span>' + esc(c) + '</span></label>';
         }).join('') +
+        /* 去程有「跳過文章，直接作答」，回程原本沒有對稱出口：
+           從最後一個自我檢核回到〈下一題〉要按 54 次 Shift+Tab，
+           中途逐顆停在句子鈕上——順手按 Enter 就寫一筆 MARK 事件，
+           汙染閱讀歷程資料。 */
         '<button class="skip" data-act="back-to-passage" type="button">回到文章</button>' +
+        '<button class="skip" data-act="back-to-nav" type="button">回到題目導覽</button>' +
       '</div></div>' +
     '</div></div>';
 }
@@ -232,7 +248,7 @@ function aalDialogPane(it, cond, turns, used, maxT){
     /* role="log" + aria-live：AI 的回覆是非同步送達的，
        沒有這兩個屬性，報讀器使用者永遠不知道夥伴回話了。 */
     '<div class="chat" id="aalChat" role="log" aria-live="polite" aria-relevant="additions"' +
-    ' aria-label="我和夥伴的對話">' +
+    ' aria-label="我和夥伴的對話" tabindex="0">' +
       '<div class="msg agent"><b>' + esc(cond.name) + '</b>' + esc(cond.frame) + '</div>' +
       turns.map(function(t){
         return '<div class="msg ' + (t.speaker === 'student' ? 'me' : 'agent') + '">' +
@@ -531,12 +547,17 @@ async function aalSay(){
   } else {
     box.placeholder = '這一題已經聊完了';
     box.disabled = true;
-    if (chat) chat.insertAdjacentHTML('beforeend',
-      '<div class="msg sys" id="turnsDone" tabindex="-1">這一題的對話次數用完了。換下一題會重新計算。</div>');
-    /* 額度用完那一次 box 可以真的 disabled，但焦點要有去處——
-       不接住的話，第 6 次之後焦點永久留在 body。 */
+    /* 順序很重要：先 append，再捲到底，最後才 focus。
+       反過來的話那句話確實拿到焦點，但整個落在捲動視窗外——
+       孩子只看到輸入框忽然變灰，解釋原因的那句話在他看不到的地方。 */
+    if (chat){
+      chat.insertAdjacentHTML('beforeend',
+        '<div class="msg sys" id="turnsDone" tabindex="-1">這一題的對話次數用完了。換下一題會重新計算。</div>');
+      chat.scrollTop = chat.scrollHeight;
+    }
     const done = document.getElementById('turnsDone');
     const next = document.querySelector('[data-act="aal-next"]:not([disabled])');
+    /* preventScroll 要留著——拿掉會把整個頁面捲走 */
     if (done) done.focus({preventScroll:true});
     else if (next) next.focus({preventScroll:true});
     toast('這一題的對話次數用完了，可以按下一題。');
@@ -545,6 +566,8 @@ async function aalSay(){
 
 function aalSubmit(){
   if (isImpersonating()){ toast('代為檢視時不能替學生交卷。'); return; }
+  /* 連按兩次不要丟未捕捉例外（AAL 交卷後會被清成 null）。 */
+  if (!AAL){ toast('這一份已經交出去了。'); return; }
   /* 待處理的去抖／節流先結清，再檢查與落地 */
   flushPendingPicks();
   flushLogs();
@@ -840,7 +863,10 @@ function viewSurvey(phase, page){
         '<h4>填之前先看這裡</h4>' +
         '<p class="small" style="margin-top:6px">這些題目沒有對錯，也不會算成績。' +
         '照你真正的感覺選就好。看不懂的題目可以舉手問老師。' +
-        '這份問卷分成 ' + secs.length + ' 段，中間可以休息。</p></div>'
+        '這份問卷分成 ' + secs.length + ' 段，中間可以休息。' +
+        /* 量尺與作答頁的選項是同一個 radiogroup 形狀，第一次填時
+           行為完全一樣：Tab 進來會停在第一格但不勾選它。 */
+        '用上下方向鍵選，或用空白鍵選你現在停在的那一格。</p></div>'
       : '') +
     (scaleChanged
       ? '<div class="card card-p" style="margin-bottom:14px;border-left:3px solid var(--accent)">' +
@@ -868,6 +894,8 @@ function viewSurvey(phase, page){
 
 function surveySubmit(phase){
   if (isImpersonating()){ toast('代為檢視時不能替學生送出問卷。'); return; }
+  /* 連按兩次不要丟未捕捉例外。同檔其他四處寫入路徑都有這道守門。 */
+  if (!SURVEY){ toast('問卷已經送出了。'); return; }
   const me = currentUser();
   const cond = conditionOfStudent(me.id);
   if (surveyGate(phase)){ toast('這節課還沒上完，問卷等一下再填。'); return; }
@@ -1112,7 +1140,7 @@ function inspectDialogPane(cond, turns){
     '<span class="pill">' + turns.filter(function(t){ return t.speaker === 'student'; }).length +
     ' 次發話</span></div>' +
     '<div class="card-p">' +
-    '<div class="chat">' +
+    '<div class="chat" tabindex="0" role="log" aria-label="這位學生和夥伴的對話">' +
       '<div class="msg agent"><b>' + esc(cond.name) + '</b>' + esc(cond.frame) + '</div>' +
       turns.map(function(t){
         const meta = t.speaker === 'student'

@@ -34,6 +34,13 @@ function domainTermsIn(t){
 }
 
 const EPI_LABEL = {1:'陳述主張', 2:'提出理由', 3:'援引證據或反例', 4:'綜整並改進理論'};
+/* 學生看到的版本：不可排序、不帶級數。把每個孩子的想法在社群空間裡
+   標上「第 N 級」，等於當著全班替他的想法排名。 */
+const EPI_LABEL_STUDENT = {1:'提出了看法', 2:'說了理由', 3:'找了證據', 4:'把大家的想法合起來'};
+function epiLabelFor(n){
+  const lv = epistemicLevel(n);
+  return isTeacher() ? ('第 ' + lv + ' 級 · ' + EPI_LABEL[lv]) : EPI_LABEL_STUDENT[lv];
+}
 
 /* --- 每位學生的論述指標 --- */
 /* ids 省略時預設是知識建構示範班——教師端的雙軌儀表板與 dualTrack()
@@ -164,7 +171,7 @@ function ideaImprovement(rootId){
   const hasBetter = steps.some(function(s){ return s.scaffolds.indexOf('s5') >= 0 || s.scaffolds.indexOf('s6') >= 0; });
   return {steps:steps, improved:improved, hasChallenge:hasChallenge, hasBetter:hasBetter,
           arc: hasChallenge && hasBetter ? '完整（提出→挑戰→改進）'
-             : hasChallenge ? '已被挑戰，尚未提出更好的理論'
+             : hasChallenge ? '已被挑戰，尚未提出' + scaffoldLabel('s5')
              : hasBetter ? '已綜整，但缺少被挑戰的環節'
              : '仍停留在提出階段',
           newTermTotal: Object.keys(seen).length};
@@ -176,15 +183,22 @@ function dualTrack(){
   const post = diagnose(state, 'a-post');
   const ds = discourseStats();
   const dsMap = {}; ds.forEach(function(s){ dsMap[s.sid] = s; });
-  const thetaPre = {}, thetaPost = {};
-  if (pre && pre.ready) pre.perStudent.forEach(function(p){ thetaPre[p.sid] = p.theta; });
-  if (post && post.ready) post.perStudent.forEach(function(p){ thetaPost[p.sid] = p.theta; });
+  const thetaPre = {}, thetaPost = {}, sePre = {}, sePost = {};
+  if (pre && pre.ready) pre.perStudent.forEach(function(p){ thetaPre[p.sid] = p.theta; sePre[p.sid] = p.se; });
+  if (post && post.ready) post.perStudent.forEach(function(p){ thetaPost[p.sid] = p.theta; sePost[p.sid] = p.se; });
 
   const rows = kbClass().studentIds.map(function(sid){
     const a = thetaPre[sid], b = thetaPost[sid];
     const d = (a != null && b != null) ? b - a : null;
     const st = dsMap[sid] || {kbi:0};
+    /* 儀表板自己寫著「Δθ 小於 2×SE 不應解讀為真的進步」，然後用 Δθ 決定
+       四格分區、每一格再附一句處方——系統點名孩子要優先介入，用的正是
+       它剛說不可信的統計量。SE 本來就在 perStudent 裡，只是沒帶進來。 */
+    const sd = (sePre[sid] != null && sePost[sid] != null)
+      ? Math.sqrt(sePre[sid] * sePre[sid] + sePost[sid] * sePost[sid]) : null;
     return {sid:sid, thetaPre:a, thetaPost:b, delta:d, kbi:st.kbi, stats:st,
+            sePre:sePre[sid], sePost:sePost[sid], seDelta:sd,
+            sig: (d != null && sd != null) ? Math.abs(d) >= 2 * sd : false,
             q2Pre: pre && pre.ready ? (pre.perStudent.find(function(p){ return p.sid === sid; }) || {q:{}}).q[2] || 0 : 0,
             q2Post: post && post.ready ? (post.perStudent.find(function(p){ return p.sid === sid; }) || {q:{}}).q[2] || 0 : 0};
   });

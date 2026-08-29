@@ -283,12 +283,14 @@ td.n,th.n{text-align:right; font-family:var(--f-mono); font-variant-numeric:tabu
 
 /* ---------- 知識建構 ---------- */
 .kb-toolbar{display:flex; gap:9px; align-items:center; flex-wrap:wrap; padding:10px 14px; background:var(--card); border:1px solid var(--rule); border-radius:var(--r-l); margin-bottom:14px; box-shadow:var(--shadow)}
+/* 畫布與貼文座標都用 rem。貼文寬度本來就隨字級長（264→462px），
+   而畫布與座標寫死 px，於是 175% 時貼文重疊對數從 2 暴增到 22。 */
 .canvas{
-  position:relative; height:660px; border:1px solid var(--rule); border-radius:var(--r-l);
+  position:relative; height:33rem; border:1px solid var(--rule); border-radius:var(--r-l);
   background:var(--card); background-image:radial-gradient(var(--grid) 1.1px,transparent 1.1px); background-size:19px 19px;
   overflow:auto; touch-action:pan-x pan-y;
 }
-.canvas-inner{position:relative; width:1600px; height:1100px}
+.canvas-inner{position:relative; width:80rem; height:55rem}
 .note{
   position:absolute; width:13.2rem; background:var(--card); border:1px solid var(--rule);
   border-left:4px solid var(--ink-4); border-radius:var(--r-m); padding:9px 11px; cursor:grab;
@@ -451,6 +453,15 @@ input[type=checkbox],input[type=radio]{ width:1.15em; height:1.15em; accent-colo
 .aal-chat .pane-bar{min-height:2.35rem; align-items:center}
 .aal-chat .pane-foot{min-height:4.2rem}
 .chat{display:flex; flex-direction:column; gap:8px; height:var(--pane-h); overflow-y:auto; padding-right:4px}
+/* 對話區要能用鍵盤捲。三個 AI 組讀不回自己講過什麼，而對照組同一個位置
+   是 textarea、上下鍵就能讀完整份筆記——那是以條件為單位發生的介面差異。 */
+.chat:focus-visible{outline:3px solid var(--accent); outline-offset:2px}
+
+/* scrollIntoView 的落點要避開黏在頂部的那一條。全份 CSS 原本沒有任何
+   scroll-margin-top：按〈下一題〉之後 #aalAnswer 的 top 是 0、頂列的 bottom
+   是 100（175% 時 209），題號與題幹整個在頂列後面（WCAG 2.4.11），
+   而那正是孩子換題後要讀的第一樣東西，16 題每題至少一次。 */
+[tabindex="-1"], .likert, .modal{ scroll-margin-top: calc(var(--sticky-top) + 12px) }
 .msg{max-width:88%; padding:8px 12px; border-radius:12px; font-size:1rem; line-height:1.6}
 .msg b{display:block; font-size:0.8rem; letter-spacing:.04em; color:var(--ink-4); font-weight:600; margin-bottom:2px}
 .msg.agent{align-self:flex-start; background:var(--shade); border:1px solid var(--rule-soft); border-bottom-left-radius:3px}
@@ -465,8 +476,12 @@ input[type=checkbox],input[type=radio]{ width:1.15em; height:1.15em; accent-colo
    拿回原生語意（radiogroup + 方向鍵），Tab 停留點是「一題」而非「一格」。
    每一格都印出文字——原本只放在 title 裡，平板沒有 hover，等於不存在。
    尺寸用 rem，字級放大時六格才不會擠爆。 */
-.scale{display:flex; gap:6px; flex-wrap:wrap}
-.lk{min-width:3.4rem; flex:1 1 3.4rem; min-height:2.6rem; border:1px solid var(--rule-strong);
+/* 用 grid 等分而不是 flex 換行。原本 175% + 768px 時六格會斷成 5+1，
+   第六格「非常同意」獨佔第二列、寬度 687px——最極端的正向端點變成畫面上
+   最大最好按的目標，而且只發生在需要放大字級的那一群受試者身上。
+   grid-auto-columns 會依實際格數自動等分，五點量尺不用另外寫。 */
+.scale{display:grid; grid-auto-flow:column; grid-auto-columns:minmax(0,1fr); gap:6px}
+.lk{min-width:0; min-height:2.6rem; border:1px solid var(--rule-strong);
     background:var(--card); border-radius:var(--r-m); cursor:pointer; color:var(--ink-2);
     display:inline-flex; flex-direction:column; align-items:center; justify-content:center;
     gap:1px; padding:4px 2px; text-align:center}
@@ -506,8 +521,16 @@ pre.prompt{
        一開，右欄會被壓到十個中文字寬卻不觸發斷點。 */
 @media (max-width:900px){
   .main{flex-direction:column; align-items:stretch}
-  .rail{position:static; width:auto; flex:0 0 auto; max-height:none; min-height:0;
-        flex-direction:row; overflow-x:auto; border-right:0; border-bottom:1px solid var(--rule); padding:8px 10px; gap:6px}
+  /* align-self 與 min-width 一定要一起覆寫。只改 position／width／flex 的話，
+     寬版的 align-self:flex-start 還留著，側欄會把整份文件撐出橫向捲軸
+     （768px 實測 clientWidth 753 / scrollWidth 962），而被推到畫面外的正是
+     「課後問卷」與「系統說明」——側欄自己的 overflow-x 永遠不會啟動。
+     改成 wrap 而不是只消掉橫捲：橫捲那一條沒有可捲提示，六個入口仍有
+     三個要先學會橫向滑。 */
+  .rail{position:static; width:100%; flex:0 0 auto; align-self:stretch; min-width:0;
+        max-height:none; min-height:0;
+        flex-flow:row wrap; overflow-x:visible; border-right:0;
+        border-bottom:1px solid var(--rule); padding:8px 10px; gap:6px}
   .stage{min-height:0}
   .rail-group{display:inline-flex; align-items:center; padding:0 8px; font-size:0.7rem; opacity:.6}
   .rail a{white-space:nowrap}
@@ -518,8 +541,10 @@ pre.prompt{
   .aal-text{position:static; max-height:none}
 }
 :root[data-narrow] .main{flex-direction:column; align-items:stretch}
-:root[data-narrow] .rail{position:static; width:auto; flex:0 0 auto; max-height:none; min-height:0;
-      flex-direction:row; overflow-x:auto; border-right:0; border-bottom:1px solid var(--rule); padding:8px 10px; gap:6px}
+:root[data-narrow] .rail{position:static; width:100%; flex:0 0 auto; align-self:stretch; min-width:0;
+      max-height:none; min-height:0;
+      flex-flow:row wrap; overflow-x:visible; border-right:0;
+      border-bottom:1px solid var(--rule); padding:8px 10px; gap:6px}
 :root[data-narrow] .stage{min-height:0}
 :root[data-narrow] .rail-group{display:inline-flex; align-items:center; padding:0 8px; font-size:0.7rem; opacity:.6}
 :root[data-narrow] .rail a{white-space:nowrap}
@@ -530,6 +555,10 @@ pre.prompt{
 :root[data-narrow] .aal-text{position:static; max-height:none}
 @media (prefers-reduced-motion:reduce){*{animation:none!important; transition:none!important}}
 @media print{.rail,.topbar,.kb-toolbar{display:none} .app,.main{display:block} .stage{min-height:0}}
+
+/* 暗星用形狀（☆）區分，顏色只是輔助。原本靠 inline opacity:.25，
+   對比 1.73:1，而且高對比模式的覆寫進不去 inline style。 */
+.star-dim{ color:var(--ink-4) }
 </style>
 <button class="skip" id="skipLink" type="button">跳至主要內容</button>
 <div class="app">
@@ -1913,11 +1942,19 @@ function buildDemoLogs(){
 /* 題幹逐句切分（供逐句標記與 MARK 事件使用） */
 function splitSentences(text){
   const t = String(text || '').trim();
+  /* 句末標點後面如果緊跟著收尾符號（引號、括號），要一起吃進來。
+     不吃的話，「……甜。」會被切成兩句，第二句的內容就只有一個「」」——
+     那是一顆 aria-pressed 的按鈕，報讀器只唸得出一個標點，
+     按下去還會寫一筆 MARK 事件進閱讀歷程資料。T1 因此多出 4 個標點句。 */
+  const CLOSERS = '」』）》〉】"\'）)]}';
   function cut(str, marks){
     const out = []; let buf = '';
     for (let i = 0; i < str.length; i++){
       buf += str[i];
-      if (marks.indexOf(str[i]) >= 0){ out.push(buf.trim()); buf = ''; }
+      if (marks.indexOf(str[i]) >= 0){
+        while (i + 1 < str.length && CLOSERS.indexOf(str[i + 1]) >= 0){ buf += str[++i]; }
+        out.push(buf.trim()); buf = '';
+      }
     }
     if (buf.trim()) out.push(buf.trim());
     return out.filter(Boolean);
@@ -2553,7 +2590,7 @@ function isResearcher(){ return currentUser().role === 'admin'; }
 /* 學生走進教師頁時的統一擋板。文案是給十歲孩子看的，不解釋權限模型。 */
 function studentBlocked(){
   return '<div class="empty"><h3>這一頁是老師看的</h3>' +
-    '<p style="max-width:60ch">你的作業、討論與學習軌跡都在左邊的選單裡。</p>' +
+    '<p style="max-width:60ch">你的作業、討論與學習軌跡都在導覽選單裡。</p>' +
     '<a class="btn" href="#/student">回我的作業</a></div>';
 }
 
@@ -2861,6 +2898,13 @@ function domainTermsIn(t){
 }
 
 const EPI_LABEL = {1:'陳述主張', 2:'提出理由', 3:'援引證據或反例', 4:'綜整並改進理論'};
+/* 學生看到的版本：不可排序、不帶級數。把每個孩子的想法在社群空間裡
+   標上「第 N 級」，等於當著全班替他的想法排名。 */
+const EPI_LABEL_STUDENT = {1:'提出了看法', 2:'說了理由', 3:'找了證據', 4:'把大家的想法合起來'};
+function epiLabelFor(n){
+  const lv = epistemicLevel(n);
+  return isTeacher() ? ('第 ' + lv + ' 級 · ' + EPI_LABEL[lv]) : EPI_LABEL_STUDENT[lv];
+}
 
 /* --- 每位學生的論述指標 --- */
 /* ids 省略時預設是知識建構示範班——教師端的雙軌儀表板與 dualTrack()
@@ -2991,7 +3035,7 @@ function ideaImprovement(rootId){
   const hasBetter = steps.some(function(s){ return s.scaffolds.indexOf('s5') >= 0 || s.scaffolds.indexOf('s6') >= 0; });
   return {steps:steps, improved:improved, hasChallenge:hasChallenge, hasBetter:hasBetter,
           arc: hasChallenge && hasBetter ? '完整（提出→挑戰→改進）'
-             : hasChallenge ? '已被挑戰，尚未提出更好的理論'
+             : hasChallenge ? '已被挑戰，尚未提出' + scaffoldLabel('s5')
              : hasBetter ? '已綜整，但缺少被挑戰的環節'
              : '仍停留在提出階段',
           newTermTotal: Object.keys(seen).length};
@@ -3003,15 +3047,22 @@ function dualTrack(){
   const post = diagnose(state, 'a-post');
   const ds = discourseStats();
   const dsMap = {}; ds.forEach(function(s){ dsMap[s.sid] = s; });
-  const thetaPre = {}, thetaPost = {};
-  if (pre && pre.ready) pre.perStudent.forEach(function(p){ thetaPre[p.sid] = p.theta; });
-  if (post && post.ready) post.perStudent.forEach(function(p){ thetaPost[p.sid] = p.theta; });
+  const thetaPre = {}, thetaPost = {}, sePre = {}, sePost = {};
+  if (pre && pre.ready) pre.perStudent.forEach(function(p){ thetaPre[p.sid] = p.theta; sePre[p.sid] = p.se; });
+  if (post && post.ready) post.perStudent.forEach(function(p){ thetaPost[p.sid] = p.theta; sePost[p.sid] = p.se; });
 
   const rows = kbClass().studentIds.map(function(sid){
     const a = thetaPre[sid], b = thetaPost[sid];
     const d = (a != null && b != null) ? b - a : null;
     const st = dsMap[sid] || {kbi:0};
+    /* 儀表板自己寫著「Δθ 小於 2×SE 不應解讀為真的進步」，然後用 Δθ 決定
+       四格分區、每一格再附一句處方——系統點名孩子要優先介入，用的正是
+       它剛說不可信的統計量。SE 本來就在 perStudent 裡，只是沒帶進來。 */
+    const sd = (sePre[sid] != null && sePost[sid] != null)
+      ? Math.sqrt(sePre[sid] * sePre[sid] + sePost[sid] * sePost[sid]) : null;
     return {sid:sid, thetaPre:a, thetaPost:b, delta:d, kbi:st.kbi, stats:st,
+            sePre:sePre[sid], sePost:sePost[sid], seDelta:sd,
+            sig: (d != null && sd != null) ? Math.abs(d) >= 2 * sd : false,
             q2Pre: pre && pre.ready ? (pre.perStudent.find(function(p){ return p.sid === sid; }) || {q:{}}).q[2] || 0 : 0,
             q2Post: post && post.ready ? (post.perStudent.find(function(p){ return p.sid === sid; }) || {q:{}}).q[2] || 0 : 0};
   });
@@ -3983,7 +4034,7 @@ function builtinRubric(item){
 /* ==========================================================================
    4. 相似題生成
    ========================================================================== */
-async function aiSimilarItems(item, force){
+async function aiSimilarItems(item, force, exclude){
   if (!force){ const c = cacheGet('similar', item.id); if (c) return c; }
   let out;
   if (aiEngine() === 'llm'){
@@ -3999,7 +4050,7 @@ async function aiSimilarItems(item, force){
     if (!m) throw new Error('回傳的格式不正確，請再試一次。');
     out = JSON.parse(m[0]).items;
   } else {
-    out = builtinSimilar(item);
+    out = builtinSimilar(item, exclude);
   }
   /* 相似題也要過洩答篩檢。這條通道原本一次都沒過，而 #/about 對老師寫著
      「每一則回應送出前都會過一次篩檢，攔截次數本身即為忠實度指標」——
@@ -4016,19 +4067,31 @@ async function aiSimilarItems(item, force){
 /* 內建引擎不「生成」新題——閱讀題離不開文本，憑空造題會造出沒有文本依據的題目。
    改為從現有題庫挑出「測同一項理解歷程」的題目：先取同一篇文本的，不足再跨文本補，
    讓老師拿得到可以直接用的替代題，而不是一段看起來像題目的生成文字。 */
-function builtinSimilar(item){
-  const sameProc = function(i){ return i.type === 'mc' && i.id !== item.id && i.process === item.process; };
+/* 離線引擎不會憑空造閱讀題——它是從題庫裡挑同一項理解歷程的既有題目。
+   那些題目正在施測中（前後測是同一份 16 題），所以每一題都要帶著
+   來源 id 與所屬派題出去，讓呼叫端可以明明白白告訴老師。
+   exclude 讓〈再出 3 題〉真的換一批，而不是把同樣三題再列一次。 */
+function builtinSimilar(item, exclude){
+  const ex = exclude || [];
+  const sameProc = function(i){
+    return i.type === 'mc' && i.id !== item.id && i.process === item.process && ex.indexOf(i.id) < 0;
+  };
   const near = ITEMS.filter(function(i){ return sameProc(i) && i.unit === item.unit; });
   const far  = ITEMS.filter(function(i){ return sameProc(i) && i.unit !== item.unit; });
   const alt = near.concat(far).slice(0, 3).map(function(i){
+    const inUse = state.assignments.filter(function(a){ return a.itemIds.indexOf(i.id) >= 0; });
     return {stem:i.stem, options:i.options, answer:i.answer,
+            itemId:i.id, itemNo:i.no,
+            inUse: inUse.map(function(a){ return a.title; }),
             hint:'同樣測「' + processName(i.process) + '」' +
                  (i.unit === item.unit ? '，同一篇文本' : '，取自' + textTitle(i.unit)) +
                  '。' + (i.note || '')};
   });
-  return alt.length ? alt : [{stem:'（題庫裡沒有其他測同一項理解歷程的選擇題。' +
+  return alt.length ? alt : [{stem:'（題庫裡測同一項理解歷程的選擇題已經全部列出了。' +
       '切換到外部語言模型可以依這篇文本即時生成；離線模式不會憑空造閱讀題。）',
-    options:['—','—','—','—'], answer:0, hint:'到「系統設定」填入 OpenAI 相容端點與 API key。'}];
+    options:['—','—','—','—'], answer:0, exhausted:true,
+    /* 「系統設定」在 RESEARCHER_ONLY，教師點不進去——不要給一條死路 */
+    hint:'請研究者在「系統設定」切換引擎。'}];
 }
 
 /* ==========================================================================
@@ -4080,7 +4143,7 @@ function builtinNoteFeedback(n){
   L.push('#### 你可以試試看');
   if (lv <= 1) L.push('- 你可以試試看在句子後面加一句「因為……」，把你為什麼這樣想寫出來，別人才有東西可以接。');
   else if (lv === 2) L.push('- 你可以試試看舉一個具體的數字例子，或找一個「照你的說法會說不通」的情況，把理由變成可以檢驗的東西。');
-  else if (lv === 3) L.push('- 你可以試試看用「更好的理論」支架，把你和前面同學的說法合併寫成一個新版本，並說明新版本改掉了什麼。');
+  else if (lv === 3) L.push('- 你可以試試看用「' + scaffoldLabel('s5') + '」支架，把你和前面同學的說法合併寫成一個新版本，並說明新版本改掉了什麼。');
   else L.push('- 你可以試試看把這個版本貼回原本的問題貼文下面，並標出「還沒解決的部分」，讓討論有下一步。');
   if (!kids.length && n.kind !== 'problem') L.push('- 這則還沒有人延伸。你可以試試看主動去讀兩則別人的貼文並回應，通常也會有人回來讀你的。');
   L.push('');
@@ -4131,7 +4194,7 @@ function builtinThreadSynthesis(rootId){
   } else {
     L.push('- 這條串裡沒有人用「我需要理解」支架。請刻意邀請學生把還不懂的地方寫出來——沒有問題，想法就不會再往前。');
   }
-  if (!ii.hasChallenge) L.push('- **缺少挑戰**：沒有人使用「這個理論無法解釋」。可以直接問：有沒有哪一個情況照現在的說法會說不通？');
+  if (!ii.hasChallenge) L.push('- **缺少挑戰**：沒有人使用「' + scaffoldLabel('s4') + '」。可以直接問：有沒有哪一個情況照現在的說法會說不通？');
   if (!ii.hasBetter) L.push('- **缺少改進**：還沒有人把大家的說法合併成新版本。');
   L.push('');
   L.push('#### 躍升貼文草稿');
@@ -5209,9 +5272,17 @@ function tabProcess(diag){
     inClass.map(function(sid){
       const pr = processProfile(diag, [sid]);
       const rows = PROCESSES.map(function(p){ return {p:p, b:pr[p.id]}; }).filter(function(x){ return x.b.n; });
-      const worst = rows.slice().sort(function(a, b){ return a.b.rate - b.b.rate; })[0];
-      return {sid:sid, pr:pr, rows:rows, worst:worst};
-    }).sort(function(a, b){ return (a.worst ? a.worst.b.rate : 1) - (b.worst ? b.worst.b.rate : 1); })
+      /* 並列與滿分都要處理。取 [0] 的話：三項並列 0% 只會顯示 PROCESSES
+         陣列裡排最前面的那一項，四項全對的學生也會被印一個「最弱」——
+         而這一欄的副標寫著「優先看需要介入的人」，那個排序建立在一個
+         任意的 tie-break 上。 */
+      const minRate = rows.length ? Math.min.apply(null, rows.map(function(x){ return x.b.rate; })) : 1;
+      const worsts = rows.filter(function(x){ return x.b.rate === minRate; });
+      return {sid:sid, pr:pr, rows:rows, minRate:minRate, worsts:worsts};
+    }).sort(function(a, b){
+      /* 先看最弱的答對率，再看並列了幾項——並列越多代表越全面地卡住 */
+      return (a.minRate - b.minRate) || (b.worsts.length - a.worsts.length);
+    })
     .map(function(x){
       return '<tr><td>' + esc(userName(x.sid)) + '</td>' +
         PROCESSES.map(function(p){
@@ -5223,9 +5294,14 @@ function tabProcess(diag){
           return '<i style="width:' + (100 / x.rows.length) + '%;background:var(--' +
             r.p.cls.replace('sc', 'sc-') + ');opacity:' + (0.25 + 0.75 * r.b.rate).toFixed(2) + '"></i>';
         }).join('') + '</div></td>' +
-        '<td class="n"><span class="pill ' + (x.worst ? x.worst.p.cls : '') + '">' +
-        '<span aria-hidden="true">' + (x.worst ? x.worst.p.mark : '') + '</span>' +
-        esc(x.worst ? x.worst.p.name : '—') + '</span></td></tr>';
+        '<td class="n">' + (
+          x.minRate === 1
+            ? '<span class="pill">—　四項都答對</span>'
+            : x.worsts.map(function(w){
+                return '<span class="pill ' + w.p.cls + '">' +
+                  '<span aria-hidden="true">' + w.p.mark + '</span>' + esc(w.p.name) + '</span>';
+              }).join(' ')
+        ) + '</td></tr>';
     }).join('') + '</tbody></table></div>' +
     '<div class="card-p"><p class="muted small">剖面條的每一段代表一項歷程，顏色深淺代表答對率高低；' +
     '同時附上數字與「最弱」文字標籤，不以顏色單獨傳達訊息。' +
@@ -5301,7 +5377,7 @@ function tabItems(diag){
     '<div class="card-p"><div class="row">' + quadLegend() + '</div>' +
     /* 相似題原本印在學生的診斷頁上，四個條件都拿得到、不限次數，
        等於在 MAX_TURNS 之外多開一條鷹架通道。移到教師端備課用。 */
-    '<p class="muted small" style="margin-top:10px">「相似題」是給你備課用的，' +
+    '<p class="muted small" style="margin-top:10px">「相似題」是給你備課用的，<strong>它挑出來的是題庫裡的現役題目，不是新生成的</strong>——前後測同一份題本，印給學生練習等於先發答案卡。' +
     '<strong>不計入學生的鷹架劑量</strong>——學生端看不到這顆按鈕。</p>' +
     '<p class="muted small" style="margin-top:10px">Outfit MNSQ 接近 1 代表該題與 Rasch 模式相符；明顯大於 1.3 表示有異常作答型態，' +
     '通常正是迷思或猜測造成的，值得優先檢視。</p></div></div>';
@@ -5582,7 +5658,7 @@ function noteRow(n){
   return '<div class="row" style="justify-content:space-between;border-bottom:1px solid var(--rule-soft);padding-bottom:8px">' +
     '<div><a href="#/note/' + n.id + '"><b>' + esc(n.title) + '</b></a>' +
     '<div class="muted small">' + esc(noteAuthors(n)) + '　·　' + (v ? esc(v.title) : '') + '　·　' + fmtDate(n.createdAt) + '</div></div>' +
-    '<span class="pill">第 ' + epistemicLevel(n) + ' 級</span></div>';
+    '<span class="pill">' + esc(epiLabelFor(n)) + '</span></div>';
 }
 
 /* --- 視圖畫布 --- */
@@ -5608,8 +5684,14 @@ function viewKBCanvas(vid){
        但 role="button" 的 Children Presentational 為 true——卡內所有子節點的
        語意都被移除，所以 .nf（未讀、作者、回應／閱讀／註記數）也必須被
        describedby 明確參照，否則報讀器一律拿不到。 */
-    return '<div class="' + cls + ' ' + (scls || '') + '" style="left:' + n.x + 'px;top:' + n.y + 'px"' +
+    /* 座標存的是 viewBox 單位（100% 字級下的 px），畫成 rem 讓整張畫布
+       隨字級等比縮放——貼文寬度本來就會長，座標不跟著長就會互相重疊。 */
+    return '<div class="' + cls + ' ' + (scls || '') +
+      '" style="left:' + (n.x / 20) + 'rem;top:' + (n.y / 20) + 'rem"' +
       ' data-note="' + n.id + '" tabindex="0" role="button"' +
+      /* 只有在選取模式下才是「可切換」的按鈕。非選取模式輸出 aria-pressed
+         會讓報讀器把每一張貼文都唸成「未按下」。 */
+      (KBSEL === v.id ? ' aria-pressed="' + (KBPICK[n.id] ? 'true' : 'false') + '"' : '') +
       ' aria-labelledby="nt-' + n.id + '" aria-describedby="nb-' + n.id + ' nf-' + n.id + '">' +
       '<div class="nt" id="nt-' + n.id + '">' + esc(n.title) + '</div>' +
       (scaf ? '<div class="small" style="color:var(--' + ((scaffold(scaf.s) || {}).cls || '').replace('sc', 'sc-') +
@@ -5633,10 +5715,11 @@ function viewKBCanvas(vid){
 
   // 連線
   const pos = {};
-  /* 卡片寬度改成 13.2rem（會隨字級放大），錨點不能再寫死 108px——
-       108 ≒ 264/2 − 24，是 100% 字級下的值。 */
-  const rootFS = parseFloat(getComputedStyle(document.documentElement).fontSize) || 20;
-  const NOTE_W = 13.2 * rootFS;
+  /* 連線畫在 viewBox 0 0 1600 1100 的座標系裡，那是固定的：畫布改用 rem
+     之後整張圖等比縮放，錨點不可以再乘上當下的字級（乘了的話，
+     改字級不會重繪畫布，座標會停在改字級前的值）。
+     264 就是 13.2rem 在 100% 字級下的值，也就是一個 viewBox 單位的卡寬。 */
+  const NOTE_W = 264;
   ns.forEach(function(n){ pos[n.id] = {x: n.x + NOTE_W / 2 - 24, y: n.y + 40}; });
   const edges = [];
   ns.forEach(function(n){
@@ -5698,7 +5781,7 @@ function scaffoldUsageBar(ns){
       '<div class="bar"><i style="width:' + (100 * n / mx) + '%;background:var(--' + s.cls.replace('sc', 'sc-') + ')"></i></div>' +
       '<span class="lv">' + n + '</span></div>';
   }).join('') + '</div>' +
-  '<p class="muted small" style="margin-top:10px">支架分布反映論述的形態。若「我的理論」遠多於「這個理論無法解釋」與「更好的理論」，' +
+  '<p class="muted small" style="margin-top:10px">支架分布反映論述的形態。若「' + esc(scaffoldLabel('s1')) + '」遠多於「' + esc(scaffoldLabel('s4')) + '」與「' + esc(scaffoldLabel('s5')) + '」，' +
   '代表大家在各說各話，想法還沒有真的被改進。</p>';
 }
 
@@ -5738,7 +5821,7 @@ function viewNote(nid){
           '<div class="row" style="gap:8px"><span class="pill">' + (x.depth ? '↳' : '●') + '</span>' +
           (cur ? '<b>' + esc(x.note.title) + '</b>' : '<a href="#/note/' + x.note.id + '">' + esc(x.note.title) + '</a>') +
           '<span class="muted small">' + esc(noteAuthors(x.note)) + '</span>' +
-          '<span class="pill">第 ' + epistemicLevel(x.note) + ' 級</span></div></div>';
+          '<span class="pill">' + esc(epiLabelFor(x.note)) + '</span></div></div>';
       }).join('') + '</div></div>' +
     '<div class="card"><div class="card-h"><h3>延伸這則想法</h3></div><div class="card-p">' +
       '<div class="sc-btns" style="margin-bottom:10px">' + SCAFFOLDS.map(function(s){
@@ -5782,7 +5865,7 @@ function noteFullHTML(n, full){
       '<span class="row" style="gap:6px">' +
         (n.kind === 'problem' ? '<span class="pill q2"><span class="dot"></span>共同問題</span>' : '') +
         (n.kind === 'rise' ? '<span class="pill" style="color:var(--sc-6);border-color:var(--sc-6)">躍升貼文</span>' : '') +
-        '<span class="pill">第 ' + epistemicLevel(n) + ' 級 · ' + EPI_LABEL[epistemicLevel(n)] + '</span>' +
+        '<span class="pill">' + esc(epiLabelFor(n)) + '</span>' +
       '</span>' +
       '<span class="meta">' + fmtDateTime(n.createdAt) + (n.editedAt ? '（已修改）' : '') + '</span>' +
     '</div>' +
@@ -5856,7 +5939,7 @@ function renderEditor(opts){
     }).join('') +
     '<button class="btn sm" data-act="seg-add">＋ 再加一個支架段落</button></div>' +
     '<div class="field"><label for="nkw">關鍵詞（用、分隔）</label>' +
-      '<input id="nkw" type="text" value="' + esc(EDIT.keywords) + '" placeholder="平方根、負根、反例"></div>' +
+      '<input id="nkw" type="text" value="' + esc(EDIT.keywords) + '" placeholder="伏筆、線索、證據"></div>' +
     '<div class="field"><label for="nauth">共同作者</label>' +
       '<select id="nauth" multiple size="4">' + state.users.filter(function(u){ return u.role !== 'admin'; }).map(function(u){
         return '<option value="' + u.id + '"' + (EDIT.authorIds.indexOf(u.id) >= 0 ? ' selected' : '') + '>' + esc(u.name) + '</option>';
@@ -6001,6 +6084,13 @@ function dashDual(){
         '<span class="pill ' + Z.cls + '"><span class="dot"></span>' + z + '　' + Z.name + '</span>' +
         '<span class="num" style="font-size:1rem;font-weight:600">' + counts[z] + '</span></div>' +
         '<p class="small muted">' + esc(Z.desc) + '</p>' +
+        /* 處方卡不能只給人數：這一格裡有幾位的 Δθ 根本在測量誤差範圍內，
+           老師要先知道，才不會照著一個不可信的數字安排介入。 */
+        (function(){
+          const ns = rows.filter(function(r){ return r.delta != null && !r.sig; }).length;
+          return ns ? '<p class="small" style="color:var(--warn);margin:4px 0 0">其中 ' + ns +
+            ' 位的變化在測量誤差範圍內，不宜當成真的進步或退步。</p>' : '';
+        })() +
         '<div class="row" style="gap:5px;margin-top:6px">' + rows.map(function(r){
           return '<button type="button" class="pill" data-act="asrole" data-id="' + r.sid + '">' +
             esc(userName(r.sid)) + '</button>'; }).join('') + '</div>' +
@@ -6022,6 +6112,7 @@ function dashStudents(){
     '<span class="muted small">點姓名可切換成該學生視角</span></div>' +
     '<div class="tablewrap"><table><thead><tr>' +
     '<th>學生</th><th class="n">θ 前測</th><th class="n">θ 後測</th><th class="n">Δθ</th>' +
+    '<th class="n">Δθ 的誤差（±2SE）</th>' +
     '<th class="n">前測迷思</th><th class="n">後測迷思</th>' +
     '<th class="n">貼文</th><th class="n">延伸</th><th class="n">被延伸</th><th class="n">支架</th>' +
     '<th class="n">論述層次</th><th class="n">KB 指數</th><th>分區</th></tr></thead><tbody>' +
@@ -6032,6 +6123,8 @@ function dashStudents(){
       return '<tr><td><button type="button" class="lk-plain" data-act="asrole" data-id="' + r.sid + '">' + esc(userName(r.sid)) + '<span class="sr-only">：以這位學生的視角唯讀檢視</span></button></td>' +
         '<td class="n">' + fx(r.thetaPre) + '</td><td class="n">' + fx(r.thetaPost) + '</td>' +
         '<td class="n delta ' + cls + '">' + (d == null ? '—' : (d > 0 ? '+' : '') + fx(d)) + '</td>' +
+        '<td class="n">' + (r.seDelta == null ? '—' : '±' + fx(2 * r.seDelta)) +
+          (r.delta != null && !r.sig ? '<span class="sr-only">：這位學生的變化在測量誤差範圍內</span>' : '') + '</td>' +
         '<td class="n">' + r.q2Pre + '</td><td class="n">' + r.q2Post + '</td>' +
         '<td class="n">' + (s.notes || 0) + '</td><td class="n">' + (s.buildMade || 0) + '</td>' +
         '<td class="n">' + (s.buildGot || 0) + '</td><td class="n">' + (s.scaffoldKinds || 0) + '/6</td>' +
@@ -6244,7 +6337,7 @@ function viewMyGrowth(){
       '<div class="card-p col">' + (myNotes.map(function(n){
         return '<div class="row" style="justify-content:space-between;border-bottom:1px solid var(--rule-soft);padding-bottom:6px">' +
           '<a href="#/note/' + n.id + '">' + esc(n.title) + '</a>' +
-          '<span class="pill">第 ' + epistemicLevel(n) + ' 級</span></div>';
+          '<span class="pill">' + esc(epiLabelFor(n)) + '</span></div>';
       }).join('') || '<div class="muted small">還沒貼過想法。到知識建構空間貼第一則吧。</div>') + '</div></div>' +
     '</div>';
 }
@@ -6286,7 +6379,7 @@ function viewStudent(){
         '<div class="eyebrow">這節課的進行方式</div>' +
         '<h3 style="margin-top:4px">我的筆記</h3>' +
         '<p class="small" style="margin-top:6px">這節課你自己讀、自己想。' +
-        '右邊是「我的筆記」，把想到的、卡住的地方寫下來。</p>' +
+        '這一頁有一塊「我的筆記」，把想到的、卡住的地方寫下來。</p>' +
         '<p class="muted small">筆記只有你和老師看得到，不會打分數。' +
         '一題一頁，換題會換新的。</p></div>') +
     (needPre ? '<div class="card card-p" style="margin-bottom:16px;border-left:3px solid var(--warn)">' +
@@ -6336,7 +6429,7 @@ function viewStudent(){
     }).join('') + '</div>' +
     '<div class="card" style="margin-top:16px"><div class="card-p">' +
     '<h4>作答之後會發生什麼</h4>' +
-    '<p class="small" style="margin-top:6px;max-width:70ch">系統會用全班的作答估出每題的難度與你的能力，' +
+    '<p class="small" style="margin-top:6px;max-width:70ch">系統會用所有做過這份題目的同學（四個班一起）估出每題的難度與你的能力，' +
     '把「你本來應該答得出來卻答錯」的題目標出來。這些題目不會只變成一個紅色叉叉——' +
     '系統會把它整理出來變成全班的共同問題，貼到知識建構空間，讓大家一起把它想清楚。</p></div></div>';
 }
@@ -6402,8 +6495,13 @@ function viewQuiz(aid){
 function readingStars(theta, mean){
   const d = theta - (mean || 0);
   const n = d >= 1 ? 5 : d >= 0.35 ? 4 : d >= -0.35 ? 3 : d >= -1 ? 2 : 1;
-  return '<span data-theta="' + fx(theta) + '" aria-label="五顆星裡的第 ' + n + ' 顆">' +
-    '★★★★★'.slice(0, n) + '<span style="opacity:.25">' + '★★★★★'.slice(n) + '</span></span>';
+  /* role="img" + aria-label：沒有 role 的 <span> 是 generic，
+     ARIA 禁止替它命名，報讀器只會唸出五個星星符號。
+     暗星原本只靠 inline opacity:.25（對比 1.73:1，而且高對比模式覆寫不到），
+     改用實心／空心的形狀差異，不只靠顏色（1.4.1）。 */
+  return '<span role="img" data-theta="' + fx(theta) + '" aria-label="五顆星裡的第 ' + n + ' 顆">' +
+    '<span aria-hidden="true">' + '★★★★★'.slice(0, n) +
+    '<span class="star-dim">' + '☆☆☆☆☆'.slice(n) + '</span></span></span>';
 }
 
 /* --- 個人診斷 --- */
@@ -6449,7 +6547,7 @@ function viewResult(aid){
         return pct(right / Math.max(1, mc.length)) + (miss ? '　另外 ' + miss + ' 題沒有作答' : '');
       })()) +
       statCard('我這次的閱讀力', ps ? readingStars(ps.theta, diag.meanTheta) : '—',
-        ps ? '和班上比起來的位置' : '需要更多人完成') +
+        ps ? '和所有做過的同學比起來的位置' : '需要更多人完成') +
       statCard('可惜的題目', ps ? ps.q[2] : '—', '這幾題你其實讀得懂，只是這次沒答對') +
       statCard('厲害的題目', ps ? ps.q[1] : '—', '這幾題比較難，你答對了', 'good') +
     '</div>' +
@@ -6532,27 +6630,49 @@ function crResultBlock(aid, sid, keyLocked){
 }
 
 /* --- 相似題練習 --- */
-async function showSimilar(iid){
+/* 離線引擎挑出來的「相似題」是題庫裡的**現役題目**，不是新生成的。
+   前後測用的是同一份 16 題，老師把它們印成隔天的練習卷就是先發答案卡，
+   而他原本沒有任何線索知道自己踩到了——介面從頭到尾用「出題／生成」
+   的措辭，唯一的線索藏在要另外展開的〈解題思路〉裡。 */
+showSimilar._seen = {};
+async function showSimilar(iid, force){
   const box = document.getElementById('sim-' + iid);
   if (!box) return;
-  box.innerHTML = '<p class="muted small" style="margin-top:8px">出題中……</p>';
+  box.innerHTML = '<p class="muted small" style="margin-top:8px">整理中……</p>';
+  if (!force) showSimilar._seen[iid] = [];
   try {
-    const items = await aiSimilarItems(getItem(iid));
-    box.innerHTML = '<div class="col" style="margin-top:10px">' + items.map(function(x, i){
-      return '<div class="item" style="background:var(--shade)"><div class="eyebrow">相似題 ' + (i + 1) + '</div>' +
+    const items = await aiSimilarItems(getItem(iid), !!force, showSimilar._seen[iid] || []);
+    const exhausted = items.length === 1 && items[0].exhausted;
+    (items || []).forEach(function(x){
+      if (x.itemId && (showSimilar._seen[iid] || []).indexOf(x.itemId) < 0) showSimilar._seen[iid].push(x.itemId);
+    });
+    box.innerHTML = '<div class="col" style="margin-top:10px">' +
+      (exhausted ? '' :
+        '<div class="card card-p" style="border-left:3px solid var(--crit)">' +
+        '<p class="small" style="margin:0"><strong>這些是題庫裡的現役題目，不是新生成的。</strong>' +
+        '前測與後測用的是同一份題本——把它們印給學生練習，等於先發答案卡。' +
+        '這一區只供你自己備課參考。</p></div>') +
+      items.map(function(x, i){
+      return '<div class="item" style="background:var(--shade)">' +
+        '<div class="eyebrow">' + (x.itemId
+          ? '題庫第 ' + x.itemNo + ' 題（' + esc(x.itemId) + '）' +
+            (x.inUse && x.inUse.length ? '　·　目前用於：' + esc(x.inUse.join('、')) : '')
+          : '參考題 ' + (i + 1)) + '</div>' +
         '<div class="stem">' + esc(x.stem) + '</div>' +
         '<div class="opts">' + x.options.map(function(o, k){
           return '<label class="opt" data-act="sim-pick" data-i="' + i + '" data-k="' + k + '" data-ans="' + x.answer +
             '" data-iid="' + iid + '"><b>' + String.fromCharCode(65 + k) + '</b><span>' + esc(o) + '</span></label>';
         }).join('') + '</div>' +
         '<div class="small muted" id="simfb-' + iid + '-' + i + '" style="margin-top:6px"></div>' +
-        '<details style="margin-top:6px"><summary class="small muted" style="cursor:pointer">解題思路</summary>' +
+        '<details style="margin-top:6px"><summary class="small muted" style="cursor:pointer">命題備註</summary>' +
         '<div class="small" style="margin-top:4px">' + esc(x.hint || '') + '</div></details>' +
         '</div>';
     }).join('') + '<div class="row"><span class="muted small">引擎：' + esc(engineLabel()) + '</span>' +
-    '<button class="btn sm" data-act="similar-again" data-id="' + iid + '">再出 3 題</button></div></div>';
+    /* 一顆按不動的按鈕比一顆按了沒反應的按鈕誠實 */
+    '<button class="btn sm" data-act="similar-again" data-id="' + iid + '"' +
+      (exhausted ? ' disabled' : '') + '>換一批</button></div></div>';
   } catch (e) {
-    box.innerHTML = '<p class="small" style="margin-top:8px"><strong>出題失敗：</strong>' + esc(e.message) + '</p>';
+    box.innerHTML = '<p class="small" style="margin-top:8px"><strong>取不到題目：</strong>' + esc(e.message) + '</p>';
   }
 }
 
@@ -6590,6 +6710,9 @@ function initPads(){
     });
     cv.addEventListener('pointerup', function(){ cur = null; if (QUIZ) QUIZ.strokes[id] = PADS[id].strokes; });
     cv.addEventListener('pointerleave', function(){ cur = null; });
+    /* 與畫布同一個坑：手勢被瀏覽器接管時會送 pointercancel，
+       不處理的話同一次捲動會在計算紙上留下一條假筆畫。 */
+    cv.addEventListener('pointercancel', function(){ cur = null; });
   });
 }
 function redraw(id){
@@ -6796,7 +6919,7 @@ function viewAboutStudent(){
       ? '<div class="card card-p">' +
           '<h3>你自己的筆記</h3>' +
           '<p class="lead" style="margin-top:8px">這節課你自己讀、自己想。' +
-          '畫面右邊是「我的筆記」，把你想到的、卡住的地方寫下來。</p>' +
+          '這一頁有一塊「我的筆記」，把你想到的、卡住的地方寫下來。</p>' +
         '</div>'
       : '<div class="card card-p">' +
           '<h3>你旁邊的夥伴</h3>' +
@@ -7172,7 +7295,10 @@ function viewAaL(aid){
          AAL.cond 與日誌的 cond 欄位照舊寫入，拿掉的只是畫面上的字。 */
       '<div class="muted small">' + esc(me.name) + '　·　' +
       esc((classOfStudent(me.id) || {}).name || '') + '</div></div>' +
-      '<div class="row">' +
+      /* tabindex="-1"：〈回到題目導覽〉的焦點落在這個容器上，
+         而不是落在某一顆按鈕。落在容器上，下一次 Tab 才依序碰到
+         〈上一題〉〈下一題〉〈交卷〉——不會讓鍵盤使用者一按 Enter 就交卷。 */
+      '<div class="row" id="aalNav" tabindex="-1">' +
       '<button class="btn sm" data-act="aal-leave">← 先離開（進度會保留）</button>' +
       '<span class="pill">第 ' + (AAL.idx + 1) + ' / ' + AAL.items.length + ' 題</span>' +
       '<span class="pill">' + esc(text.title) + '</span>' +
@@ -7225,7 +7351,15 @@ function viewAaL(aid){
               '<b aria-hidden="true">' + String.fromCharCode(65 + k) + (on ? '✓' : '') +
               '</b><span>' + esc(o) + '</span></label>';
           }).join('') + '</fieldset>' +
-          '<p class="sr-only">用上下方向鍵聽過每個選項，停在你要的答案上就算選好。</p>'
+          /* 原本這句是 sr-only，而且說「停在你要的答案上就算選好」——
+             那是錯的：原生 radiogroup 在一顆都沒選時，Tab 進來會把焦點
+             放在第一顆但不勾選它。照著做的孩子那一題是空白的，
+             而想選 B/C/D 的必須按方向鍵、反而被正確記錄——
+             這個缺陷只吃掉 A 的作答，是只打在鍵盤使用者身上的系統性失分。
+             改文案與可見性就好，不要「讓 focus 等於選取」：那會把漏答
+             換成錯答，還會用純導覽動作汙染 drafts 的「第一次判斷」。 */
+          '<p class="muted small" style="margin-top:6px">用上下方向鍵選答案，' +
+          '或用空白鍵選你現在停在的那一個。</p>'
         : '<div class="field"><label for="crText">寫出你的答案，並說明你的理由</label>' +
           '<textarea id="crText" data-act="aal-text" style="min-height:160px" ' +
           'placeholder="先寫你的看法，再寫你是從文章哪一段看出來的">' +
@@ -7241,7 +7375,12 @@ function viewAaL(aid){
           return '<label class="opt" style="align-items:center"><input type="checkbox" data-act="aal-check" data-i="' + i + '"' +
             (on ? ' checked' : '') + '><span>' + esc(c) + '</span></label>';
         }).join('') +
+        /* 去程有「跳過文章，直接作答」，回程原本沒有對稱出口：
+           從最後一個自我檢核回到〈下一題〉要按 54 次 Shift+Tab，
+           中途逐顆停在句子鈕上——順手按 Enter 就寫一筆 MARK 事件，
+           汙染閱讀歷程資料。 */
         '<button class="skip" data-act="back-to-passage" type="button">回到文章</button>' +
+        '<button class="skip" data-act="back-to-nav" type="button">回到題目導覽</button>' +
       '</div></div>' +
     '</div></div>';
 }
@@ -7255,7 +7394,7 @@ function aalDialogPane(it, cond, turns, used, maxT){
     /* role="log" + aria-live：AI 的回覆是非同步送達的，
        沒有這兩個屬性，報讀器使用者永遠不知道夥伴回話了。 */
     '<div class="chat" id="aalChat" role="log" aria-live="polite" aria-relevant="additions"' +
-    ' aria-label="我和夥伴的對話">' +
+    ' aria-label="我和夥伴的對話" tabindex="0">' +
       '<div class="msg agent"><b>' + esc(cond.name) + '</b>' + esc(cond.frame) + '</div>' +
       turns.map(function(t){
         return '<div class="msg ' + (t.speaker === 'student' ? 'me' : 'agent') + '">' +
@@ -7554,12 +7693,17 @@ async function aalSay(){
   } else {
     box.placeholder = '這一題已經聊完了';
     box.disabled = true;
-    if (chat) chat.insertAdjacentHTML('beforeend',
-      '<div class="msg sys" id="turnsDone" tabindex="-1">這一題的對話次數用完了。換下一題會重新計算。</div>');
-    /* 額度用完那一次 box 可以真的 disabled，但焦點要有去處——
-       不接住的話，第 6 次之後焦點永久留在 body。 */
+    /* 順序很重要：先 append，再捲到底，最後才 focus。
+       反過來的話那句話確實拿到焦點，但整個落在捲動視窗外——
+       孩子只看到輸入框忽然變灰，解釋原因的那句話在他看不到的地方。 */
+    if (chat){
+      chat.insertAdjacentHTML('beforeend',
+        '<div class="msg sys" id="turnsDone" tabindex="-1">這一題的對話次數用完了。換下一題會重新計算。</div>');
+      chat.scrollTop = chat.scrollHeight;
+    }
     const done = document.getElementById('turnsDone');
     const next = document.querySelector('[data-act="aal-next"]:not([disabled])');
+    /* preventScroll 要留著——拿掉會把整個頁面捲走 */
     if (done) done.focus({preventScroll:true});
     else if (next) next.focus({preventScroll:true});
     toast('這一題的對話次數用完了，可以按下一題。');
@@ -7568,6 +7712,8 @@ async function aalSay(){
 
 function aalSubmit(){
   if (isImpersonating()){ toast('代為檢視時不能替學生交卷。'); return; }
+  /* 連按兩次不要丟未捕捉例外（AAL 交卷後會被清成 null）。 */
+  if (!AAL){ toast('這一份已經交出去了。'); return; }
   /* 待處理的去抖／節流先結清，再檢查與落地 */
   flushPendingPicks();
   flushLogs();
@@ -7863,7 +8009,10 @@ function viewSurvey(phase, page){
         '<h4>填之前先看這裡</h4>' +
         '<p class="small" style="margin-top:6px">這些題目沒有對錯，也不會算成績。' +
         '照你真正的感覺選就好。看不懂的題目可以舉手問老師。' +
-        '這份問卷分成 ' + secs.length + ' 段，中間可以休息。</p></div>'
+        '這份問卷分成 ' + secs.length + ' 段，中間可以休息。' +
+        /* 量尺與作答頁的選項是同一個 radiogroup 形狀，第一次填時
+           行為完全一樣：Tab 進來會停在第一格但不勾選它。 */
+        '用上下方向鍵選，或用空白鍵選你現在停在的那一格。</p></div>'
       : '') +
     (scaleChanged
       ? '<div class="card card-p" style="margin-bottom:14px;border-left:3px solid var(--accent)">' +
@@ -7891,6 +8040,8 @@ function viewSurvey(phase, page){
 
 function surveySubmit(phase){
   if (isImpersonating()){ toast('代為檢視時不能替學生送出問卷。'); return; }
+  /* 連按兩次不要丟未捕捉例外。同檔其他四處寫入路徑都有這道守門。 */
+  if (!SURVEY){ toast('問卷已經送出了。'); return; }
   const me = currentUser();
   const cond = conditionOfStudent(me.id);
   if (surveyGate(phase)){ toast('這節課還沒上完，問卷等一下再填。'); return; }
@@ -8135,7 +8286,7 @@ function inspectDialogPane(cond, turns){
     '<span class="pill">' + turns.filter(function(t){ return t.speaker === 'student'; }).length +
     ' 次發話</span></div>' +
     '<div class="card-p">' +
-    '<div class="chat">' +
+    '<div class="chat" tabindex="0" role="log" aria-label="這位學生和夥伴的對話">' +
       '<div class="msg agent"><b>' + esc(cond.name) + '</b>' + esc(cond.frame) + '</div>' +
       turns.map(function(t){
         const meta = t.speaker === 'student'
@@ -8835,7 +8986,7 @@ function render(){
         '<a href="#/dash">雙軌評量儀表板</a>。</p>' +
         '<a class="btn" href="#/teacher">回教師後台</a></div>'
       : '<div class="empty"><h3>這一頁不是給你看的</h3>' +
-        '<p style="max-width:60ch">你的作業、討論與學習軌跡都在左邊的選單裡。</p>' +
+        '<p style="max-width:60ch">你的作業、討論與學習軌跡都在導覽選單裡。</p>' +
         '<a class="btn" href="#/student">回我的作業</a></div>';
     renderRail();
     return;
@@ -8843,7 +8994,7 @@ function render(){
   if (TEACHER_ONLY[ROUTE.name] && !isTeacher()){
     stage.className = 'stage';
     $('#view').innerHTML = '<div class="empty"><h3>這一頁是老師看的</h3>' +
-      '<p style="max-width:60ch">你的作業、討論與學習軌跡都在左邊的選單裡。</p>' +
+      '<p style="max-width:60ch">你的作業、討論與學習軌跡都在導覽選單裡。</p>' +
       '<a class="btn" href="#/student">回我的作業</a></div>';
     renderRail();
     return;
@@ -8877,6 +9028,9 @@ function render(){
      不再是這裡的對象。） */
   const key = ROUTE.name + '/' + a.join('/');
   const samePage = (key === LAST_ROUTE_KEY);
+  /* 換頁時關掉還開著的彈窗。留著的話，aria-modal 與焦點陷阱會掛在
+     一個屬於別頁的對話框上——Tab 被鎖在裡面，而它談的東西已經不在畫面上。 */
+  if (!samePage && $('#modalRoot').firstChild){ closeModal(); EDIT = null; }
   /* 離開知識建構空間就把選取模式與搜尋清掉。進 #/note、#/synth 再回來時
      殘留的狀態會與畫面脫節。 */
   if (ROUTE.name !== 'kb' && KBSEL){ KBSEL = null; KBPICK = {}; }
@@ -8947,25 +9101,45 @@ function render(){
 function initCanvasDrag(){
   const inner = $('#canvasInner'); if (!inner) return;
   let drag = null;
+  /* 座標存的是 viewBox 單位（100% 字級的 px），畫面上用 rem。 */
+  const U = 20;
+  function px2unit(v){ return Math.round(v); }
+
+  /* 手指一開始捲動，瀏覽器會送 pointercancel 並收回 capture，
+     但閉包裡的 drag 仍非 null——接下來的 pointermove/up 會把全班共用的
+     貼文搬走並存檔。捲一次畫面就改掉別人的版面。 */
+  function endDrag(){
+    if (!drag) return;
+    drag.el.style.left = (drag.ox / U) + 'rem';
+    drag.el.style.top  = (drag.oy / U) + 'rem';
+    drag = null;
+  }
+  inner.addEventListener('pointercancel', endDrag);
+  inner.addEventListener('lostpointercapture', endDrag);
+
   inner.addEventListener('pointerdown', function(e){
     const el = e.target.closest('.note'); if (!el) return;
     const n = getNote(el.dataset.note); if (!n) return;
-    drag = {el:el, n:n, sx:e.clientX, sy:e.clientY, ox:n.x, oy:n.y, moved:false};
+    /* 觸控的抖動比滑鼠大得多。曼哈頓距離 4px 會讓「右 3、下 2」的輕點
+       就算成拖曳——實測輕點一下貼文位置就變了，而且詳頁沒有打開。 */
+    drag = {el:el, n:n, sx:e.clientX, sy:e.clientY, ox:n.x, oy:n.y, moved:false,
+            slop: e.pointerType === 'touch' ? 10 : 4};
     el.setPointerCapture(e.pointerId);
   });
   inner.addEventListener('pointermove', function(e){
     if (!drag) return;
     const dx = e.clientX - drag.sx, dy = e.clientY - drag.sy;
-    if (Math.abs(dx) + Math.abs(dy) > 4) drag.moved = true;
+    if (Math.hypot(dx, dy) > drag.slop) drag.moved = true;
     if (!drag.moved) return;
-    drag.el.style.left = Math.max(0, drag.ox + dx) + 'px';
-    drag.el.style.top = Math.max(0, drag.oy + dy) + 'px';
+    drag.el.style.left = (Math.max(0, drag.ox + dx) / U) + 'rem';
+    drag.el.style.top  = (Math.max(0, drag.oy + dy) / U) + 'rem';
   });
   inner.addEventListener('pointerup', function(e){
     if (!drag) return;
     const d = drag; drag = null;
     if (d.moved){
-      moveNote(d.n.id, parseInt(d.el.style.left, 10), parseInt(d.el.style.top, 10));
+      const dx = e.clientX - d.sx, dy = e.clientY - d.sy;
+      moveNote(d.n.id, px2unit(Math.max(0, d.ox + dx)), px2unit(Math.max(0, d.oy + dy)));
       render();
     } else if (KBSEL){
       if (KBPICK[d.n.id]) delete KBPICK[d.n.id]; else KBPICK[d.n.id] = true;
@@ -8974,9 +9148,20 @@ function initCanvasDrag(){
       go('#/note/' + d.n.id);
     }
   });
+  /* 鍵盤要與指標對稱。原本 Enter 一律 go()，於是只用鍵盤的孩子
+     完全做不到躍升——而躍升是知識建構空間的核心動作（2.1.1 無替代路徑）。 */
   inner.addEventListener('keydown', function(e){
     const el = e.target.closest('.note');
-    if (el && (e.key === 'Enter' || e.key === ' ')){ e.preventDefault(); go('#/note/' + el.dataset.note); }
+    if (!el) return;
+    if (e.key !== 'Enter' && e.key !== ' ' && e.key !== 'Spacebar') return;
+    e.preventDefault();
+    const id = el.dataset.note;
+    if (KBSEL){
+      if (KBPICK[id]) delete KBPICK[id]; else KBPICK[id] = true;
+      render();
+    } else {
+      go('#/note/' + id);
+    }
   });
 }
 
@@ -9250,11 +9435,17 @@ function bindEvents(){
       if (!deleteNote(id)){ toast('代為檢視時不能替學生刪貼文。'); return; }
       closeModal(); EDIT = null; go('#/kb'); render(); toast('已刪除。'); } return; }
     if (act === 'add-ann'){ const ta = $('#annText');
-      if (ta && ta.value.trim()){
-        const ok = addAnnotation(id, ta.value);
-        render();
-        toast(ok ? '已加上註記。' : '代為檢視時不能加註記。');
-      } return; }
+      /* 空白時原本什麼都不做——沒有訊息、焦點也不回到輸入框，
+         使用者只會覺得按鈕壞了。 */
+      if (!ta || !ta.value.trim()){
+        toast('先寫幾個字再送出。');
+        if (ta) ta.focus();
+        return;
+      }
+      const ok = addAnnotation(id, ta.value);
+      render();
+      toast(ok ? '已加上註記。' : '代為檢視時不能加註記。');
+      return; }
     if (act === 'search-clear'){ KBSEARCH.q = ''; render(); return; }
     if (act === 'synth-sel'){ viewSynth.sel = id; render(); return; }
 
@@ -9265,7 +9456,8 @@ function bindEvents(){
     /* 相似題只給教師備課用。它原本印在學生的診斷頁上、四個條件都給、
        不限次數、完全在 MAX_TURNS 之外——那會讓對照組拿到一顆無限次的 AI
        按鈕，變成第四種處理，RQ1 的組間比較失去基準。 */
-    if (act === 'similar' || act === 'similar-again'){ if (!isTeacher()) return; showSimilar(id); return; }
+    if (act === 'similar' || act === 'similar-again'){ if (!isTeacher()) return;
+      showSimilar(id, act === 'similar-again'); return; }
     if (act === 'sim-pick'){
       if (!isTeacher()) return;
       const ok = +t.dataset.k === +t.dataset.ans;
@@ -9299,7 +9491,7 @@ function bindEvents(){
       render();
       const nu = aalItem().unit;
       if (nu !== oldUnit){
-        toast('第 ' + (AAL.idx + 1) + ' 題換了一篇文章：〈' + getText(nu).title + '〉，左邊已經換過來了。');
+        toast('第 ' + (AAL.idx + 1) + ' 題換了一篇文章：〈' + getText(nu).title + '〉，文章已經換過來了。');
         /* 換了文章，左欄要從頭開始——否則學生會在新文章的中段醒來 */
         const p = document.querySelector('.aal-text > .card-p');
         if (p) p.scrollTop = 0;
@@ -9333,6 +9525,10 @@ function bindEvents(){
     if (act === 'back-to-passage'){
       const h = document.getElementById('passageTitle');
       if (h){ h.focus(); h.scrollIntoView({block:'start'}); }
+      return; }
+    if (act === 'back-to-nav'){
+      const nv = document.getElementById('aalNav');
+      if (nv){ nv.focus(); nv.scrollIntoView({block:'start'}); }
       return; }
 
     /* 教師／研究者的唯讀檢視：換題不寫任何日誌 */

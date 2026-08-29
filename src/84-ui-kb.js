@@ -96,7 +96,7 @@ function noteRow(n){
   return '<div class="row" style="justify-content:space-between;border-bottom:1px solid var(--rule-soft);padding-bottom:8px">' +
     '<div><a href="#/note/' + n.id + '"><b>' + esc(n.title) + '</b></a>' +
     '<div class="muted small">' + esc(noteAuthors(n)) + '　·　' + (v ? esc(v.title) : '') + '　·　' + fmtDate(n.createdAt) + '</div></div>' +
-    '<span class="pill">第 ' + epistemicLevel(n) + ' 級</span></div>';
+    '<span class="pill">' + esc(epiLabelFor(n)) + '</span></div>';
 }
 
 /* --- 視圖畫布 --- */
@@ -122,8 +122,14 @@ function viewKBCanvas(vid){
        但 role="button" 的 Children Presentational 為 true——卡內所有子節點的
        語意都被移除，所以 .nf（未讀、作者、回應／閱讀／註記數）也必須被
        describedby 明確參照，否則報讀器一律拿不到。 */
-    return '<div class="' + cls + ' ' + (scls || '') + '" style="left:' + n.x + 'px;top:' + n.y + 'px"' +
+    /* 座標存的是 viewBox 單位（100% 字級下的 px），畫成 rem 讓整張畫布
+       隨字級等比縮放——貼文寬度本來就會長，座標不跟著長就會互相重疊。 */
+    return '<div class="' + cls + ' ' + (scls || '') +
+      '" style="left:' + (n.x / 20) + 'rem;top:' + (n.y / 20) + 'rem"' +
       ' data-note="' + n.id + '" tabindex="0" role="button"' +
+      /* 只有在選取模式下才是「可切換」的按鈕。非選取模式輸出 aria-pressed
+         會讓報讀器把每一張貼文都唸成「未按下」。 */
+      (KBSEL === v.id ? ' aria-pressed="' + (KBPICK[n.id] ? 'true' : 'false') + '"' : '') +
       ' aria-labelledby="nt-' + n.id + '" aria-describedby="nb-' + n.id + ' nf-' + n.id + '">' +
       '<div class="nt" id="nt-' + n.id + '">' + esc(n.title) + '</div>' +
       (scaf ? '<div class="small" style="color:var(--' + ((scaffold(scaf.s) || {}).cls || '').replace('sc', 'sc-') +
@@ -147,10 +153,11 @@ function viewKBCanvas(vid){
 
   // 連線
   const pos = {};
-  /* 卡片寬度改成 13.2rem（會隨字級放大），錨點不能再寫死 108px——
-       108 ≒ 264/2 − 24，是 100% 字級下的值。 */
-  const rootFS = parseFloat(getComputedStyle(document.documentElement).fontSize) || 20;
-  const NOTE_W = 13.2 * rootFS;
+  /* 連線畫在 viewBox 0 0 1600 1100 的座標系裡，那是固定的：畫布改用 rem
+     之後整張圖等比縮放，錨點不可以再乘上當下的字級（乘了的話，
+     改字級不會重繪畫布，座標會停在改字級前的值）。
+     264 就是 13.2rem 在 100% 字級下的值，也就是一個 viewBox 單位的卡寬。 */
+  const NOTE_W = 264;
   ns.forEach(function(n){ pos[n.id] = {x: n.x + NOTE_W / 2 - 24, y: n.y + 40}; });
   const edges = [];
   ns.forEach(function(n){
@@ -212,7 +219,7 @@ function scaffoldUsageBar(ns){
       '<div class="bar"><i style="width:' + (100 * n / mx) + '%;background:var(--' + s.cls.replace('sc', 'sc-') + ')"></i></div>' +
       '<span class="lv">' + n + '</span></div>';
   }).join('') + '</div>' +
-  '<p class="muted small" style="margin-top:10px">支架分布反映論述的形態。若「我的理論」遠多於「這個理論無法解釋」與「更好的理論」，' +
+  '<p class="muted small" style="margin-top:10px">支架分布反映論述的形態。若「' + esc(scaffoldLabel('s1')) + '」遠多於「' + esc(scaffoldLabel('s4')) + '」與「' + esc(scaffoldLabel('s5')) + '」，' +
   '代表大家在各說各話，想法還沒有真的被改進。</p>';
 }
 
@@ -252,7 +259,7 @@ function viewNote(nid){
           '<div class="row" style="gap:8px"><span class="pill">' + (x.depth ? '↳' : '●') + '</span>' +
           (cur ? '<b>' + esc(x.note.title) + '</b>' : '<a href="#/note/' + x.note.id + '">' + esc(x.note.title) + '</a>') +
           '<span class="muted small">' + esc(noteAuthors(x.note)) + '</span>' +
-          '<span class="pill">第 ' + epistemicLevel(x.note) + ' 級</span></div></div>';
+          '<span class="pill">' + esc(epiLabelFor(x.note)) + '</span></div></div>';
       }).join('') + '</div></div>' +
     '<div class="card"><div class="card-h"><h3>延伸這則想法</h3></div><div class="card-p">' +
       '<div class="sc-btns" style="margin-bottom:10px">' + SCAFFOLDS.map(function(s){
@@ -296,7 +303,7 @@ function noteFullHTML(n, full){
       '<span class="row" style="gap:6px">' +
         (n.kind === 'problem' ? '<span class="pill q2"><span class="dot"></span>共同問題</span>' : '') +
         (n.kind === 'rise' ? '<span class="pill" style="color:var(--sc-6);border-color:var(--sc-6)">躍升貼文</span>' : '') +
-        '<span class="pill">第 ' + epistemicLevel(n) + ' 級 · ' + EPI_LABEL[epistemicLevel(n)] + '</span>' +
+        '<span class="pill">' + esc(epiLabelFor(n)) + '</span>' +
       '</span>' +
       '<span class="meta">' + fmtDateTime(n.createdAt) + (n.editedAt ? '（已修改）' : '') + '</span>' +
     '</div>' +
@@ -370,7 +377,7 @@ function renderEditor(opts){
     }).join('') +
     '<button class="btn sm" data-act="seg-add">＋ 再加一個支架段落</button></div>' +
     '<div class="field"><label for="nkw">關鍵詞（用、分隔）</label>' +
-      '<input id="nkw" type="text" value="' + esc(EDIT.keywords) + '" placeholder="平方根、負根、反例"></div>' +
+      '<input id="nkw" type="text" value="' + esc(EDIT.keywords) + '" placeholder="伏筆、線索、證據"></div>' +
     '<div class="field"><label for="nauth">共同作者</label>' +
       '<select id="nauth" multiple size="4">' + state.users.filter(function(u){ return u.role !== 'admin'; }).map(function(u){
         return '<option value="' + u.id + '"' + (EDIT.authorIds.indexOf(u.id) >= 0 ? ' selected' : '') + '>' + esc(u.name) + '</option>';

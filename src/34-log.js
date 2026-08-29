@@ -232,11 +232,19 @@ function buildDemoLogs(){
 /* 題幹逐句切分（供逐句標記與 MARK 事件使用） */
 function splitSentences(text){
   const t = String(text || '').trim();
+  /* 句末標點後面如果緊跟著收尾符號（引號、括號），要一起吃進來。
+     不吃的話，「……甜。」會被切成兩句，第二句的內容就只有一個「」」——
+     那是一顆 aria-pressed 的按鈕，報讀器只唸得出一個標點，
+     按下去還會寫一筆 MARK 事件進閱讀歷程資料。T1 因此多出 4 個標點句。 */
+  const CLOSERS = '」』）》〉】"\'）)]}';
   function cut(str, marks){
     const out = []; let buf = '';
     for (let i = 0; i < str.length; i++){
       buf += str[i];
-      if (marks.indexOf(str[i]) >= 0){ out.push(buf.trim()); buf = ''; }
+      if (marks.indexOf(str[i]) >= 0){
+        while (i + 1 < str.length && CLOSERS.indexOf(str[i + 1]) >= 0){ buf += str[++i]; }
+        out.push(buf.trim()); buf = '';
+      }
     }
     if (buf.trim()) out.push(buf.trim());
     return out.filter(Boolean);

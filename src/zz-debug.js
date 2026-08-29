@@ -242,3 +242,89 @@ window.diffConditionCopy = function(){
   console.log(fails.length ? '不對等 ' + fails.length + ' 個畫面' : '四條件文案對等：全數通過');
   return {rows: rows, bans: bans, pass: fails.length === 0 && bans.length === 0};
 };
+
+/* ==========================================================================
+   學生端不變量。第 1–3 輪反覆出現同一種形狀的缺陷：修了專家點名的那一處、
+   沒掃同型位置——AI 通道修了 similar 漏了 ai-note／ai-thread；術語修了
+   顯示端漏了產生端；θ 修了 #/result 漏了 #/mygrowth。
+   這支測試把那四種形狀變成斷言，不再靠人工掃描。
+   console 一行：assertStudentInvariants()
+   ========================================================================== */
+window.assertStudentInvariants = function(){
+  /* 學生畫面上永遠不該出現的字。「反例」不在裡面——它出現在
+     EPI_LABEL 與名詞說明裡是正確的研究語彙。
+     「正解」也不在裡面：兩份都交完之後，個人診斷本來就該打開答案，
+     那是刻意的設計。它另外用 keyLocked 的情境單獨斷言（見下面）。 */
+  const BAD_TEXT = /θ|logit|Rasch|KIDMAP|迷思|象限|第\s*\d\s*級|平方根/;
+  /* 學生永遠不該按得到的 AI 通道與教師工具 */
+  const BAD_SEL = ['[data-act^="ai-"]', '[data-act="similar"]', '[data-act="similar-again"]',
+                   '[data-act="gen-rubric"]', '[data-act="item-strategy"]',
+                   '[data-act="items-from-view"]', '[data-act="new-view"]',
+                   'a[href^="#/synth/"]', 'a[href^="#/assign/"]', 'a[href^="#/dash"]'];
+
+  const realRole = state.ui.role, realImp = state.ui.impersonate, realHash = location.hash;
+  state.ui.impersonate = null;
+  const fails = [];
+
+  state.classes.forEach(function(k){
+    const sid = k.studentIds[0];
+    state.ui.role = sid; renderShell();
+    const routes = ['#/student', '#/about', '#/mygrowth', '#/survey/pre', '#/survey/post',
+                    '#/kb', '#/result/a-pre', '#/result/a-post'];
+    viewsForViewer().forEach(function(v){ routes.push('#/kb/' + v.id); });
+    notesForViewer().slice(0, 5).forEach(function(n){ routes.push('#/note/' + n.id); });
+    /* 直接打網址也要試——列表過濾擋不住手動輸入 */
+    routes.push('#/synth/' + (state.views[0] || {}).id, '#/assign/a-post/overview', '#/dash', '#/inspect/a-post/' + sid);
+
+    routes.forEach(function(h){
+      if (!h || h.indexOf('undefined') >= 0) return;
+      try {
+        location.hash = h; render();
+        const stage = document.getElementById('view');
+        const txt = stage.innerText || '';
+        const m = txt.match(BAD_TEXT);
+        if (m) fails.push(k.condition + ' ' + h + ' → 出現「' + m[0] + '」');
+        BAD_SEL.forEach(function(s){
+          const n = stage.querySelectorAll(s).length;
+          if (n) fails.push(k.condition + ' ' + h + ' → ' + n + ' 個 ' + s);
+        });
+      } catch (e){ fails.push(k.condition + ' ' + h + ' → ' + e.message); }
+    });
+  });
+
+  /* 答案卡的門檻：後測還沒交的時候，兩份診斷都不可以出現正解。
+     這是 B1-02／B1-04 的核心，用一次可還原的模擬來驗。 */
+  (function(){
+    const sid = state.classes[0].studentIds[0];
+    const keep = state.submissions.filter(function(s){ return s.aid === 'a-post' && s.sid === sid; });
+    state.submissions = state.submissions.filter(function(s){ return !(s.aid === 'a-post' && s.sid === sid); });
+    state.ui.role = sid; renderShell();
+    ['#/result/a-pre', '#/result/a-post'].forEach(function(h){
+      try {
+        location.hash = h; render();
+        const t = document.getElementById('view').innerText || '';
+        if (t.indexOf('正解') >= 0) fails.push('後測未交時 ' + h + ' 仍印出「正解」');
+        if (document.querySelectorAll('#view .opt.right').length) fails.push('後測未交時 ' + h + ' 仍標出正確選項');
+      } catch (e){ fails.push(h + ' → ' + e.message); }
+    });
+    state.submissions = state.submissions.concat(keep);
+  })();
+
+  state.ui.role = realRole; state.ui.impersonate = realImp; renderShell();
+  location.hash = realHash || '#/teacher'; render();
+
+  /* 支架名稱只有一個真相來源：介面上不存在的舊名（「XX理論」）不可以出現 */
+  const labels = SCAFFOLDS.map(function(s){ return s.label; });
+  const src = [PROMPT_BACKBONE].concat(Object.keys(PROMPT_ROLE).map(function(k){ return PROMPT_ROLE[k]; }));
+  src.forEach(function(t){
+    const m = String(t).match(/「([^」]*理論[^」]*)」/g);
+    if (m) m.forEach(function(q){
+      const bare = q.slice(1, -1);
+      if (labels.indexOf(bare) < 0) fails.push('提示詞用了介面上不存在的支架名：' + q);
+    });
+  });
+
+  console.log(fails.length ? '學生端不變量失敗 ' + fails.length + ' 項：\n  ' + fails.join('\n  ')
+                           : '學生端不變量：全數通過');
+  return {pass: fails.length === 0, fails: fails};
+};

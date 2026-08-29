@@ -103,7 +103,7 @@ function isResearcher(){ return currentUser().role === 'admin'; }
 /* 學生走進教師頁時的統一擋板。文案是給十歲孩子看的，不解釋權限模型。 */
 function studentBlocked(){
   return '<div class="empty"><h3>這一頁是老師看的</h3>' +
-    '<p style="max-width:60ch">你的作業、討論與學習軌跡都在左邊的選單裡。</p>' +
+    '<p style="max-width:60ch">你的作業、討論與學習軌跡都在導覽選單裡。</p>' +
     '<a class="btn" href="#/student">回我的作業</a></div>';
 }
 
