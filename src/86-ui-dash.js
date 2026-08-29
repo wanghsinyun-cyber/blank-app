@@ -23,8 +23,8 @@ function viewDash(){
     /* 這一頁永遠只有示範班的 24 人，但頂列還掛著一顆班級選單——
        不說清楚，老師會以為自己看的是全部 96 人。 */
     '<div class="card card-p" style="margin-bottom:12px;border-left:3px solid var(--warn)">' +
-    '<p class="small" style="margin:0">這一頁只涵蓋<strong>有討論紀錄的示範班（' + esc(kc.name) +
-    '）</strong>。其他班級還沒有知識建構資料，因此不在這張圖上；' +
+    '<p class="small" style="margin:0">這一頁只涵蓋<strong>知識建構示範班（' + esc(kc.name) +
+    '）</strong>。其他班級有自己的白板，不在這張圖上；' +
     '頂列的班級選單在這一頁不作用。</p></div>' +
     '<div class="tabs">' + tabs.map(function(t){
       return '<button data-act="dtab" data-id="' + t[0] + '" ' + (DTAB === t[0] ? ' aria-current="true"' : '') + '>' + t[1] + '</button>';
@@ -160,7 +160,7 @@ function dashDiscourse(){
       '</div></div>' +
   '</div>' +
   '<div class="card" style="margin-top:16px"><div class="card-h"><h3>支架使用（全社群）</h3></div>' +
-    '<div class="card-p">' + scaffoldUsageBar(state.notes) + '</div></div>' +
+    '<div class="card-p">' + scaffoldUsageBar(notesOfClass(kbClass().studentIds)) + '</div></div>' +
   '<div class="card" style="margin-top:16px"><div class="card-h"><h3>個人論述輪廓</h3></div>' +
     '<div class="tablewrap"><table><thead><tr><th>學生</th><th class="n">貼文</th><th class="n">字數</th>' +
     '<th class="n">延伸</th><th class="n">被延伸</th><th class="n">閱讀</th><th class="n">註記</th>' +
@@ -219,12 +219,16 @@ function viewMyGrowth(){
   const mates = myClass ? myClass.studentIds : [];
   const dsAll = discourseStats(mates);
   const ds = dsAll.find(function(s){ return s.sid === me.id; }) || {};
-  const myNotes = state.notes.filter(function(n){ return n.authorIds.indexOf(me.id) >= 0; });
+  /* 也要依班——否則被跨班掛名的孩子首頁「我貼的想法」+1、點進去卻被守門擋掉 */
+  const myNotes = notesForViewer().filter(function(n){ return n.authorIds.indexOf(me.id) >= 0; });
   const thetaPre  = pp ? pp.theta : null;
   const thetaPost = qp ? qp.theta : null;
   const delta = (thetaPre != null && thetaPost != null) ? thetaPost - thetaPre : null;
-  const q2Pre  = pp ? pp.q[2] : 0;
-  const q2Post = qp ? qp.q[2] : 0;
+  /* 「還沒有這份測驗的資料」不是 0。寫成 0 的話，後測都還沒發生，
+     孩子就被一張綠色卡片告知「本來會卻答錯的題數 3 → 0」——
+     那正好污染後測本身與課後問卷要量的自我效能。 */
+  const q2Pre  = pp ? pp.q[2] : null;
+  const q2Post = qp ? qp.q[2] : null;
 
   /* 這一班有沒有討論紀錄。沒有的話走降級版面，但卡片數與尺寸一模一樣，
      四個條件看到的版面幾何必須相同，否則介面差異會混進依變項。 */
@@ -259,9 +263,10 @@ function viewMyGrowth(){
          （「這次讀懂的程度 -1.95」「比課前進步 -2.99」）。第 1 輪把
          #/result 的 θ 換成星等，這一頁漏掉了——本輪回報密度最高的一條。
          負數對孩子沒有意義，而且那是一個可以互相比較的數字。 */
+      /* 後測還沒有資料時不要 fallback 到前測：值會是前測的星等、
+         副標卻寫「等課後那份做完」——同一張卡上兩個不同的測量。 */
       statCard('這次讀得怎麼樣',
-        thetaPost != null ? readingStars(thetaPost, post && post.meanTheta)
-          : (thetaPre != null ? readingStars(thetaPre, pre && pre.meanTheta) : '—'),
+        thetaPost != null ? readingStars(thetaPost, post && post.meanTheta) : '—',
         thetaPost != null ? '五顆星是這次讀得最穩的' : '等課後那份做完') +
       statCard('比課前有沒有進步',
         delta == null ? '—' : (delta > 0.15 ? '有往上' : (delta < -0.15 ? '這次比較不順' : '差不多')),
@@ -270,8 +275,12 @@ function viewMyGrowth(){
             : (delta < -0.15 ? '一次結果不代表什麼，回去看看哪幾題卡住'
               : '前後差不多')),
         delta != null && delta > 0.15 ? 'good' : '') +
-      statCard('本來會、卻答錯的題數', q2Pre + ' → ' + q2Post,
-        '這些是最值得回頭看的題目', q2Post < q2Pre ? 'good' : '') +
+      /* good 樣式要同時看 Δθ：θ 掉下去時 q2 也可能一起減少，
+         那時標綠會跟旁邊的「這次比較不順」互相矛盾。 */
+      statCard('可惜的題目',
+        (q2Pre == null || q2Post == null) ? '—' : (q2Pre + ' → ' + q2Post),
+        (q2Post == null) ? '等課後那份做完' : '這些是最值得回頭看的題目',
+        (q2Post != null && q2Pre != null && delta != null && delta > 0.15 && q2Post < q2Pre) ? 'good' : '') +
       (hasKB
         ? statCard('討論參與度', ds.kbi || 0, '把想法貼出來、也接住別人的想法')
         : statCard('討論參與度', '—', '你們班的知識建構空間還沒有討論紀錄')) +

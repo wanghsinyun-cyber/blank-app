@@ -169,6 +169,12 @@ window.diffConditionCopy = function(){
                   .map(function(x){ return condition(x).name; });
   });
 
+  /* 磁碟快照。這兩支測試會切身分並在過程中觸發 save()——
+     跑完之後記憶體還原了、localStorage 卻停在最後一位受測學生身上。
+     研究者只要在下一次 save() 之前重整，就靜默變成別人登入。
+     施測當天跑它會污染真實受試者的資料。 */
+  const SNAP = (function(){ try { return localStorage.getItem(STORE_KEY); } catch (e){ return null; } })();
+  const DRAFT0 = (function(){ try { return localStorage.getItem('kairos-draft'); } catch (e){ return null; } })();
   const realRole = state.ui.role, realImp = state.ui.impersonate, realHash = location.hash;
   state.ui.impersonate = null;
 
@@ -198,42 +204,80 @@ window.diffConditionCopy = function(){
 
   const rows = [];
   const bans = [];
-  SCREENS.forEach(function(sc){
-    const per = {};
-    CONDS.forEach(function(cond){
-      const sid = pick(cond); if (!sid) return;
-      let hash = sc[1];
-      if (!hash){
-        const secs = surveySections('post', cond);
-        hash = '#/survey/post/' + secs.length;
-      }
-      /* 作答頁要走得進去：暫時清掉這一位的後測交卷紀錄 */
-      let restored = null;
-      if (hash.indexOf('#/aal/') === 0){
-        restored = state.submissions.filter(function(s){ return s.aid === 'a-post' && s.sid === sid; });
-        state.submissions = state.submissions.filter(function(s){ return !(s.aid === 'a-post' && s.sid === sid); });
-      }
-      per[cond] = shot(sid, hash);
-      if (restored && restored.length) state.submissions = state.submissions.concat(restored);
-      (BAN[cond] || []).forEach(function(w){
-        if (per[cond].text.indexOf(w) >= 0) bans.push(sc[0] + ' / ' + cond + '：「' + w + '」');
+
+  /* 前置條件要對稱：作答頁需要「還沒交卷」，問卷需要「已經交卷」
+     （surveyGate 會擋）。原本只對作答頁做，於是別的代理人按過
+     〈再走一次（示範）〉之後，問卷那兩列就出現 0/3/3/3 的假紅字。 */
+  function withSubmission(sid, want, fn){
+    const had = submitted('a-post', sid);
+    let removed = null;
+    if (had && !want){
+      removed = state.submissions.filter(function(s){ return s.aid === 'a-post' && s.sid === sid; });
+      state.submissions = state.submissions.filter(function(s){ return !(s.aid === 'a-post' && s.sid === sid); });
+    } else if (!had && want){
+      state.submissions.push({aid:'a-post', sid:sid, at:Date.now(), _diffTmp:true});
+    }
+    try { return fn(); }
+    finally {
+      if (removed) state.submissions = state.submissions.concat(removed);
+      if (!had && want) state.submissions = state.submissions.filter(function(s){ return !s._diffTmp; });
+    }
+  }
+
+  if (!document.documentElement.clientWidth){
+    console.warn('[KAIROS] clientWidth 為 0——這個視窗量不出版面，先把瀏覽器窗格拉開再跑。');
+    return {rows:[], bans:[], pass:false, aborted:'clientWidth=0'};
+  }
+
+  /* 掃字級。四條件版面對等原本只在 100% 量過，而 125% 與 175% 是真的失敗——
+     測試不掃參數空間，等於沒有測。 */
+  const SCALES = [1, 1.25, 1.5, 1.75];
+  const realFs = ((state.settings && state.settings.a11y) || {}).fontScale || 1;
+
+  SCALES.forEach(function(fs){
+    state.settings.a11y = Object.assign({}, state.settings.a11y, {fontScale: fs});
+    if (typeof applyA11y === 'function') applyA11y();
+    SCREENS.forEach(function(sc){
+      const per = {};
+      CONDS.forEach(function(cond){
+        const sid = pick(cond); if (!sid) return;
+        let hash = sc[1];
+        if (!hash){
+          const secs = surveySections('post', cond);
+          hash = '#/survey/post/' + secs.length;
+        }
+        const wantSubmitted = hash.indexOf('#/aal/') !== 0;
+        per[cond] = withSubmission(sid, wantSubmitted, function(){ return shot(sid, hash); });
+        (BAN[cond] || []).forEach(function(w){
+          if (per[cond].text.indexOf(w) >= 0) bans.push(sc[0] + ' / ' + cond + '：「' + w + '」');
+        });
       });
+      const vals = CONDS.map(function(c){ return per[c]; }).filter(Boolean);
+      if (!vals.length) return;
+      const cards = vals.map(function(x){ return x.cards; });
+      const chars = vals.map(function(x){ return x.chars; });
+      const hs    = vals.map(function(x){ return x.h; });
+      const cardsSame = Math.max.apply(null, cards) === Math.min.apply(null, cards);
+      const charPct = +(((Math.max.apply(null, chars) - Math.min.apply(null, chars)) /
+                         Math.max(1, Math.min.apply(null, chars))) * 100).toFixed(1);
+      const hSpread = Math.max.apply(null, hs) - Math.min.apply(null, hs);
+      rows.push({字級: Math.round(fs * 100) + '%', 畫面: sc[0],
+                 卡片數: cards.join('/'), 卡片數相同: cardsSame,
+                 字數落差: charPct + '%', 字數過關: charPct <= 10,
+                 高度落差: hSpread + 'px', 高度過關: hSpread <= 4});
     });
-    const vals = CONDS.map(function(c){ return per[c]; }).filter(Boolean);
-    if (!vals.length) return;
-    const cards = vals.map(function(x){ return x.cards; });
-    const chars = vals.map(function(x){ return x.chars; });
-    const hs    = vals.map(function(x){ return x.h; });
-    const cardsSame = Math.max.apply(null, cards) === Math.min.apply(null, cards);
-    const charPct = +(((Math.max.apply(null, chars) - Math.min.apply(null, chars)) /
-                       Math.max(1, Math.min.apply(null, chars))) * 100).toFixed(1);
-    const hSpread = Math.max.apply(null, hs) - Math.min.apply(null, hs);
-    rows.push({畫面: sc[0], 卡片數: cards.join('/'), 卡片數相同: cardsSame,
-               字數: chars.join('/'), 字數落差: charPct + '%', 字數過關: charPct <= 10,
-               高度落差: hSpread + 'px', 高度過關: hSpread <= 4});
   });
 
+  state.settings.a11y = Object.assign({}, state.settings.a11y, {fontScale: realFs});
+  if (typeof applyA11y === 'function') applyA11y();
+
   state.ui.role = realRole; state.ui.impersonate = realImp; renderShell();
+  /* 磁碟也要還原，而且要在記憶體還原之後 */
+  try {
+    if (SNAP != null) localStorage.setItem(STORE_KEY, SNAP);
+    if (DRAFT0 != null) localStorage.setItem('kairos-draft', DRAFT0);
+    else localStorage.removeItem('kairos-draft');
+  } catch (e){}
   location.hash = realHash || '#/teacher'; render();
 
   const fails = rows.filter(function(r){ return !r.卡片數相同 || !r.字數過關 || !r.高度過關; });
@@ -262,6 +306,12 @@ window.assertStudentInvariants = function(){
                    '[data-act="items-from-view"]', '[data-act="new-view"]',
                    'a[href^="#/synth/"]', 'a[href^="#/assign/"]', 'a[href^="#/dash"]'];
 
+  /* 磁碟快照。這兩支測試會切身分並在過程中觸發 save()——
+     跑完之後記憶體還原了、localStorage 卻停在最後一位受測學生身上。
+     研究者只要在下一次 save() 之前重整，就靜默變成別人登入。
+     施測當天跑它會污染真實受試者的資料。 */
+  const SNAP = (function(){ try { return localStorage.getItem(STORE_KEY); } catch (e){ return null; } })();
+  const DRAFT0 = (function(){ try { return localStorage.getItem('kairos-draft'); } catch (e){ return null; } })();
   const realRole = state.ui.role, realImp = state.ui.impersonate, realHash = location.hash;
   state.ui.impersonate = null;
   const fails = [];
@@ -311,6 +361,12 @@ window.assertStudentInvariants = function(){
   })();
 
   state.ui.role = realRole; state.ui.impersonate = realImp; renderShell();
+  /* 磁碟也要還原，而且要在記憶體還原之後 */
+  try {
+    if (SNAP != null) localStorage.setItem(STORE_KEY, SNAP);
+    if (DRAFT0 != null) localStorage.setItem('kairos-draft', DRAFT0);
+    else localStorage.removeItem('kairos-draft');
+  } catch (e){}
   location.hash = realHash || '#/teacher'; render();
 
   /* 支架名稱只有一個真相來源：介面上不存在的舊名（「XX理論」）不可以出現 */

@@ -182,7 +182,7 @@ function builtinClassReport(diag){
   top.forEach(function(pi){
     L.push('**第 ' + pi.item.no + ' 題 → 可直接貼到知識建構空間的問題敘述**');
     L.push('');
-    L.push('> ' + buildInquiryPrompt(pi, diag).split('\n').join('\n> '));
+    L.push('> ' + buildInquiryPrompt(pi, diag, currentClass()).split('\n').join('\n> '));
     L.push('');
     L.push('在「派題診斷 → 迷思橋接」按下〈開啟共構視圖〉，系統會把這段話與該題一起貼進新的視圖，並自動標出可以擔任知識資源人的同學。');
     L.push('');

@@ -551,3 +551,23 @@ pre.prompt{
 /* 暗星用形狀（☆）區分，顏色只是輔助。原本靠 inline opacity:.25，
    對比 1.73:1，而且高對比模式的覆寫進不去 inline style。 */
 .star-dim{ color:var(--ink-4) }
+
+/* 共同作者的核取方塊清單。原本是 <select multiple>——不按 Ctrl／⌘ 單點
+   會取代整個選取集合，平板觸控的孩子一點就把自己從作者裡刪掉。 */
+.authpick{ display:flex; flex-wrap:wrap; gap:6px; max-height:9rem; overflow-y:auto;
+  border:1px solid var(--rule); border-radius:var(--r-m); padding:8px }
+.authpick .opt{ flex:0 0 auto; padding:4px 10px; margin:0 }
+.field .lbl{ display:block; font-size:0.85rem; color:var(--ink-3); margin-bottom:2px }
+
+/* 四條件的版面幾何必須與文案字數解耦。
+   frame 字數 tutor 36／tutee 29／peer 29／control 40，每行約 33–35 字，
+   於是 29 字永遠一行、36–40 字永遠兩行——125% 與 175% 實測差 45px 與 63px。
+   靠改文案湊字數只是把同一個脆弱性推到下一次改字的時候。 */
+.about-frame{ min-height:3.6rem }
+.about-use{ min-height:5.4rem }
+.cond-card-body{ min-height:3.6rem }
+.cond-card-foot{ min-height:2.9rem }
+/* 作答頁 125% 的落差來自卡片頭（標題＋「還可以說 N 次」pill 折成兩行），
+   round1 只鎖了 --pane-h／.pane-bar／.pane-foot。 */
+.aal-chat{ min-height:31rem }
+.aal-chat .card-h{ min-height:3.95rem; align-items:flex-start }

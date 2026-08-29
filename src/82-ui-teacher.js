@@ -501,7 +501,7 @@ function tabBridge(diag){
              '<span class="muted small">這一題沒有人超越預期答對。</span>') + '</div></div>' +
         '</div>' +
         '<hr class="hr"><div class="eyebrow">將貼進視圖的探究問題</div>' +
-        '<div class="ai-out" style="margin-top:6px">' + nl2br(buildInquiryPrompt(pi, diag)) + '</div>' +
+        '<div class="ai-out" style="margin-top:6px">' + nl2br(buildInquiryPrompt(pi, diag, currentClass())) + '</div>' +
         '</div></div>';
     }).join('') : '<div class="empty"><h3>目前沒有明顯的迷思題</h3>' +
       '<p>全體（四班合計）沒有出現迷思比例超過 ' + state.settings.misThreshold + '% 的題目。</p></div>');

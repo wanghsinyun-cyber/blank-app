@@ -11,7 +11,8 @@ function viewStudent(){
   if (!inClass) return '<div class="empty"><h3>這個帳號不在示範班級裡</h3>' +
     '<p>請用右上角的身分選單切換成班上的學生。</p></div>';
   const asgs = state.assignments.slice().sort(function(a, b){ return b.createdAt - a.createdAt; });
-  const myNotes = state.notes.filter(function(n){ return n.authorIds.indexOf(me.id) >= 0; }).length;
+  /* 同上：消費端也要依班 */
+  const myNotes = notesForViewer().filter(function(n){ return n.authorIds.indexOf(me.id) >= 0; }).length;
   const unread = notesForViewer().filter(isUnread).length;
 
   const cond = condition(k.condition);
@@ -22,8 +23,8 @@ function viewStudent(){
         (cond.cls ? cond.cls.replace('sc', 'sc-') : 'ink-4') + ')">' +
         '<div class="eyebrow">這節課陪你的夥伴</div>' +
         '<h3 style="margin-top:4px">' + esc(cond.name) + '</h3>' +
-        '<p class="small" style="margin-top:6px">' + esc(cond.frame) + '</p>' +
-        '<p class="muted small">它不會告訴你答案，也不會說你對或錯。每一題最多可以跟它說 ' +
+        '<p class="small cond-card-body" style="margin-top:6px">' + esc(cond.frame) + '</p>' +
+        '<p class="muted small cond-card-foot">它不會告訴你答案，也不會說你對或錯。每一題最多可以跟它說 ' +
         ((state.settings && state.settings.maxTurns) || MAX_TURNS) + ' 次話。</p></div>'
       /* 四條件的卡片結構要逐項對位：同一條左邊框、eyebrow、h3、兩段 p。
          少一個 h3、少一條邊條，卡片高度就不同，底下的統計卡與作業清單
@@ -33,9 +34,9 @@ function viewStudent(){
       : '<div class="card card-p" style="margin-bottom:16px;border-left:3px solid var(--ink-4)">' +
         '<div class="eyebrow">這節課的進行方式</div>' +
         '<h3 style="margin-top:4px">我的筆記</h3>' +
-        '<p class="small" style="margin-top:6px">這節課你自己讀、自己想。' +
+        '<p class="small cond-card-body" style="margin-top:6px">這節課你自己讀、自己想。' +
         '這一頁有一塊「我的筆記」，把想到的、卡住的地方寫下來。</p>' +
-        '<p class="muted small">筆記只有你和老師看得到，不會打分數。' +
+        '<p class="muted small cond-card-foot">你寫的字老師之後看得到，不會拿來打分數。' +
         '一題一頁，換題會換新的。</p></div>') +
     (needPre ? '<div class="card card-p" style="margin-bottom:16px;border-left:3px solid var(--warn)">' +
       '<div class="row" style="justify-content:space-between"><span class="small">還沒填課前問卷。</span>' +
@@ -89,8 +90,33 @@ function viewStudent(){
     '系統會把它整理出來變成全班的共同問題，貼到知識建構空間，讓大家一起把它想清楚。</p></div></div>';
 }
 
+/* 「交過卷」——純存在檢查。流程與統計用這個就夠了。 */
 function submitted(aid, sid){
   return state.submissions.some(function(s){ return s.aid === aid && s.sid === sid; });
+}
+
+/* 這份派題他實際作答了幾題（選擇題有選、建構反應題有寫）。 */
+function answeredCount(aid, sid){
+  return state.responses.filter(function(r){
+    return r.aid === aid && r.sid === sid &&
+           (r.choice != null || (r.text && String(r.text).trim()));
+  }).length;
+}
+
+/* 可以打開答案卡了嗎。
+   `submitted()` 是純存在檢查——只要有一筆 submission，即使 0 題作答，
+   前測與後測的完整正解都會攤開。而前後測是同一份題本、教室裡的平板螢幕
+   是公開的，所以這是測驗安全問題，不是體驗問題。
+   門檻用「實際作答比例」而不是「有沒有那一筆紀錄」。 */
+function keyUnlocked(aid, sid){
+  const a = getAssignment(aid);
+  if (!a) return false;
+  if (!submitted(aid, sid)) return false;
+  const total = a.itemIds.length;
+  if (!total) return false;
+  const ratio = (state.settings && state.settings.keyUnlockRatio != null)
+    ? state.settings.keyUnlockRatio : 0.5;
+  return answeredCount(aid, sid) / total >= ratio;
 }
 
 /* --- 作答 --- */
@@ -180,8 +206,10 @@ function viewResult(aid){
      前半在上面那道門檻之後看似冗餘，但它是日後放寬門檻時的第二道保險，成本為零。
      四象限、星等與「可惜的題目 → 全班正在討論這題」都保留：
      它們只需要題號，不洩題，而那正是讓孩子回去重讀的動機來源。 */
-  const keyLocked = !submitted(aid, me.id) ||
-                    (aid === 'a-pre' && !submitted('a-post', me.id));
+  /* 用實際作答比例當門檻，不是「有沒有那筆 submission」。
+     前測的正解另外要等後測也真的作答過才開（同一份題本）。 */
+  const keyLocked = !keyUnlocked(aid, me.id) ||
+                    (aid === 'a-pre' && !keyUnlocked('a-post', me.id));
   const diag = diagnose(state, aid);
   const mine = state.responses.filter(function(r){ return r.aid === aid && r.sid === me.id; });
   const mc = mine.filter(function(r){ return r.correct !== null && r.correct !== undefined; });
@@ -195,14 +223,19 @@ function viewResult(aid){
     '<div class="grid g4" style="margin-bottom:16px">' +
       /* 分母是他實際作答的題數（缺答現在寫 null、不進 mc）。
        不講清楚的話，只答一題的孩子會看到「1 / 1」而更困惑。 */
-    statCard('選擇題答對', right + ' / ' + mc.length,
-      (function(){
-        const total = a.itemIds.map(getItem).filter(function(i){ return i && i.type === 'mc'; }).length;
-        const miss = total - mc.length;
-        return pct(right / Math.max(1, mc.length)) + (miss ? '　另外 ' + miss + ' 題沒有作答' : '');
-      })()) +
-      statCard('我這次的閱讀力', ps ? readingStars(ps.theta, diag.meanTheta) : '—',
-        ps ? '和所有做過的同學比起來的位置' : '需要更多人完成') +
+    /* 一題都沒作答時不要印「0 / 0　0%」，也不要餵 readingStars——
+       那會憑空給出 ★★★☆☆。太少就明說太少。 */
+    (mc.length
+      ? statCard('選擇題答對', right + ' / ' + mc.length,
+          (function(){
+            const total = a.itemIds.map(getItem).filter(function(i){ return i && i.type === 'mc'; }).length;
+            const miss = total - mc.length;
+            return pct(right / Math.max(1, mc.length)) + (miss ? '　另外 ' + miss + ' 題沒有作答' : '');
+          })())
+      : statCard('選擇題答對', '—', '這一次作答的題目太少')) +
+      statCard('我這次的閱讀力', (ps && mc.length) ? readingStars(ps.theta, diag.meanTheta) : '—',
+        !mc.length ? '這一次作答的題目太少，畫不出來'
+                   : (ps ? '和所有做過的同學比起來的位置' : '需要更多人完成')) +
       statCard('可惜的題目', ps ? ps.q[2] : '—', '這幾題你其實讀得懂，只是這次沒答對') +
       statCard('厲害的題目', ps ? ps.q[1] : '—', '這幾題比較難，你答對了', 'good') +
     '</div>' +

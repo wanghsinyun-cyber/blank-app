@@ -559,6 +559,26 @@ pre.prompt{
 /* 暗星用形狀（☆）區分，顏色只是輔助。原本靠 inline opacity:.25，
    對比 1.73:1，而且高對比模式的覆寫進不去 inline style。 */
 .star-dim{ color:var(--ink-4) }
+
+/* 共同作者的核取方塊清單。原本是 <select multiple>——不按 Ctrl／⌘ 單點
+   會取代整個選取集合，平板觸控的孩子一點就把自己從作者裡刪掉。 */
+.authpick{ display:flex; flex-wrap:wrap; gap:6px; max-height:9rem; overflow-y:auto;
+  border:1px solid var(--rule); border-radius:var(--r-m); padding:8px }
+.authpick .opt{ flex:0 0 auto; padding:4px 10px; margin:0 }
+.field .lbl{ display:block; font-size:0.85rem; color:var(--ink-3); margin-bottom:2px }
+
+/* 四條件的版面幾何必須與文案字數解耦。
+   frame 字數 tutor 36／tutee 29／peer 29／control 40，每行約 33–35 字，
+   於是 29 字永遠一行、36–40 字永遠兩行——125% 與 175% 實測差 45px 與 63px。
+   靠改文案湊字數只是把同一個脆弱性推到下一次改字的時候。 */
+.about-frame{ min-height:3.6rem }
+.about-use{ min-height:5.4rem }
+.cond-card-body{ min-height:3.6rem }
+.cond-card-foot{ min-height:2.9rem }
+/* 作答頁 125% 的落差來自卡片頭（標題＋「還可以說 N 次」pill 折成兩行），
+   round1 只鎖了 --pane-h／.pane-bar／.pane-foot。 */
+.aal-chat{ min-height:31rem }
+.aal-chat .card-h{ min-height:3.95rem; align-items:flex-start }
 </style>
 <button class="skip" id="skipLink" type="button">跳至主要內容</button>
 <div class="app">
@@ -2617,6 +2637,14 @@ function scaffold(id){ return SCAFFOLDS.find(function(s){ return s.id === id; })
 function scaffoldLabel(id){ const s = scaffold(id); return s ? s.label : ''; }
 
 function notesOfView(vid){ return state.notes.filter(function(n){ return n.viewId === vid; }); }
+/* 某一群學生所屬班級的貼文。分析端的分子與分母都要用同一個範圍——
+   分母用全站、分子只算本班，閱讀率會被系統性壓低。 */
+function notesOfClass(ids){
+  const cid = ids && ids.length ? (classOfStudent(ids[0]) || {}).id : null;
+  const ok = {};
+  state.views.forEach(function(v){ if ((v.classId || kbClass().id) === cid) ok[v.id] = 1; });
+  return state.notes.filter(function(n){ return ok[n.viewId]; });
+}
 function childrenOf(nid){ return state.notes.filter(function(n){ return n.buildOn === nid; }); }
 function noteText(n){
   return (n.segs || []).map(function(s){ return s.text; }).join('\n');
@@ -2649,7 +2677,10 @@ function createNote(o){
   if (isImpersonating()) return null;
   const n = {
     id: uid('n'), viewId: o.viewId, title: o.title || '（未命名）',
-    segs: o.segs || [], authorIds: o.authorIds || [currentUser().id],
+    segs: o.segs || [],
+    /* 空陣列是 truthy，所以 `o.authorIds || [me]` 永遠不會補回本人——
+       署名會被靜默清空，而貼文數、延伸數、KB 指數都掛在 authorIds 上。 */
+    authorIds: (o.authorIds && o.authorIds.length) ? o.authorIds : [currentUser().id],
     keywords: o.keywords || [], createdAt: Date.now(), editedAt: null,
     x: o.x != null ? o.x : 60 + Math.round(Math.random() * 400),
     y: o.y != null ? o.y : 60 + Math.round(Math.random() * 300),
@@ -2752,21 +2783,42 @@ function bridgeExists(aid, iid){
   });
 }
 
-function buildInquiryPrompt(pi, diag){
+function buildInquiryPrompt(pi, diag, klass){
   const it = pi.item;
-  const n2 = pi.q[2], n1 = pi.q[1];
   const dis = pi.topDistractor != null ? it.options[pi.topDistractor] : null;
   const mis = pi.misCode ? MISCONCEPTIONS.find(function(m){ return m.id === pi.misCode; }) : null;
+  /* 人數必須跟名單同一個範圍。原本 n2/n1 是四班全樣本（第 13 題 21 與 16），
+     而名單已依班過濾只印 3 個名字——21+16=37 大於全班 24 人，孩子自己數得出矛盾。 */
+  const inClass = {};
+  ((klass || currentClass() || kbClass()).studentIds || []).forEach(function(s){ inClass[s] = 1; });
+  const only = function(arr){ return (arr || []).filter(function(s){ return inClass[s]; }).length; };
   const lines = [];
   /* 這段字是貼給全班讀的貼文本文，不是教師報表。
      兩個必須避免的東西：
      (1) 寫死「前測」——函式明明收到了 diag，卻在後測的橋接上印「前測」；
      (2) 「落在迷思象限／本來應該答得出來」——那是當著全班的面
          對特定幾個孩子貼缺陷標籤，跟這個平台自己寫的知識建構原則相反。 */
-  lines.push('「' + diag.assignment.title + '」第 ' + it.no + ' 題（' + textTitle(it.unit) + '）有 ' +
-    n2 + ' 位同學的讀法跟答案不一樣。我們一起看看，是哪一句話讓大家想得不同。');
-  if (dis) lines.push('這些同學裡最多人選的是「' + dis + '」（' + pi.topDistractorN + ' 人）。');
-  if (mis) lines.push('這常常跟「' + mis.name + '」有關：' + mis.desc);
+  const n2 = only(pi.q2Students), n1 = only(pi.q1Students);
+  /* 這一題本班沒有人讀法不同時，整句不要輸出——原本只有 n1 有守門。 */
+  if (n2){
+    lines.push('「' + diag.assignment.title + '」第 ' + it.no + ' 題（' + textTitle(it.unit) + '）有 ' +
+      n2 + ' 位同學的讀法跟答案不一樣。我們一起看看，是哪一句話讓大家想得不同。');
+    /* topDistractorN 同樣是全樣本，一起改成本班計數——
+       只改兩個數字會留下第三個。 */
+    if (dis){
+      const dn = (pi.q2Students || []).filter(function(s){
+        if (!inClass[s]) return false;
+        const r = state.responses.find(function(x){
+          return x.aid === diag.assignment.id && x.sid === s && x.iid === it.id; });
+        return r && r.choice === pi.topDistractor;
+      }).length;
+      if (dn) lines.push('這些同學裡最多人選的是「' + dis + '」（' + dn + ' 人）。');
+    }
+    if (mis) lines.push('這常常跟「' + mis.name + '」有關：' + mis.desc);
+  } else {
+    lines.push('「' + diag.assignment.title + '」第 ' + it.no + ' 題（' + textTitle(it.unit) +
+      '）值得我們一起再看一次。');
+  }
   if (n1) lines.push('另外有 ' + n1 + ' 位同學這一題讀得很穩，請他們先把自己的想法貼出來，讓大家看得到不同的思路。');
   lines.push('請大家不要只寫答案。先說你原本怎麼想，再說你現在覺得哪裡需要修正，並且盡量舉出一個能檢驗的例子。');
   return lines.join('\n');
@@ -2802,7 +2854,7 @@ function createBridgeView(diag, pi){
     authorIds: [k.teacherId],
     keywords: it.tags || [],
     itemRef: {aid: diag.assignment.id, iid: it.id},
-    segs: [{s: 's2', text: buildInquiryPrompt(pi, diag)}],
+    segs: [{s: 's2', text: buildInquiryPrompt(pi, diag, k)}],
     x: 60, y: 40
   });
   // 在這一題讀得比較穩的同學，請他們先說自己怎麼想
@@ -2919,9 +2971,13 @@ function discourseStats(ids){
                  reads:0, chars:0, scaffolds:{}, terms:{}, epiSum:0, epiN:0,
                  revisions:0, keywords:0, threads:{}};
   });
-  const total = state.notes.length;
+  /* 分母必須與 ids 同範圍。用全站 76 則當分母、分子只算本班的閱讀，
+     每個人的閱讀率會被系統性壓到約 1/3.6——而 readRate 佔 kbi 權重 10%，
+     那是依變項內部的跨範圍污染。 */
+  const scoped = notesOfClass(ids);
+  const total = scoped.length;
 
-  state.notes.forEach(function(n){
+  scoped.forEach(function(n){
     const lv = epistemicLevel(n);
     const t = noteFullText(n);
     const terms = domainTermsIn(t);
@@ -2981,7 +3037,8 @@ function snaGraph(){
   const ids = klass.studentIds.slice();
   const idx = {}; ids.forEach(function(id, i){ idx[id] = i; });
   const edges = {};
-  state.notes.forEach(function(n){
+  /* 只看本班的貼文——跨班的 buildOn 不該進這張網 */
+  notesOfClass(ids).forEach(function(n){
     if (!n.buildOn) return;
     const p = getNote(n.buildOn); if (!p) return;
     (n.authorIds || []).forEach(function(a){
@@ -3007,8 +3064,9 @@ function snaGraph(){
 }
 
 /* --- 詞彙成長：領域詞彙首次出現的累積曲線 --- */
-function vocabGrowth(){
-  const ns = state.notes.slice().sort(function(a, b){ return a.createdAt - b.createdAt; });
+function vocabGrowth(notes){
+  const ns = (notes || notesOfClass(kbClass().studentIds)).slice()
+    .sort(function(a, b){ return a.createdAt - b.createdAt; });
   const seen = {}; const pts = [];
   ns.forEach(function(n){
     domainTermsIn(noteFullText(n)).forEach(function(w){ seen[w] = true; });
@@ -3091,18 +3149,23 @@ function median(a){
 
 /* --- 社群層級摘要 --- */
 function communitySummary(){
-  const ds = discourseStats();
+  /* 全部收在同一個班級範圍內。原本分子用 state.notes（四班 76 則），
+     而頁首寫著「這一頁只涵蓋示範班」、隔壁 SNA 分頁對「延伸」給出 15——
+     同一個儀表板對同一件事給兩個答案。 */
+  const ids = kbClass().studentIds;
+  const scoped = notesOfClass(ids);
+  const ds = discourseStats(ids);
   const g = snaGraph();
-  const vg = vocabGrowth();
-  const roots = state.notes.filter(function(n){ return !n.buildOn; });
+  const vg = vocabGrowth(scoped);
+  const roots = scoped.filter(function(n){ return !n.buildOn; });
   const withBuild = roots.filter(function(n){ return childrenOf(n.id).length > 0; });
-  const rise = state.notes.filter(function(n){ return n.kind === 'rise'; });
-  const epi = state.notes.map(epistemicLevel);
+  const rise = scoped.filter(function(n){ return n.kind === 'rise'; });
+  const epi = scoped.map(epistemicLevel);
   return {
-    notes: state.notes.length,
-    buildOns: state.notes.filter(function(n){ return n.buildOn; }).length,
+    notes: scoped.length,
+    buildOns: scoped.filter(function(n){ return n.buildOn; }).length,
     riseAbove: rise.length,
-    views: state.views.length,
+    views: state.views.filter(function(v){ return (v.classId || kbClass().id) === kbClass().id; }).length,
     threads: roots.length,
     threadUptake: roots.length ? withBuild.length / roots.length : 0,
     contributors: ds.filter(function(s){ return s.notes > 0; }).length,
@@ -3856,7 +3919,7 @@ function builtinClassReport(diag){
   top.forEach(function(pi){
     L.push('**第 ' + pi.item.no + ' 題 → 可直接貼到知識建構空間的問題敘述**');
     L.push('');
-    L.push('> ' + buildInquiryPrompt(pi, diag).split('\n').join('\n> '));
+    L.push('> ' + buildInquiryPrompt(pi, diag, currentClass()).split('\n').join('\n> '));
     L.push('');
     L.push('在「派題診斷 → 迷思橋接」按下〈開啟共構視圖〉，系統會把這段話與該題一起貼進新的視圖，並自動標出可以擔任知識資源人的同學。');
     L.push('');
@@ -5419,7 +5482,7 @@ function tabBridge(diag){
              '<span class="muted small">這一題沒有人超越預期答對。</span>') + '</div></div>' +
         '</div>' +
         '<hr class="hr"><div class="eyebrow">將貼進視圖的探究問題</div>' +
-        '<div class="ai-out" style="margin-top:6px">' + nl2br(buildInquiryPrompt(pi, diag)) + '</div>' +
+        '<div class="ai-out" style="margin-top:6px">' + nl2br(buildInquiryPrompt(pi, diag, currentClass())) + '</div>' +
         '</div></div>';
     }).join('') : '<div class="empty"><h3>目前沒有明顯的迷思題</h3>' +
       '<p>全體（四班合計）沒有出現迷思比例超過 ' + state.settings.misThreshold + '% 的題目。</p></div>');
@@ -5914,7 +5977,9 @@ function openNoteEditor(o){
 
 function renderEditor(opts){
   const parent = EDIT.buildOn ? getNote(EDIT.buildOn) : null;
-  const others = state.notes.filter(function(n){ return n.id !== EDIT.id; });
+  /* 引用清單同樣不可跨班——跨班引用會在 SNA 裡建出不存在的連結，
+     而且會讓對照組讀到三個 AI 組的貼文標題。 */
+  const others = notesForViewer().filter(function(n){ return n.id !== EDIT.id; });
   modal(
     '<div class="modal-h"><h3>' + (EDIT.id ? '編輯貼文' : (EDIT.kind === 'rise' ? '建立躍升貼文' : (parent ? '延伸：' + esc(parent.title) : '貼一則新想法'))) + '</h3>' +
     '<button class="btn sm ghost" data-act="close-modal">關閉</button></div>' +
@@ -5940,10 +6005,25 @@ function renderEditor(opts){
     '<button class="btn sm" data-act="seg-add">＋ 再加一個支架段落</button></div>' +
     '<div class="field"><label for="nkw">關鍵詞（用、分隔）</label>' +
       '<input id="nkw" type="text" value="' + esc(EDIT.keywords) + '" placeholder="伏筆、線索、證據"></div>' +
-    '<div class="field"><label for="nauth">共同作者</label>' +
-      '<select id="nauth" multiple size="4">' + state.users.filter(function(u){ return u.role !== 'admin'; }).map(function(u){
-        return '<option value="' + u.id + '"' + (EDIT.authorIds.indexOf(u.id) >= 0 ? ' selected' : '') + '>' + esc(u.name) + '</option>';
-      }).join('') + '</select><span class="muted small">按住 Ctrl／⌘ 可以多選。知識建構鼓勵共同署名。</span></div>' +
+    /* 共同作者：核取方塊，不是 <select multiple>。
+       原生 multiple select 在不按 Ctrl／⌘ 時單點會「取代」整個選取集合——
+       平板觸控與鍵盤使用者點第二個名字就會把自己刪掉，而 canEdit 要求
+       本人在 authorIds 裡，於是他再也編輯不回來。核取方塊沒有這個行為。
+       名單只列同班同學：班級＝實驗條件，跨班共同署名會同時污染兩個條件的
+       知識建構依變項。本人固定顯示、不可取消。 */
+    (function(){
+      const me = currentUser();
+      const mates = ((isTeacher() ? currentClass() : classOfStudent(me.id)) || {studentIds:[]}).studentIds || [];
+      const pick = mates.filter(function(sid){ return sid !== me.id; });
+      return '<div class="field"><span class="lbl">共同作者</span>' +
+        '<p class="muted small" style="margin:2px 0 6px">' + esc(userName(me.id)) +
+        '（你）一定會列在作者裡。要一起署名的同學再勾起來。</p>' +
+        '<div class="authpick" role="group" aria-label="共同作者">' + pick.map(function(sid){
+          return '<label class="opt"><input type="checkbox" data-act="auth-pick" value="' + sid + '"' +
+            (EDIT.authorIds.indexOf(sid) >= 0 ? ' checked' : '') + '>' +
+            '<span>' + esc(userName(sid)) + '</span></label>';
+        }).join('') + '</div></div>';
+    })() +
     '<div class="field"><label for="nref">引用其他貼文</label>' +
       '<select id="nref" style="width:100%"><option value="">（不引用）</option>' +
       others.map(function(n){ return '<option value="' + n.id + '">' + esc(n.title) + ' — ' + esc(noteAuthors(n)) + '</option>'; }).join('') +
@@ -5958,8 +6038,11 @@ function renderEditor(opts){
 function collectEditor(){
   const t = $('#ntitle'); if (t) EDIT.title = t.value;
   const k = $('#nkw'); if (k) EDIT.keywords = k.value;
-  const a = $('#nauth');
-  if (a) EDIT.authorIds = Array.prototype.slice.call(a.selectedOptions).map(function(o){ return o.value; });
+  /* 本人恆在作者名單裡，而且排第一。少了這一行，孩子一次誤點就把
+     自己的貼文永久交給別人（canEdit 需要本人在名單內，沒有復原路徑）。 */
+  const me = currentUser().id;
+  const picked = $$('[data-act="auth-pick"]:checked').map(function(el){ return el.value; });
+  EDIT.authorIds = [me].concat(picked.filter(function(x){ return x !== me; }));
   $$('[data-act="seg-text"]').forEach(function(el){ EDIT.segs[+el.dataset.i].text = el.value; });
   const r = $('#nref'), q = $('#nquote');
   if (r && r.value && q && q.value.trim()){
@@ -6060,8 +6143,8 @@ function viewDash(){
     /* 這一頁永遠只有示範班的 24 人，但頂列還掛著一顆班級選單——
        不說清楚，老師會以為自己看的是全部 96 人。 */
     '<div class="card card-p" style="margin-bottom:12px;border-left:3px solid var(--warn)">' +
-    '<p class="small" style="margin:0">這一頁只涵蓋<strong>有討論紀錄的示範班（' + esc(kc.name) +
-    '）</strong>。其他班級還沒有知識建構資料，因此不在這張圖上；' +
+    '<p class="small" style="margin:0">這一頁只涵蓋<strong>知識建構示範班（' + esc(kc.name) +
+    '）</strong>。其他班級有自己的白板，不在這張圖上；' +
     '頂列的班級選單在這一頁不作用。</p></div>' +
     '<div class="tabs">' + tabs.map(function(t){
       return '<button data-act="dtab" data-id="' + t[0] + '" ' + (DTAB === t[0] ? ' aria-current="true"' : '') + '>' + t[1] + '</button>';
@@ -6197,7 +6280,7 @@ function dashDiscourse(){
       '</div></div>' +
   '</div>' +
   '<div class="card" style="margin-top:16px"><div class="card-h"><h3>支架使用（全社群）</h3></div>' +
-    '<div class="card-p">' + scaffoldUsageBar(state.notes) + '</div></div>' +
+    '<div class="card-p">' + scaffoldUsageBar(notesOfClass(kbClass().studentIds)) + '</div></div>' +
   '<div class="card" style="margin-top:16px"><div class="card-h"><h3>個人論述輪廓</h3></div>' +
     '<div class="tablewrap"><table><thead><tr><th>學生</th><th class="n">貼文</th><th class="n">字數</th>' +
     '<th class="n">延伸</th><th class="n">被延伸</th><th class="n">閱讀</th><th class="n">註記</th>' +
@@ -6256,12 +6339,16 @@ function viewMyGrowth(){
   const mates = myClass ? myClass.studentIds : [];
   const dsAll = discourseStats(mates);
   const ds = dsAll.find(function(s){ return s.sid === me.id; }) || {};
-  const myNotes = state.notes.filter(function(n){ return n.authorIds.indexOf(me.id) >= 0; });
+  /* 也要依班——否則被跨班掛名的孩子首頁「我貼的想法」+1、點進去卻被守門擋掉 */
+  const myNotes = notesForViewer().filter(function(n){ return n.authorIds.indexOf(me.id) >= 0; });
   const thetaPre  = pp ? pp.theta : null;
   const thetaPost = qp ? qp.theta : null;
   const delta = (thetaPre != null && thetaPost != null) ? thetaPost - thetaPre : null;
-  const q2Pre  = pp ? pp.q[2] : 0;
-  const q2Post = qp ? qp.q[2] : 0;
+  /* 「還沒有這份測驗的資料」不是 0。寫成 0 的話，後測都還沒發生，
+     孩子就被一張綠色卡片告知「本來會卻答錯的題數 3 → 0」——
+     那正好污染後測本身與課後問卷要量的自我效能。 */
+  const q2Pre  = pp ? pp.q[2] : null;
+  const q2Post = qp ? qp.q[2] : null;
 
   /* 這一班有沒有討論紀錄。沒有的話走降級版面，但卡片數與尺寸一模一樣，
      四個條件看到的版面幾何必須相同，否則介面差異會混進依變項。 */
@@ -6296,9 +6383,10 @@ function viewMyGrowth(){
          （「這次讀懂的程度 -1.95」「比課前進步 -2.99」）。第 1 輪把
          #/result 的 θ 換成星等，這一頁漏掉了——本輪回報密度最高的一條。
          負數對孩子沒有意義，而且那是一個可以互相比較的數字。 */
+      /* 後測還沒有資料時不要 fallback 到前測：值會是前測的星等、
+         副標卻寫「等課後那份做完」——同一張卡上兩個不同的測量。 */
       statCard('這次讀得怎麼樣',
-        thetaPost != null ? readingStars(thetaPost, post && post.meanTheta)
-          : (thetaPre != null ? readingStars(thetaPre, pre && pre.meanTheta) : '—'),
+        thetaPost != null ? readingStars(thetaPost, post && post.meanTheta) : '—',
         thetaPost != null ? '五顆星是這次讀得最穩的' : '等課後那份做完') +
       statCard('比課前有沒有進步',
         delta == null ? '—' : (delta > 0.15 ? '有往上' : (delta < -0.15 ? '這次比較不順' : '差不多')),
@@ -6307,8 +6395,12 @@ function viewMyGrowth(){
             : (delta < -0.15 ? '一次結果不代表什麼，回去看看哪幾題卡住'
               : '前後差不多')),
         delta != null && delta > 0.15 ? 'good' : '') +
-      statCard('本來會、卻答錯的題數', q2Pre + ' → ' + q2Post,
-        '這些是最值得回頭看的題目', q2Post < q2Pre ? 'good' : '') +
+      /* good 樣式要同時看 Δθ：θ 掉下去時 q2 也可能一起減少，
+         那時標綠會跟旁邊的「這次比較不順」互相矛盾。 */
+      statCard('可惜的題目',
+        (q2Pre == null || q2Post == null) ? '—' : (q2Pre + ' → ' + q2Post),
+        (q2Post == null) ? '等課後那份做完' : '這些是最值得回頭看的題目',
+        (q2Post != null && q2Pre != null && delta != null && delta > 0.15 && q2Post < q2Pre) ? 'good' : '') +
       (hasKB
         ? statCard('討論參與度', ds.kbi || 0, '把想法貼出來、也接住別人的想法')
         : statCard('討論參與度', '—', '你們班的知識建構空間還沒有討論紀錄')) +
@@ -6356,7 +6448,8 @@ function viewStudent(){
   if (!inClass) return '<div class="empty"><h3>這個帳號不在示範班級裡</h3>' +
     '<p>請用右上角的身分選單切換成班上的學生。</p></div>';
   const asgs = state.assignments.slice().sort(function(a, b){ return b.createdAt - a.createdAt; });
-  const myNotes = state.notes.filter(function(n){ return n.authorIds.indexOf(me.id) >= 0; }).length;
+  /* 同上：消費端也要依班 */
+  const myNotes = notesForViewer().filter(function(n){ return n.authorIds.indexOf(me.id) >= 0; }).length;
   const unread = notesForViewer().filter(isUnread).length;
 
   const cond = condition(k.condition);
@@ -6367,8 +6460,8 @@ function viewStudent(){
         (cond.cls ? cond.cls.replace('sc', 'sc-') : 'ink-4') + ')">' +
         '<div class="eyebrow">這節課陪你的夥伴</div>' +
         '<h3 style="margin-top:4px">' + esc(cond.name) + '</h3>' +
-        '<p class="small" style="margin-top:6px">' + esc(cond.frame) + '</p>' +
-        '<p class="muted small">它不會告訴你答案，也不會說你對或錯。每一題最多可以跟它說 ' +
+        '<p class="small cond-card-body" style="margin-top:6px">' + esc(cond.frame) + '</p>' +
+        '<p class="muted small cond-card-foot">它不會告訴你答案，也不會說你對或錯。每一題最多可以跟它說 ' +
         ((state.settings && state.settings.maxTurns) || MAX_TURNS) + ' 次話。</p></div>'
       /* 四條件的卡片結構要逐項對位：同一條左邊框、eyebrow、h3、兩段 p。
          少一個 h3、少一條邊條，卡片高度就不同，底下的統計卡與作業清單
@@ -6378,9 +6471,9 @@ function viewStudent(){
       : '<div class="card card-p" style="margin-bottom:16px;border-left:3px solid var(--ink-4)">' +
         '<div class="eyebrow">這節課的進行方式</div>' +
         '<h3 style="margin-top:4px">我的筆記</h3>' +
-        '<p class="small" style="margin-top:6px">這節課你自己讀、自己想。' +
+        '<p class="small cond-card-body" style="margin-top:6px">這節課你自己讀、自己想。' +
         '這一頁有一塊「我的筆記」，把想到的、卡住的地方寫下來。</p>' +
-        '<p class="muted small">筆記只有你和老師看得到，不會打分數。' +
+        '<p class="muted small cond-card-foot">你寫的字老師之後看得到，不會拿來打分數。' +
         '一題一頁，換題會換新的。</p></div>') +
     (needPre ? '<div class="card card-p" style="margin-bottom:16px;border-left:3px solid var(--warn)">' +
       '<div class="row" style="justify-content:space-between"><span class="small">還沒填課前問卷。</span>' +
@@ -6434,8 +6527,33 @@ function viewStudent(){
     '系統會把它整理出來變成全班的共同問題，貼到知識建構空間，讓大家一起把它想清楚。</p></div></div>';
 }
 
+/* 「交過卷」——純存在檢查。流程與統計用這個就夠了。 */
 function submitted(aid, sid){
   return state.submissions.some(function(s){ return s.aid === aid && s.sid === sid; });
+}
+
+/* 這份派題他實際作答了幾題（選擇題有選、建構反應題有寫）。 */
+function answeredCount(aid, sid){
+  return state.responses.filter(function(r){
+    return r.aid === aid && r.sid === sid &&
+           (r.choice != null || (r.text && String(r.text).trim()));
+  }).length;
+}
+
+/* 可以打開答案卡了嗎。
+   `submitted()` 是純存在檢查——只要有一筆 submission，即使 0 題作答，
+   前測與後測的完整正解都會攤開。而前後測是同一份題本、教室裡的平板螢幕
+   是公開的，所以這是測驗安全問題，不是體驗問題。
+   門檻用「實際作答比例」而不是「有沒有那一筆紀錄」。 */
+function keyUnlocked(aid, sid){
+  const a = getAssignment(aid);
+  if (!a) return false;
+  if (!submitted(aid, sid)) return false;
+  const total = a.itemIds.length;
+  if (!total) return false;
+  const ratio = (state.settings && state.settings.keyUnlockRatio != null)
+    ? state.settings.keyUnlockRatio : 0.5;
+  return answeredCount(aid, sid) / total >= ratio;
 }
 
 /* --- 作答 --- */
@@ -6525,8 +6643,10 @@ function viewResult(aid){
      前半在上面那道門檻之後看似冗餘，但它是日後放寬門檻時的第二道保險，成本為零。
      四象限、星等與「可惜的題目 → 全班正在討論這題」都保留：
      它們只需要題號，不洩題，而那正是讓孩子回去重讀的動機來源。 */
-  const keyLocked = !submitted(aid, me.id) ||
-                    (aid === 'a-pre' && !submitted('a-post', me.id));
+  /* 用實際作答比例當門檻，不是「有沒有那筆 submission」。
+     前測的正解另外要等後測也真的作答過才開（同一份題本）。 */
+  const keyLocked = !keyUnlocked(aid, me.id) ||
+                    (aid === 'a-pre' && !keyUnlocked('a-post', me.id));
   const diag = diagnose(state, aid);
   const mine = state.responses.filter(function(r){ return r.aid === aid && r.sid === me.id; });
   const mc = mine.filter(function(r){ return r.correct !== null && r.correct !== undefined; });
@@ -6540,14 +6660,19 @@ function viewResult(aid){
     '<div class="grid g4" style="margin-bottom:16px">' +
       /* 分母是他實際作答的題數（缺答現在寫 null、不進 mc）。
        不講清楚的話，只答一題的孩子會看到「1 / 1」而更困惑。 */
-    statCard('選擇題答對', right + ' / ' + mc.length,
-      (function(){
-        const total = a.itemIds.map(getItem).filter(function(i){ return i && i.type === 'mc'; }).length;
-        const miss = total - mc.length;
-        return pct(right / Math.max(1, mc.length)) + (miss ? '　另外 ' + miss + ' 題沒有作答' : '');
-      })()) +
-      statCard('我這次的閱讀力', ps ? readingStars(ps.theta, diag.meanTheta) : '—',
-        ps ? '和所有做過的同學比起來的位置' : '需要更多人完成') +
+    /* 一題都沒作答時不要印「0 / 0　0%」，也不要餵 readingStars——
+       那會憑空給出 ★★★☆☆。太少就明說太少。 */
+    (mc.length
+      ? statCard('選擇題答對', right + ' / ' + mc.length,
+          (function(){
+            const total = a.itemIds.map(getItem).filter(function(i){ return i && i.type === 'mc'; }).length;
+            const miss = total - mc.length;
+            return pct(right / Math.max(1, mc.length)) + (miss ? '　另外 ' + miss + ' 題沒有作答' : '');
+          })())
+      : statCard('選擇題答對', '—', '這一次作答的題目太少')) +
+      statCard('我這次的閱讀力', (ps && mc.length) ? readingStars(ps.theta, diag.meanTheta) : '—',
+        !mc.length ? '這一次作答的題目太少，畫不出來'
+                   : (ps ? '和所有做過的同學比起來的位置' : '需要更多人完成')) +
       statCard('可惜的題目', ps ? ps.q[2] : '—', '這幾題你其實讀得懂，只是這次沒答對') +
       statCard('厲害的題目', ps ? ps.q[1] : '—', '這幾題比較難，你答對了', 'good') +
     '</div>' +
@@ -6918,17 +7043,17 @@ function viewAboutStudent(){
     (aboutCondition() === 'control'
       ? '<div class="card card-p">' +
           '<h3>你自己的筆記</h3>' +
-          '<p class="lead" style="margin-top:8px">這節課你自己讀、自己想。' +
+          '<p class="lead about-frame" style="margin-top:8px">這節課你自己讀、自己想。' +
           '這一頁有一塊「我的筆記」，把你想到的、卡住的地方寫下來。</p>' +
         '</div>'
       : '<div class="card card-p">' +
           '<h3>你旁邊的夥伴</h3>' +
-          '<p class="lead" style="margin-top:8px">' +
+          '<p class="lead about-frame" style="margin-top:8px">' +
           esc(condition(aboutCondition()).frame) + '</p>' +
         '</div>') +
     '<div class="card card-p">' +
       '<h3>你寫的東西會怎麼被用</h3>' +
-      '<p class="lead" style="margin-top:8px">你在這裡寫的字、標記的句子' +
+      '<p class="lead about-use" style="margin-top:8px">你在這裡寫的字、標記的句子' +
       (aboutCondition() === 'control' ? '' : '、跟夥伴說的話') + '，' +
       '老師之後看得到，這是為了知道你怎麼讀，不會拿來打分數。' +
       '研究整理的時候會把名字拿掉。你隨時可以跟老師說你不想繼續。</p>' +
@@ -7441,7 +7566,11 @@ function aalNotePane(it){
     '</div>' +
     /* 三句，與 AI 面板的 pane-foot 逐句對位（字數落差 10% 以內）。
        第一句不要與 textarea 的 placeholder 逐字重複。 */
-    '<p class="muted small pane-foot" style="margin-top:8px">這一頁只有你自己看得到，不是要交出去的答案。' +
+    /* 第一句原本是「這一頁只有你自己看得到」，而第三句是「你寫的字老師
+       之後看得到」——同一段話直接互相否定，而且這個不實承諾只落在對照組
+       （三個 AI 組的對位段落沒有）。這是對十歲受試者的知情同意內容。
+       不能靠刪掉第三句修：那會把不實承諾留下來，還破壞三句逐句對位。 */
+    '<p class="muted small pane-foot" style="margin-top:8px">這一頁是給你整理想法用的，不是要交出去的答案。' +
     '沒有寫得對不對的問題，想到什麼就寫什麼。' +
     '你寫的字老師之後看得到，不會拿來打分數。</p>' +
     '</div></div>';

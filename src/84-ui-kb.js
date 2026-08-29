@@ -352,7 +352,9 @@ function openNoteEditor(o){
 
 function renderEditor(opts){
   const parent = EDIT.buildOn ? getNote(EDIT.buildOn) : null;
-  const others = state.notes.filter(function(n){ return n.id !== EDIT.id; });
+  /* 引用清單同樣不可跨班——跨班引用會在 SNA 裡建出不存在的連結，
+     而且會讓對照組讀到三個 AI 組的貼文標題。 */
+  const others = notesForViewer().filter(function(n){ return n.id !== EDIT.id; });
   modal(
     '<div class="modal-h"><h3>' + (EDIT.id ? '編輯貼文' : (EDIT.kind === 'rise' ? '建立躍升貼文' : (parent ? '延伸：' + esc(parent.title) : '貼一則新想法'))) + '</h3>' +
     '<button class="btn sm ghost" data-act="close-modal">關閉</button></div>' +
@@ -378,10 +380,25 @@ function renderEditor(opts){
     '<button class="btn sm" data-act="seg-add">＋ 再加一個支架段落</button></div>' +
     '<div class="field"><label for="nkw">關鍵詞（用、分隔）</label>' +
       '<input id="nkw" type="text" value="' + esc(EDIT.keywords) + '" placeholder="伏筆、線索、證據"></div>' +
-    '<div class="field"><label for="nauth">共同作者</label>' +
-      '<select id="nauth" multiple size="4">' + state.users.filter(function(u){ return u.role !== 'admin'; }).map(function(u){
-        return '<option value="' + u.id + '"' + (EDIT.authorIds.indexOf(u.id) >= 0 ? ' selected' : '') + '>' + esc(u.name) + '</option>';
-      }).join('') + '</select><span class="muted small">按住 Ctrl／⌘ 可以多選。知識建構鼓勵共同署名。</span></div>' +
+    /* 共同作者：核取方塊，不是 <select multiple>。
+       原生 multiple select 在不按 Ctrl／⌘ 時單點會「取代」整個選取集合——
+       平板觸控與鍵盤使用者點第二個名字就會把自己刪掉，而 canEdit 要求
+       本人在 authorIds 裡，於是他再也編輯不回來。核取方塊沒有這個行為。
+       名單只列同班同學：班級＝實驗條件，跨班共同署名會同時污染兩個條件的
+       知識建構依變項。本人固定顯示、不可取消。 */
+    (function(){
+      const me = currentUser();
+      const mates = ((isTeacher() ? currentClass() : classOfStudent(me.id)) || {studentIds:[]}).studentIds || [];
+      const pick = mates.filter(function(sid){ return sid !== me.id; });
+      return '<div class="field"><span class="lbl">共同作者</span>' +
+        '<p class="muted small" style="margin:2px 0 6px">' + esc(userName(me.id)) +
+        '（你）一定會列在作者裡。要一起署名的同學再勾起來。</p>' +
+        '<div class="authpick" role="group" aria-label="共同作者">' + pick.map(function(sid){
+          return '<label class="opt"><input type="checkbox" data-act="auth-pick" value="' + sid + '"' +
+            (EDIT.authorIds.indexOf(sid) >= 0 ? ' checked' : '') + '>' +
+            '<span>' + esc(userName(sid)) + '</span></label>';
+        }).join('') + '</div></div>';
+    })() +
     '<div class="field"><label for="nref">引用其他貼文</label>' +
       '<select id="nref" style="width:100%"><option value="">（不引用）</option>' +
       others.map(function(n){ return '<option value="' + n.id + '">' + esc(n.title) + ' — ' + esc(noteAuthors(n)) + '</option>'; }).join('') +
@@ -396,8 +413,11 @@ function renderEditor(opts){
 function collectEditor(){
   const t = $('#ntitle'); if (t) EDIT.title = t.value;
   const k = $('#nkw'); if (k) EDIT.keywords = k.value;
-  const a = $('#nauth');
-  if (a) EDIT.authorIds = Array.prototype.slice.call(a.selectedOptions).map(function(o){ return o.value; });
+  /* 本人恆在作者名單裡，而且排第一。少了這一行，孩子一次誤點就把
+     自己的貼文永久交給別人（canEdit 需要本人在名單內，沒有復原路徑）。 */
+  const me = currentUser().id;
+  const picked = $$('[data-act="auth-pick"]:checked').map(function(el){ return el.value; });
+  EDIT.authorIds = [me].concat(picked.filter(function(x){ return x !== me; }));
   $$('[data-act="seg-text"]').forEach(function(el){ EDIT.segs[+el.dataset.i].text = el.value; });
   const r = $('#nref'), q = $('#nquote');
   if (r && r.value && q && q.value.trim()){

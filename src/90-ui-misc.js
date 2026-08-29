@@ -187,17 +187,17 @@ function viewAboutStudent(){
     (aboutCondition() === 'control'
       ? '<div class="card card-p">' +
           '<h3>你自己的筆記</h3>' +
-          '<p class="lead" style="margin-top:8px">這節課你自己讀、自己想。' +
+          '<p class="lead about-frame" style="margin-top:8px">這節課你自己讀、自己想。' +
           '這一頁有一塊「我的筆記」，把你想到的、卡住的地方寫下來。</p>' +
         '</div>'
       : '<div class="card card-p">' +
           '<h3>你旁邊的夥伴</h3>' +
-          '<p class="lead" style="margin-top:8px">' +
+          '<p class="lead about-frame" style="margin-top:8px">' +
           esc(condition(aboutCondition()).frame) + '</p>' +
         '</div>') +
     '<div class="card card-p">' +
       '<h3>你寫的東西會怎麼被用</h3>' +
-      '<p class="lead" style="margin-top:8px">你在這裡寫的字、標記的句子' +
+      '<p class="lead about-use" style="margin-top:8px">你在這裡寫的字、標記的句子' +
       (aboutCondition() === 'control' ? '' : '、跟夥伴說的話') + '，' +
       '老師之後看得到，這是為了知道你怎麼讀，不會拿來打分數。' +
       '研究整理的時候會把名字拿掉。你隨時可以跟老師說你不想繼續。</p>' +

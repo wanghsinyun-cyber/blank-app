@@ -55,9 +55,13 @@ function discourseStats(ids){
                  reads:0, chars:0, scaffolds:{}, terms:{}, epiSum:0, epiN:0,
                  revisions:0, keywords:0, threads:{}};
   });
-  const total = state.notes.length;
+  /* 分母必須與 ids 同範圍。用全站 76 則當分母、分子只算本班的閱讀，
+     每個人的閱讀率會被系統性壓到約 1/3.6——而 readRate 佔 kbi 權重 10%，
+     那是依變項內部的跨範圍污染。 */
+  const scoped = notesOfClass(ids);
+  const total = scoped.length;
 
-  state.notes.forEach(function(n){
+  scoped.forEach(function(n){
     const lv = epistemicLevel(n);
     const t = noteFullText(n);
     const terms = domainTermsIn(t);
@@ -117,7 +121,8 @@ function snaGraph(){
   const ids = klass.studentIds.slice();
   const idx = {}; ids.forEach(function(id, i){ idx[id] = i; });
   const edges = {};
-  state.notes.forEach(function(n){
+  /* 只看本班的貼文——跨班的 buildOn 不該進這張網 */
+  notesOfClass(ids).forEach(function(n){
     if (!n.buildOn) return;
     const p = getNote(n.buildOn); if (!p) return;
     (n.authorIds || []).forEach(function(a){
@@ -143,8 +148,9 @@ function snaGraph(){
 }
 
 /* --- 詞彙成長：領域詞彙首次出現的累積曲線 --- */
-function vocabGrowth(){
-  const ns = state.notes.slice().sort(function(a, b){ return a.createdAt - b.createdAt; });
+function vocabGrowth(notes){
+  const ns = (notes || notesOfClass(kbClass().studentIds)).slice()
+    .sort(function(a, b){ return a.createdAt - b.createdAt; });
   const seen = {}; const pts = [];
   ns.forEach(function(n){
     domainTermsIn(noteFullText(n)).forEach(function(w){ seen[w] = true; });
@@ -227,18 +233,23 @@ function median(a){
 
 /* --- 社群層級摘要 --- */
 function communitySummary(){
-  const ds = discourseStats();
+  /* 全部收在同一個班級範圍內。原本分子用 state.notes（四班 76 則），
+     而頁首寫著「這一頁只涵蓋示範班」、隔壁 SNA 分頁對「延伸」給出 15——
+     同一個儀表板對同一件事給兩個答案。 */
+  const ids = kbClass().studentIds;
+  const scoped = notesOfClass(ids);
+  const ds = discourseStats(ids);
   const g = snaGraph();
-  const vg = vocabGrowth();
-  const roots = state.notes.filter(function(n){ return !n.buildOn; });
+  const vg = vocabGrowth(scoped);
+  const roots = scoped.filter(function(n){ return !n.buildOn; });
   const withBuild = roots.filter(function(n){ return childrenOf(n.id).length > 0; });
-  const rise = state.notes.filter(function(n){ return n.kind === 'rise'; });
-  const epi = state.notes.map(epistemicLevel);
+  const rise = scoped.filter(function(n){ return n.kind === 'rise'; });
+  const epi = scoped.map(epistemicLevel);
   return {
-    notes: state.notes.length,
-    buildOns: state.notes.filter(function(n){ return n.buildOn; }).length,
+    notes: scoped.length,
+    buildOns: scoped.filter(function(n){ return n.buildOn; }).length,
     riseAbove: rise.length,
-    views: state.views.length,
+    views: state.views.filter(function(v){ return (v.classId || kbClass().id) === kbClass().id; }).length,
     threads: roots.length,
     threadUptake: roots.length ? withBuild.length / roots.length : 0,
     contributors: ds.filter(function(s){ return s.notes > 0; }).length,

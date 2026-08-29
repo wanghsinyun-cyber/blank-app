@@ -130,6 +130,14 @@ function scaffold(id){ return SCAFFOLDS.find(function(s){ return s.id === id; })
 function scaffoldLabel(id){ const s = scaffold(id); return s ? s.label : ''; }
 
 function notesOfView(vid){ return state.notes.filter(function(n){ return n.viewId === vid; }); }
+/* 某一群學生所屬班級的貼文。分析端的分子與分母都要用同一個範圍——
+   分母用全站、分子只算本班，閱讀率會被系統性壓低。 */
+function notesOfClass(ids){
+  const cid = ids && ids.length ? (classOfStudent(ids[0]) || {}).id : null;
+  const ok = {};
+  state.views.forEach(function(v){ if ((v.classId || kbClass().id) === cid) ok[v.id] = 1; });
+  return state.notes.filter(function(n){ return ok[n.viewId]; });
+}
 function childrenOf(nid){ return state.notes.filter(function(n){ return n.buildOn === nid; }); }
 function noteText(n){
   return (n.segs || []).map(function(s){ return s.text; }).join('\n');
@@ -162,7 +170,10 @@ function createNote(o){
   if (isImpersonating()) return null;
   const n = {
     id: uid('n'), viewId: o.viewId, title: o.title || '（未命名）',
-    segs: o.segs || [], authorIds: o.authorIds || [currentUser().id],
+    segs: o.segs || [],
+    /* 空陣列是 truthy，所以 `o.authorIds || [me]` 永遠不會補回本人——
+       署名會被靜默清空，而貼文數、延伸數、KB 指數都掛在 authorIds 上。 */
+    authorIds: (o.authorIds && o.authorIds.length) ? o.authorIds : [currentUser().id],
     keywords: o.keywords || [], createdAt: Date.now(), editedAt: null,
     x: o.x != null ? o.x : 60 + Math.round(Math.random() * 400),
     y: o.y != null ? o.y : 60 + Math.round(Math.random() * 300),
@@ -265,21 +276,42 @@ function bridgeExists(aid, iid){
   });
 }
 
-function buildInquiryPrompt(pi, diag){
+function buildInquiryPrompt(pi, diag, klass){
   const it = pi.item;
-  const n2 = pi.q[2], n1 = pi.q[1];
   const dis = pi.topDistractor != null ? it.options[pi.topDistractor] : null;
   const mis = pi.misCode ? MISCONCEPTIONS.find(function(m){ return m.id === pi.misCode; }) : null;
+  /* 人數必須跟名單同一個範圍。原本 n2/n1 是四班全樣本（第 13 題 21 與 16），
+     而名單已依班過濾只印 3 個名字——21+16=37 大於全班 24 人，孩子自己數得出矛盾。 */
+  const inClass = {};
+  ((klass || currentClass() || kbClass()).studentIds || []).forEach(function(s){ inClass[s] = 1; });
+  const only = function(arr){ return (arr || []).filter(function(s){ return inClass[s]; }).length; };
   const lines = [];
   /* 這段字是貼給全班讀的貼文本文，不是教師報表。
      兩個必須避免的東西：
      (1) 寫死「前測」——函式明明收到了 diag，卻在後測的橋接上印「前測」；
      (2) 「落在迷思象限／本來應該答得出來」——那是當著全班的面
          對特定幾個孩子貼缺陷標籤，跟這個平台自己寫的知識建構原則相反。 */
-  lines.push('「' + diag.assignment.title + '」第 ' + it.no + ' 題（' + textTitle(it.unit) + '）有 ' +
-    n2 + ' 位同學的讀法跟答案不一樣。我們一起看看，是哪一句話讓大家想得不同。');
-  if (dis) lines.push('這些同學裡最多人選的是「' + dis + '」（' + pi.topDistractorN + ' 人）。');
-  if (mis) lines.push('這常常跟「' + mis.name + '」有關：' + mis.desc);
+  const n2 = only(pi.q2Students), n1 = only(pi.q1Students);
+  /* 這一題本班沒有人讀法不同時，整句不要輸出——原本只有 n1 有守門。 */
+  if (n2){
+    lines.push('「' + diag.assignment.title + '」第 ' + it.no + ' 題（' + textTitle(it.unit) + '）有 ' +
+      n2 + ' 位同學的讀法跟答案不一樣。我們一起看看，是哪一句話讓大家想得不同。');
+    /* topDistractorN 同樣是全樣本，一起改成本班計數——
+       只改兩個數字會留下第三個。 */
+    if (dis){
+      const dn = (pi.q2Students || []).filter(function(s){
+        if (!inClass[s]) return false;
+        const r = state.responses.find(function(x){
+          return x.aid === diag.assignment.id && x.sid === s && x.iid === it.id; });
+        return r && r.choice === pi.topDistractor;
+      }).length;
+      if (dn) lines.push('這些同學裡最多人選的是「' + dis + '」（' + dn + ' 人）。');
+    }
+    if (mis) lines.push('這常常跟「' + mis.name + '」有關：' + mis.desc);
+  } else {
+    lines.push('「' + diag.assignment.title + '」第 ' + it.no + ' 題（' + textTitle(it.unit) +
+      '）值得我們一起再看一次。');
+  }
   if (n1) lines.push('另外有 ' + n1 + ' 位同學這一題讀得很穩，請他們先把自己的想法貼出來，讓大家看得到不同的思路。');
   lines.push('請大家不要只寫答案。先說你原本怎麼想，再說你現在覺得哪裡需要修正，並且盡量舉出一個能檢驗的例子。');
   return lines.join('\n');
@@ -315,7 +347,7 @@ function createBridgeView(diag, pi){
     authorIds: [k.teacherId],
     keywords: it.tags || [],
     itemRef: {aid: diag.assignment.id, iid: it.id},
-    segs: [{s: 's2', text: buildInquiryPrompt(pi, diag)}],
+    segs: [{s: 's2', text: buildInquiryPrompt(pi, diag, k)}],
     x: 60, y: 40
   });
   // 在這一題讀得比較穩的同學，請他們先說自己怎麼想
