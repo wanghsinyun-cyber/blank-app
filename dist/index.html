@@ -856,6 +856,86 @@ function crText(it, s, mode, rnd){
 /* ==========================================================================
    示範資料建構
    ========================================================================== */
+/* 把示範班的白板複製給其餘班級。就地改寫傳入的 views／notes 陣列。
+   remap 規則：
+   ‧ 視圖與貼文取得新 id，viewId／links／buildOn／contains／refs.noteId 全部改指新 id
+   ‧ 作者依「在班上的位次」對應到目標班的同一位次（老師仍是該班導師）
+   ‧ 閱讀紀錄依目標班學生的參與傾向重擲
+   ‧ 依 dropPlan 丟掉幾則葉節點，讓各班的參與量不同 */
+function state_cloneBoards(views, notes, students, classes, srcStudents, dropPlan, rnd, now, DAY){
+  const srcClassId = srcStudents.length ? srcStudents[0].classId : 'c-1';
+  const srcViews = views.slice();
+  const srcNotes = notes.slice();
+
+  /* 葉節點＝沒有人延伸它、沒有被躍升收攏、也沒有被引用，而且不是共同問題錨點 */
+  const referenced = {};
+  srcNotes.forEach(function(n){
+    if (n.buildOn) referenced[n.buildOn] = 1;
+    (n.contains || []).forEach(function(c){ referenced[c] = 1; });
+    (n.refs || []).forEach(function(r){ if (r.noteId) referenced[r.noteId] = 1; });
+  });
+  /* 共同問題錨點與躍升貼文一律不丟：那兩種是知識建構的結構標記，
+     少一則會讓某些班在論述指標上看起來天生就少一種行為。 */
+  const leaves = srcNotes.filter(function(n){
+    return !referenced[n.id] && n.kind !== 'problem' && n.kind !== 'rise';
+  }).map(function(n){ return n.id; });
+
+  classes.forEach(function(k){
+    if (k.id === srcClassId) return;
+    const tgt = students.filter(function(s){ return s.classId === k.id; });
+    if (!tgt.length) return;
+
+    /* 這一班要丟掉哪幾則葉節點——固定種子，每次重建結果一致 */
+    const drop = {};
+    const nDrop = Math.min(dropPlan[k.id] || 0, leaves.length);
+    const pool = leaves.slice();
+    for (let d = 0; d < nDrop; d++){
+      pool.splice(Math.floor(rnd() * pool.length), 1).forEach(function(id){ drop[id] = 1; });
+    }
+
+    const vMap = {}, nMap = {};
+    srcViews.forEach(function(v, i){ vMap[v.id] = 'v-' + k.id + '-' + (i + 1); });
+    srcNotes.forEach(function(n, i){ if (!drop[n.id]) nMap[n.id] = 'n-' + k.id + '-' + (i + 1); });
+
+    function author(id){
+      if (String(id).indexOf('u-s') !== 0) return k.teacherId;   // 老師 → 該班導師
+      const idx = srcStudents.findIndex(function(s){ return s.id === id; });
+      return idx >= 0 && tgt[idx] ? tgt[idx].id : k.teacherId;
+    }
+
+    srcViews.forEach(function(v){
+      views.push(Object.assign({}, v, {
+        id: vMap[v.id], classId: k.id,
+        links: (v.links || []).map(function(l){ return vMap[l]; }).filter(Boolean)
+      }));
+    });
+
+    srcNotes.forEach(function(n){
+      if (drop[n.id]) return;
+      const c = Object.assign({}, n, {
+        id: nMap[n.id],
+        viewId: vMap[n.viewId],
+        authorIds: (n.authorIds || []).map(author),
+        buildOn: n.buildOn ? (nMap[n.buildOn] || null) : null,
+        contains: (n.contains || []).map(function(x){ return nMap[x]; }).filter(Boolean),
+        refs: (n.refs || []).map(function(r){
+          return Object.assign({}, r, {noteId: nMap[r.noteId]});
+        }).filter(function(r){ return r.noteId; }),
+        segs: (n.segs || []).map(function(g){ return Object.assign({}, g); }),
+        annotations: (n.annotations || []).map(function(a){
+          return Object.assign({}, a, {id: a.id + '-' + k.id, authorId: author(a.authorId)});
+        }),
+        reads: []
+      });
+      tgt.forEach(function(s){
+        const p = 0.2 + 0.65 * s.engage;
+        if (c.authorIds.indexOf(s.id) < 0 && rnd() < p) c.reads.push(s.id);
+      });
+      notes.push(c);
+    });
+  });
+}
+
 function buildSeedState(){
   // 亂數用固定種子 → 作答矩陣與貼文結構每次載入完全一致（可重現）；
   // 只有時間戳記跟著今天走，示範資料看起來才不會過期。
@@ -1155,6 +1235,19 @@ function buildSeedState(){
   /* 註記（annotation）示範 */
   notes[4].annotations.push({id:'an-1', authorId:'u-t1', text:'「遮起來看結尾成不成立」是很好的檢驗方法——你們自己想出了一個可以重複使用的判準。', at:now - 6*DAY});
   notes[8].annotations.push({id:'an-2', authorId:S['陳柏宇'], text:'那如果一句話同時支撐好幾段呢？我想在躍升貼文裡補這一點。', at:now - 4*DAY});
+
+  /* --- 把示範白板複製到其餘三個班 ---
+     白板依班級隔離之後，只種示範班會讓另外三個條件的知識建構空間天生是空的。
+     知識建構參與度是依變項之一，空白板本身就成了條件間的介面差異，
+     示範畫面也會讓人誤以為對照組沒有這個環節。
+
+     但四塊一模一樣的白板同樣不可信——雙軌儀表板會呈現四個完全相同的
+     KB 側寫。所以複製時保留結構、依班改變參與量：用同一顆固定種子
+     丟掉幾則「葉節點」貼文（沒有人延伸、沒有被收攏、也沒有被引用的那些），
+     再各自重擲閱讀紀錄。這樣四個班的貼文數、延伸數與閱讀廣度都不同，
+     而想法串的結構完整。 */
+  const CLONE_DROP = {'c-2': 2, 'c-3': 4, 'c-4': 3};   // 各班要丟掉幾則葉節點
+  state_cloneBoards(views, notes, students, classes, kbStudents, CLONE_DROP, rnd, now, DAY);
 
   const st = {
     version: STATE_VERSION,
