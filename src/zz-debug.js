@@ -138,7 +138,22 @@
 
   var i = 0;
   function step(){
-    if (i >= stages.length){ log('=== ALL STAGES DONE ==='); return; }
+    if (i >= stages.length){
+      /* 跑完要把 state 還原。這一趟會刻意刪掉 u-s3 與 u-s75 的交卷紀錄
+         （'viewAaL (unsubmitted)' 與 'viewAaL control cond' 兩關），而且
+         那些刪除會跟著 save() 落到 localStorage——於是「跑過巡檢」這件事
+         本身會讓後面每一次載入的 ANCOVA 少掉兩個受試者，assertSeedCanary
+         報 df2=89、F=5.03，看起來像剛才那批改動造成的回歸。
+         實際踩過兩次，每次都要花時間才排除得掉。
+         這一支上面自己寫過：驗證工具製造假陽性比沒有工具更糟。 */
+      try {
+        state = buildSeedState(); save();
+        if (typeof renderShell === 'function') renderShell();
+        log('   （已還原示範資料）');
+      } catch (e){ log('   還原失敗：' + (e && e.message)); }
+      log('=== ALL STAGES DONE ===');
+      return;
+    }
     var s = stages[i++];
     log('▶ ' + s[0]);
     var t0 = performance.now();
@@ -884,5 +899,92 @@ window.assertBundleMerge = function(){
   save();
   const r = {pass: fails.length === 0, fails: fails, 搬走的列數: nAway};
   console.log('[assertBundleMerge]', r);
+  return r;
+};
+
+/* ==========================================================================
+   手寫筆畫的等比換算
+   第 7 輪把畫布高度從 JS 的固定像素改成 CSS 的 11rem 之後，寬與高就可以
+   各自單獨變動：改字級只動高度、平板轉向只動寬度。舊碼用 kx=w/p.w、
+   ky=h/p.h 兩個獨立比例換算，於是 100%→175% 會把已經寫好的字縱向拉長
+   75%，橫轉直會把它橫向壓成 75%（筆寬還只乘 kx，跟著變細）。
+   手寫是不會注音打字的孩子在兩題建構反應題上唯一的作答通道，而變形會被
+   padPayload 烘進交出去的那一份——評閱者看到的就是被拉長的中文字。
+   這一支畫一筆，然後掃 100%→125%→150%→175%→100% 與一次寬度變化，
+   比對筆畫外接框的長寬比。
+   console 一行：assertPadAspect()
+   ========================================================================== */
+window.assertPadAspect = function(){
+  const fails = [];
+  const realRole = state.ui.role, realHash = location.hash;
+  const realFs = document.documentElement.style.getPropertyValue('--fs');
+
+  /* 找一位對照組學生（版面最單純），開到有計算紙的作答頁 */
+  const k = state.classes.find(function(c){ return c.condition === 'control'; });
+  const sid = k ? k.studentIds[0] : state.classes[0].studentIds[0];
+  const had = submitted('a-post', sid);
+  if (had) state.submissions = state.submissions.filter(function(s){ return !(s.aid === 'a-post' && s.sid === sid); });
+  state.ui.role = sid; renderShell();
+  if (typeof AAL !== 'undefined') AAL = null;
+  if (typeof clearPads === 'function') clearPads();
+  location.hash = '#/aal/a-post'; render();
+  /* 計算紙只長在建構反應題上，題本第一題是選擇題——要先翻到 CR 那一題。 */
+  if (typeof AAL !== 'undefined' && AAL){
+    const cri = AAL.items.findIndex(function(x){ return x.type === 'cr'; });
+    if (cri >= 0 && AAL.idx !== cri){ AAL.idx = cri; render(); }
+  }
+
+  const cv = document.querySelector('canvas.pad[data-pad]');
+  if (!cv){
+    if (had) state.submissions.push({aid:'a-post', sid:sid, at:Date.now()});
+    state.ui.role = realRole; renderShell(); location.hash = realHash || '#/teacher'; render();
+    const r = {pass:false, fails:['作答頁上找不到計算紙']};
+    console.log('[assertPadAspect]', r); return r;
+  }
+  const id = cv.dataset.pad;
+
+  /* 畫一筆明確不是正方形的折線（外接框 3:1） */
+  PADS[id].strokes = [{color:'ink', width:2, pts:[[20,20],[140,20],[140,60],[20,60]]}];
+  PADS[id].w = cv.clientWidth; PADS[id].h = cv.clientHeight;
+  function aspect(){
+    const pts = PADS[id].strokes[0].pts;
+    const xs = pts.map(function(p){ return p[0]; }), ys = pts.map(function(p){ return p[1]; });
+    const w = Math.max.apply(null, xs) - Math.min.apply(null, xs);
+    const h = Math.max.apply(null, ys) - Math.min.apply(null, ys);
+    return h ? w / h : 0;
+  }
+  function inside(){
+    return PADS[id].strokes[0].pts.every(function(p){
+      return p[0] >= -1 && p[1] >= -1 && p[0] <= cv.clientWidth + 1 && p[1] <= cv.clientHeight + 1;
+    });
+  }
+  const base = aspect();
+  const rows = [{step:'起始', aspect:+base.toFixed(3), 在畫布內:inside()}];
+
+  /* 字級掃描：畫布高度跟著 11rem 走，寬度不動 */
+  ['1.25', '1.5', '1.75', '1'].forEach(function(fs){
+    document.documentElement.style.setProperty('--fs', fs);
+    if (typeof syncPads === 'function') syncPads();
+    const a = aspect();
+    rows.push({step:'字級 ' + fs, aspect:+a.toFixed(3), 在畫布內:inside()});
+    if (Math.abs(a - base) > 0.02) fails.push('字級 ' + fs + '：長寬比 ' + a.toFixed(3) + '，起始是 ' + base.toFixed(3));
+    if (!inside()) fails.push('字級 ' + fs + '：筆畫跑到畫布外');
+  });
+  document.documentElement.style.setProperty('--fs', realFs || '1');
+
+  /* 只改寬度（模擬平板轉向）：直接改 PADS 的基準寬再走一次 size() */
+  PADS[id].w = cv.clientWidth * 1.4;             // 假裝原本比較寬
+  if (typeof syncPads === 'function') syncPads();
+  const a2 = aspect();
+  rows.push({step:'寬度變窄', aspect:+a2.toFixed(3), 在畫布內:inside()});
+  if (Math.abs(a2 - base) > 0.02) fails.push('寬度變窄：長寬比 ' + a2.toFixed(3) + '，起始是 ' + base.toFixed(3));
+  if (!inside()) fails.push('寬度變窄：筆畫跑到畫布外');
+
+  if (typeof clearPads === 'function') clearPads();
+  if (had) state.submissions.push({aid:'a-post', sid:sid, at:Date.now()});
+  state.ui.role = realRole; renderShell();
+  location.hash = realHash || '#/teacher'; render();
+  const r = {pass: fails.length === 0, fails: fails, rows: rows};
+  console.log('[assertPadAspect]', r);
   return r;
 };

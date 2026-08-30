@@ -156,6 +156,10 @@ function render(){
     const c = document.getElementById('aalChat');
     if (c) c.scrollTop = c.scrollHeight;
   }
+  /* 缺答標記要跨重繪存活。紅框、aria-invalid 與「這一段還有 N 題沒有選」
+     原本只寫進當下的 DOM，任何一次 render() 都會把它們清掉，
+     只剩抬頭「已完成 46 / 共 47 題」——孩子被退回來卻不知道要補哪一題。 */
+  if (ROUTE.name === 'survey' && typeof surveyPaintMiss === 'function') surveyPaintMiss();
 
   if (!samePage){
     try { window.scrollTo(0, 0); } catch (e) {}
@@ -262,6 +266,9 @@ function initCanvasDrag(){
       render();
       const again = document.querySelector('.note[data-note="' + id0 + '"]');
       if (again) again.focus({preventScroll:true});
+      /* 搬完要說出來。這個動作沒有復原，而且改的是同學的貼文——
+         指標路徑至少看得到自己在拖，鍵盤路徑原本完全無聲。 */
+      toast('已經把這則貼文搬到新的位置。');
       return;
     }
     if (e.key !== 'Enter' && e.key !== ' ' && e.key !== 'Spacebar') return;
@@ -829,7 +836,18 @@ function bindEvents(){
          .passage 現在有 tabindex="0"，是中性的落腳點：Space／PageDown
          捲的是文章本身，也不會誤觸到任何一句的標記。 */
       const p = document.querySelector('.aal-text .passage') || document.getElementById('passageTitle');
-      if (p){ p.focus({preventScroll:true}); p.scrollIntoView({block:'start'}); }
+      if (p){
+        p.focus({preventScroll:true});
+        /* 原本緊接著一行無條件的 scrollIntoView({block:'start'})，把上面那段
+           註解講的事整個抵銷掉：block:'start' 會把 .passage 的上緣對齊最近
+           可捲祖先的起緣（雙欄捲 .aal-text > .card-p，單欄捲視窗），等於把
+           捲動位置歸零——他讀到第 8 段，按一次這顆鈕就回到第一段，而
+           render() 還特地把 .card-p 的 scrollTop 放進 SCROLL_KEEP 跨重繪保存。
+           只有在文章確實不在視窗裡的時候才捲，而且用 'nearest'：
+           位置在的時候，這顆鈕就只是把焦點交回文章。 */
+        const r = p.getBoundingClientRect();
+        if (r.bottom < 0 || r.top > (window.innerHeight || 0)) p.scrollIntoView({block:'nearest'});
+      }
       return; }
     if (act === 'back-to-nav'){
       const nv = document.getElementById('aalNav');
@@ -951,6 +969,13 @@ function bindEvents(){
       if (typeof DEMO_LOGS !== 'undefined' && DEMO_LOGS.length)
         DEMO_LOGS = DEMO_LOGS.filter(function(e){ return !(e.aid === aid && e.sid === me.id); });
       aalDraftDrop(aid, me.id);
+      /* 課後問卷也要一起清。不清的話，重走一次交卷之後 toast 說「接下來是
+         這節課的問卷」、replaceHash 去 #/survey/post，而 viewSurvey 讀到
+         buildDemoSurveys 種下的那一筆（demo:true），直接回「這份問卷你已經
+         送出了」——側欄沒有待填徽章，首頁提醒卡也不出現，整條路走不下去。 */
+      state.surveys = (state.surveys || []).filter(function(s){
+        return !(s.sid === me.id && s.phase === 'post'); });
+      surveyDraftDrop(me.id, 'post');
       AAL = null;
       clearPads();
       save(); go('#/aal/' + aid);
@@ -1596,8 +1621,20 @@ function submitQuizCommit(aid){
   }
   quizDraftDrop(aid, me.id);   // 交出去了，草稿不用留（落地失敗時不會走到這一行）
   QUIZ = null;
-  toast('已交卷。往下看你的個人診斷。');
-  replaceHash('#/result/' + aid);
+  /* 前測交完卷不能承諾「往下看你的個人診斷」：viewResult 的第一道門就是
+     「前測且後測還沒交」——這一刻必然成立，孩子會落在一張標題寫〈等這節課
+     做完〉的擋板上，而 toast 還在畫面上說相反的話（toast 的存活時間隨字數
+     算，這一句約 3.9 秒，兩段互相否定的訊息同時在螢幕上）。
+     這道門是刻意的（先看前測對錯，後測就不算他自己讀出來的），所以要改的是
+     承諾與落點：話講真正會發生的事，人落在看得到下一步的地方。 */
+  const isPre = aid === 'a-pre' && !submitted('a-post', me.id);
+  if (isPre){
+    toast('已交卷。逐題結果要等這節課也做完才會打開。');
+    replaceHash('#/student');
+  } else {
+    toast('已交卷。往下看你的個人診斷。');
+    replaceHash('#/result/' + aid);
+  }
 }
 
 /* --- 測試連線 --- */

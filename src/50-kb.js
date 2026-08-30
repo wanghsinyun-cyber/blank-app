@@ -477,6 +477,20 @@ function kbLockReason(u){
   if (typeof classKeyReleased === 'function' && !classKeyReleased('a-post', me.id)) return 'class';
   return null;
 }
+/* 同一把鎖只准有一份說法。原本三個入口各自寫死一組字串：側欄只認 'survey'
+   （其餘一律「測驗後開放」）、首頁左邊那張卡不分原因一律「交完卷就可以繼續」、
+   kbGate 又是第三種。交完卷也填完問卷的孩子，會在同一個畫面上讀到三種
+   互相矛盾的條件——而其中兩種他早就滿足了。十歲的孩子最合理的解讀是
+   「我的交卷沒有生效」，而全站沒有任何補交或改答路徑可以驗證。
+   badge = 側欄與統計卡的短標；line = 副標；hint = 左邊那張卡的下一步。 */
+const KB_LOCK_TEXT = {
+  pending: {badge:'測驗後開放', line:'交完卷就會打開', hint:'交完卷就可以繼續'},
+  survey:  {badge:'問卷後開放', line:'問卷填完就會打開', hint:'問卷填完就可以繼續'},
+  class:   {badge:'全班完成後開放', line:'等老師打開之後', hint:'等老師打開之後'}
+};
+function kbLockLabel(u){
+  return KB_LOCK_TEXT[kbLockReason(u)] || null;
+}
 function scaffold(id){ return SCAFFOLDS.find(function(s){ return s.id === id; }); }
 function scaffoldLabel(id){ const s = scaffold(id); return s ? s.label : ''; }
 

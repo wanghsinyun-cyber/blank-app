@@ -31,10 +31,17 @@ function kbGate(){
      在這裡讀到的東西會流向還在做的。見 kbLocked 的第三道門。 */
   if (kbLockReason(me) === 'class'){
     const left = typeof classKeyPending === 'function' ? classKeyPending('a-post', me.id) : 0;
-    return '<div class="empty"><h3>等同學都做完，這裡就會打開</h3>' +
+    /* 標題原本是「等同學都做完，這裡就會打開」，而一人一台平板時這台裝置
+       根本看不到別人交了沒有——真正會讓它打開的是老師按下那顆〈打開答案卡〉
+       （見 kbLocked 第三道門走的 classKeyReleased）。viewResult 已經改成
+       這個說法，這裡跟上，四個入口才是同一句話。
+       「還有 N 位同學還沒做完」只有在示範／共用瀏覽器上才是真的，
+       施測狀態下那個數字是名單推出來的，不是實況。 */
+    return '<div class="empty"><h3>等老師打開之後，這裡就會開</h3>' +
       '<p style="max-width:62ch">這裡放的是全班一起想的問題，裡面會直接出現這次的題目。' +
       '現在打開的話，還在作答的同學就等於先看到題目了。</p>' +
-      (left ? '<p class="muted small">還有 ' + left + ' 位同學還沒做完。</p>' : '') +
+      (left && state.demoSeed !== false
+        ? '<p class="muted small">還有 ' + left + ' 位同學還沒做完。</p>' : '') +
       '<div class="row" style="margin-top:14px">' +
       '<a class="btn primary" href="#/student">回我的作業</a>' +
       '<a class="btn" href="#/mygrowth">看我的學習軌跡</a></div></div>';
@@ -218,11 +225,26 @@ function viewKBCanvas(vid){
         '<span><i class="swatch" style="background:var(--sc-5)"></i>引用</span>' +
       '</span>' +
     '</div>' +
-    '<div class="canvas" id="canvas"><div class="canvas-inner" id="canvasInner">' +
+    /* 白板要能單純被捲。.canvas 是 33rem 高、雙軸捲動的視窗
+       （.canvas-inner 80rem×55rem），原本沒有 tabindex：鍵盤使用者唯一的
+       落腳點是貼文，而焦點一在貼文上，四個方向鍵就被 preventDefault 攔下
+       改成搬移——他沒有任何方式可以只捲動這塊畫布。 */
+    '<div class="canvas" id="canvas" tabindex="0" role="group" aria-label="這個視圖的白板">' +
+      '<div class="canvas-inner" id="canvasInner">' +
       '<svg class="edges" viewBox="0 0 1600 1100" preserveAspectRatio="none">' + edges.join('') + '</svg>' +
       notesHTML + '</div></div>' +
-    '<div class="row" style="margin-top:10px"><span class="muted small">拖曳貼文可以重新安排版面，位置會存下來。' +
-    '點一下貼文開啟完整內容、延伸與註記。</span></div>' +
+    /* 第 7 輪補的鍵盤路徑（方向鍵搬貼文、Shift 加大步距、選取模式下
+       Enter／空白鍵切換選取）在畫面上原本一個字都沒有，而方向鍵會直接
+       搬走同學的貼文、立刻落地、沒有復原。選取模式下「點一下貼文開啟
+       完整內容」這句還會變成錯的，畫面卻不變。 */
+    '<div class="row" style="margin-top:10px"><span class="muted small">' +
+    (KBSEL
+      ? '<strong>現在是選取模式</strong>：點一下貼文是選取／取消選取，不是打開它。' +
+        '用鍵盤的話，Tab 停在貼文上按 Enter 或空白鍵切換選取。'
+      : '拖曳貼文可以重新安排版面，位置會存下來。點一下貼文開啟完整內容、延伸與註記。' +
+        '用鍵盤的話，Tab 停在貼文上按 Enter 打開它；方向鍵會<strong>搬動</strong>貼文' +
+        '（按住 Shift 搬得更遠）。只想捲動白板的話，把焦點停在白板本身再按方向鍵。') +
+    '</span></div>' +
     '<div class="card" style="margin-top:16px"><div class="card-h"><h3>這個視圖的支架使用</h3></div><div class="card-p">' +
       scaffoldUsageBar(ns) + '</div></div>';
 }

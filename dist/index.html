@@ -2642,7 +2642,14 @@ function toENACsv(){
     const k = classOfStudent(e.sid);
     const d = e.turn ? dialKey[e.sid + '|' + e.iid + '|' + e.turn + '|' + (e.type === 'AI' ? 'agent' : 'student')] : null;
     const txt = (d && d.text) || e.text || '';
-    const uc = d ? d.ucode : (e.code === 'A' ? (e.proc || '') : '');
+    /* 對照組沒有 state.dialog 紀錄，dialKey 查不到；'N' 又不是 'A'，
+       於是 uc 恆為空字串，每一列對照組筆記的 FR／SI／II／EE 四欄都輸出 0——
+       ENA 因此看不到對照組的任何歷程編碼，而 62-process.js 站內那一支
+       早就對 'N' 呼叫 codeUtteranceProcess 了。舊資料沒有 e.ucode，
+       所以退回現算一次。 */
+    const uc = d ? d.ucode
+             : (e.code === 'A' ? (e.proc || '')
+             : (e.code === 'N' ? (e.ucode || codeUtteranceProcess(e.text || '')) : ''));
     /* rel_code 要的是「相對歷程編碼」（BELOW／AT／ABOVE），
        而 e.rel 是 aalLog 給每一筆事件的「距這一次入座已經幾毫秒」。
        `e.rel || …` 於是把毫秒數寫進了這一欄－－匯出檔裡
@@ -2712,7 +2719,15 @@ function toTelemetryCsv(){
     if (e.code === 'M') r.mEv.push(e);
     if (e.code === 'O') r.opts++;
     if (e.code === 'C') r.cEv.push(e);
-    if (e.type === 'ASK'){ r.turns++; if (e.sent != null) r.sent.push(e.sent); }
+    /* 對照組的一則筆記在分析上等同一次發話——64-stats.js 的 analysisDataset
+       早就是這樣收的（voiced = ASK 或 code 'N'）。這裡原本只認 ASK，
+       於是每一列對照組的 turns=0、mean_sentiment 空白，四條件的比較缺一格。
+       舊資料的 NOTE 沒有 sent，退回現算一次，與 64-stats.js 逐字對齊。 */
+    if (e.type === 'ASK' || e.code === 'N'){
+      r.turns++;
+      const s = e.sent != null ? e.sent : (e.text ? sentimentOf(e.text).score : null);
+      if (s != null) r.sent.push(s);
+    }
   });
   Object.keys(byKey).forEach(function(k){
     const r = byKey[k], kl = classOfStudent(r.sid), it = getItem(r.iid);
@@ -3678,6 +3693,20 @@ function kbLockReason(u){
   if (submitted('a-post', me.id) && !surveyOf(me.id, 'post')) return 'survey';
   if (typeof classKeyReleased === 'function' && !classKeyReleased('a-post', me.id)) return 'class';
   return null;
+}
+/* 同一把鎖只准有一份說法。原本三個入口各自寫死一組字串：側欄只認 'survey'
+   （其餘一律「測驗後開放」）、首頁左邊那張卡不分原因一律「交完卷就可以繼續」、
+   kbGate 又是第三種。交完卷也填完問卷的孩子，會在同一個畫面上讀到三種
+   互相矛盾的條件——而其中兩種他早就滿足了。十歲的孩子最合理的解讀是
+   「我的交卷沒有生效」，而全站沒有任何補交或改答路徑可以驗證。
+   badge = 側欄與統計卡的短標；line = 副標；hint = 左邊那張卡的下一步。 */
+const KB_LOCK_TEXT = {
+  pending: {badge:'測驗後開放', line:'交完卷就會打開', hint:'交完卷就可以繼續'},
+  survey:  {badge:'問卷後開放', line:'問卷填完就會打開', hint:'問卷填完就可以繼續'},
+  class:   {badge:'全班完成後開放', line:'等老師打開之後', hint:'等老師打開之後'}
+};
+function kbLockLabel(u){
+  return KB_LOCK_TEXT[kbLockReason(u)] || null;
 }
 function scaffold(id){ return SCAFFOLDS.find(function(s){ return s.id === id; }); }
 function scaffoldLabel(id){ const s = scaffold(id); return s ? s.label : ''; }
@@ -5997,9 +6026,15 @@ function renderRail(){
     {g:'我的學習'},
     {h:'#/student', g2:'業', t:'我的作業'},
     {h:'#/kb', g2:'構', t:'知識建構空間',
-     b: kbLocked(me) ? (kbLockReason(me) === 'survey' ? '問卷後開放' : '測驗後開放')
+     /* 三種原因都要有自己的標示。原本只認 'survey'，把 'class' 折進
+        「測驗後開放」——而那個孩子早就交過卷了。字串表在 50-kb.js。 */
+     b: kbLocked(me) ? ((kbLockLabel(me) || {}).badge || '測驗後開放')
           : (unread ? unread : null)},
-    {h:'#/mygrowth', g2:'長', t:'我的學習軌跡'},
+    {h:'#/mygrowth', g2:'長', t:'我的學習軌跡',
+     /* 學習軌跡被同一道課後問卷門擋著（86-ui-dash.js 的 viewMyGrowth），
+        側欄這一項卻沒有任何徽章，看起來與平常一樣可點——點下去換來一張
+        整頁擋板。鎖著就要說出來。 */
+     b: (submitted('a-post', me.id) && !surveyOf(me.id, 'post')) ? '問卷後開放' : null},
     {g:'問卷'},
     {h:'#/survey/pre',  g2:'前', t:'課前問卷',
      /* 課上完之後就不再標成可補的待辦（見 surveyGate 對 'pre' 的說明） */
@@ -6542,14 +6577,19 @@ function viewAssign(aid, tab){
       return '<div class="card card-p" style="margin-bottom:12px">' +
         '<div class="row" style="justify-content:space-between;gap:10px">' +
         '<span class="small">答案卡：' + (on ? '<strong>已對已交卷的學生打開</strong>' : '尚未開放') +
-        '。打開之後，交過卷的孩子就看得到每一題的選項與正解。</span>' +
+        '。打開之後，交過卷的孩子就看得到每一題的選項與正解，' +
+        '<strong>知識建構空間也會一起打開</strong>。</span>' +
         '<button type="button" class="btn sm' + (on ? ' primary' : '') +
         '" data-act="toggle-key" data-id="' + aid + '" aria-pressed="' + on + '">' +
         '<span aria-hidden="true">' + (on ? '☑' : '☐') + '</span>' +
         (on ? '收回答案卡' : '打開答案卡') + '</button></div>' +
         '<p class="muted small" style="margin:8px 0 0">一人一台平板時這是唯一真的會成立的' +
         '釋出路徑：每台裝置只看得到自己那一筆交卷紀錄，「全班都交完」在那個情境下' +
-        '永遠不會成立。</p></div>';
+        '永遠不會成立。<br>' +
+        /* 這兩件事原本一個字都沒說，而它們決定老師在教室裡實際要做什麼。 */
+        '這個設定只存在<strong>這一台平板</strong>的儲存空間裡——96 台要各按一次。' +
+        '施測中要在學生的平板上按，先在網址列打 <code>#/unlock</code> 換成教師身分，' +
+        '按完再換回去。</p></div>';
     })() +
     '<div class="tabs" role="tablist">' + tabs.map(function(t){
       const on = T === t[0];
@@ -7050,10 +7090,17 @@ function kbGate(){
      在這裡讀到的東西會流向還在做的。見 kbLocked 的第三道門。 */
   if (kbLockReason(me) === 'class'){
     const left = typeof classKeyPending === 'function' ? classKeyPending('a-post', me.id) : 0;
-    return '<div class="empty"><h3>等同學都做完，這裡就會打開</h3>' +
+    /* 標題原本是「等同學都做完，這裡就會打開」，而一人一台平板時這台裝置
+       根本看不到別人交了沒有——真正會讓它打開的是老師按下那顆〈打開答案卡〉
+       （見 kbLocked 第三道門走的 classKeyReleased）。viewResult 已經改成
+       這個說法，這裡跟上，四個入口才是同一句話。
+       「還有 N 位同學還沒做完」只有在示範／共用瀏覽器上才是真的，
+       施測狀態下那個數字是名單推出來的，不是實況。 */
+    return '<div class="empty"><h3>等老師打開之後，這裡就會開</h3>' +
       '<p style="max-width:62ch">這裡放的是全班一起想的問題，裡面會直接出現這次的題目。' +
       '現在打開的話，還在作答的同學就等於先看到題目了。</p>' +
-      (left ? '<p class="muted small">還有 ' + left + ' 位同學還沒做完。</p>' : '') +
+      (left && state.demoSeed !== false
+        ? '<p class="muted small">還有 ' + left + ' 位同學還沒做完。</p>' : '') +
       '<div class="row" style="margin-top:14px">' +
       '<a class="btn primary" href="#/student">回我的作業</a>' +
       '<a class="btn" href="#/mygrowth">看我的學習軌跡</a></div></div>';
@@ -7237,11 +7284,26 @@ function viewKBCanvas(vid){
         '<span><i class="swatch" style="background:var(--sc-5)"></i>引用</span>' +
       '</span>' +
     '</div>' +
-    '<div class="canvas" id="canvas"><div class="canvas-inner" id="canvasInner">' +
+    /* 白板要能單純被捲。.canvas 是 33rem 高、雙軸捲動的視窗
+       （.canvas-inner 80rem×55rem），原本沒有 tabindex：鍵盤使用者唯一的
+       落腳點是貼文，而焦點一在貼文上，四個方向鍵就被 preventDefault 攔下
+       改成搬移——他沒有任何方式可以只捲動這塊畫布。 */
+    '<div class="canvas" id="canvas" tabindex="0" role="group" aria-label="這個視圖的白板">' +
+      '<div class="canvas-inner" id="canvasInner">' +
       '<svg class="edges" viewBox="0 0 1600 1100" preserveAspectRatio="none">' + edges.join('') + '</svg>' +
       notesHTML + '</div></div>' +
-    '<div class="row" style="margin-top:10px"><span class="muted small">拖曳貼文可以重新安排版面，位置會存下來。' +
-    '點一下貼文開啟完整內容、延伸與註記。</span></div>' +
+    /* 第 7 輪補的鍵盤路徑（方向鍵搬貼文、Shift 加大步距、選取模式下
+       Enter／空白鍵切換選取）在畫面上原本一個字都沒有，而方向鍵會直接
+       搬走同學的貼文、立刻落地、沒有復原。選取模式下「點一下貼文開啟
+       完整內容」這句還會變成錯的，畫面卻不變。 */
+    '<div class="row" style="margin-top:10px"><span class="muted small">' +
+    (KBSEL
+      ? '<strong>現在是選取模式</strong>：點一下貼文是選取／取消選取，不是打開它。' +
+        '用鍵盤的話，Tab 停在貼文上按 Enter 或空白鍵切換選取。'
+      : '拖曳貼文可以重新安排版面，位置會存下來。點一下貼文開啟完整內容、延伸與註記。' +
+        '用鍵盤的話，Tab 停在貼文上按 Enter 打開它；方向鍵會<strong>搬動</strong>貼文' +
+        '（按住 Shift 搬得更遠）。只想捲動白板的話，把焦點停在白板本身再按方向鍵。') +
+    '</span></div>' +
     '<div class="card" style="margin-top:16px"><div class="card-h"><h3>這個視圖的支架使用</h3></div><div class="card-p">' +
       scaffoldUsageBar(ns) + '</div></div>';
 }
@@ -8008,13 +8070,14 @@ function viewStudent(){
     '<div class="grid g4" style="margin-bottom:16px">' +
       statCard('待作答', asgs.filter(function(a){ return !submitted(a.id, me.id); }).length, '') +
       statCard('已完成', asgs.filter(function(a){ return submitted(a.id, me.id); }).length, '') +
+      /* 兩張卡都讀同一份字串表（50-kb.js 的 KB_LOCK_TEXT）。左邊那張原本
+         不分原因一律寫「交完卷就可以繼續」——而 survey 與 class 兩種原因下，
+         他十五分鐘前就交過卷了。 */
       (kbLocked(me)
-        ? statCard('我貼的想法', myNotes, '交完卷就可以繼續') +
+        ? statCard('我貼的想法', myNotes, (kbLockLabel(me) || {}).hint || '交完卷就可以繼續') +
           statCard('知識建構空間',
-            kbLockReason(me) === 'survey' ? '問卷後開放'
-              : kbLockReason(me) === 'class' ? '全班完成後開放' : '測驗後開放',
-            kbLockReason(me) === 'survey' ? '問卷填完就會打開'
-              : kbLockReason(me) === 'class' ? '等同學都做完' : '交完卷就會打開')
+            (kbLockLabel(me) || {}).badge || '測驗後開放',
+            (kbLockLabel(me) || {}).line || '交完卷就會打開')
         : statCard('我貼的想法', myNotes, '在知識建構空間') +
           statCard('未讀貼文', unread, '同學的新想法', unread ? 'warn' : '')) +
     '</div>' +
@@ -8294,10 +8357,19 @@ function viewQuiz(aid){
 
   function renderQuizItem(it, idx){
       if (it.type === 'cr'){
-        return '<div class="card"><div class="card-p">' +
-          '<div class="row" style="justify-content:space-between;margin-bottom:6px">' +
-          '<b>第 ' + (idx + 1) + ' 題　非選題</b>' +
+        /* 題號那一列要包成 .card-h。缺答救援唯一的文字線索寫在
+           .card.missing .card-h::after，而前測兩種題卡原本都是
+           .card > .card-p、整張卡沒有 .card-h——那行「還沒寫完」永遠不會
+           被建立，被〈回去寫完〉帶回來的孩子只看到一圈紅框（純顏色，1.4.1）。
+           175% 字級下一張題卡本身就比 768px 的螢幕高，scrollIntoView 之後
+           紅框的上下緣都在視窗外，他只看得到左右兩條紅線。
+           前測 θ 是 ANCOVA 的共變數，交卷不可逆，也沒有補交路徑——
+           這是最後一道救援。後測的 #aalAnswer 有 .card-h，同一條 CSS
+           在那裡一直是生效的。 */
+        return '<div class="card"><div class="card-h">' +
+          '<b>第 ' + (idx + 1) + ' 題　非選題</b><span class="spacer"></span>' +
           '<span class="row">' + itemPillsStudent(it) + '</span></div>' +
+          '<div class="card-p">' +
           '<div class="stem" id="qStem-' + esc(it.id) + '">' + esc(it.stem) + '</div>' +
           /* label 要有 for、控制項要有 id。原本七個 label 全是裸的：
              報讀器唸到輸入框只說「編輯，空白」，唸到色票只說「色彩選擇器」，
@@ -8330,16 +8402,23 @@ function viewQuiz(aid){
          再進到選項裡。這是作答負荷，不是閱讀理解負荷，而它會直接算進
          前測 θ。問卷（surveyGate 那一頁）早就是 radiogroup，這裡補齊。 */
       const sid = 'qs-' + esc(it.id);
-      return '<div class="card"><div class="card-p">' +
-        '<div class="row" style="justify-content:space-between;margin-bottom:6px">' +
-        '<b>第 ' + (idx + 1) + ' 題</b>' +
+      /* 題號列包成 .card-h，理由同上面那張非選題卡。 */
+      return '<div class="card"><div class="card-h">' +
+        '<b>第 ' + (idx + 1) + ' 題</b><span class="spacer"></span>' +
         '<span class="row">' + itemPillsStudent(it) + '</span></div>' +
+        '<div class="card-p">' +
         '<div class="stem" id="' + sid + '">' + esc(it.stem) + '</div>' +
         '<div class="opts" role="radiogroup" aria-labelledby="' + sid + '">' + it.options.map(function(o, k){
+          /* 選中態的 ✓ 佔位記號，與後測逐字相同：.opt.chosen 的底色
+             --q4-bg 對 --card 只有約 1.2:1（高對比更低），實際只剩 3px 的
+             inset 色條與原生 radio 圓點——顏色單獨傳達訊息（1.4.1）。
+             前後測的「我選了哪一個」要是同一套線索。 */
           return '<label class="opt' + (chosen === k ? ' chosen' : '') + '">' +
             '<input type="radio" name="q-' + it.id + '" data-act="quiz-pick" data-id="' + it.id + '" data-k="' + k + '"' +
             (chosen === k ? ' checked' : '') + '>' +
-            '<b>' + String.fromCharCode(65 + k) + '</b><span>' + esc(o) + '</span></label>';
+            '<b aria-hidden="true">' + String.fromCharCode(65 + k) +
+            '<span class="tick' + (chosen === k ? ' on' : '') + '">✓</span>' +
+            '</b><span>' + esc(o) + '</span></label>';
         }).join('') + '</div>' +
         /* 三個 radiogroup 介面只修了兩個。後測作答頁與問卷頁都印了這一句，
            理由寫在 92-ui-aal.js：原生 radiogroup 在一顆都沒選時，Tab 進來
@@ -8804,18 +8883,25 @@ function initPads(){
          資料還在、畫面沒了，而孩子最可能的反應是按〈清空〉整題重寫。
          這裡依新舊寬度比例換算，字跟著縮，不會掉出去。 */
       if (p && p.w && p.h && w && h && (Math.abs(p.w - w) > 0.5 || Math.abs(p.h - h) > 0.5)){
-        /* x 與 y 各自照自己那一軸的比例換算。原本兩軸都乘寬度比，
-           而高度永遠是 240：畫布變寬時 y 被推出畫布外。 */
-        const kx = w / p.w, ky = h / p.h;
+        /* 單一等比因子，取兩軸中較嚴的那一個。
+           兩軸各自換算（kx、ky 分開）在第 7 輪把畫布高度從固定像素改成
+           CSS 的 11rem 之後就變成非等比拉伸：孩子在作答途中把字級從 100%
+           調到 175%，高度 220→385 而寬度不動（教室平板 1024px 在兩個字級
+           都落在 data-narrow，欄寬鏈全是 px 與 %），kx=1、ky≈1.75，
+           寫好的字被縱向拉長 75%；平板由橫轉直則是 kx≈0.75、ky=1，
+           字被橫向壓成 75%，筆畫還同時變細（舊碼的筆寬只乘 kx）。
+           草稿還原走同一條，所以「在 100% 寫、回來時是 175%」一樣會歪。
+           手寫是不會注音打字的孩子在兩題建構反應題上唯一的作答通道，
+           而變形會被 padPayload 烘進交出去的那一份——評閱者看到的就是
+           被拉長或壓扁的中文字。
+           取 min：只有高度變大時 k=1（筆跡完全不動，多出來的空間留在下方，
+           正是放大字級該有的效果）；只有寬度變小時等比縮小；兩軸同時變時
+           取較嚴的那一個，永遠不會把筆畫推出畫布。 */
+        const k = Math.min(w / p.w, h / p.h);
         p.strokes.forEach(function(s){
-          s.pts.forEach(function(pt){ pt[0] *= kx; pt[1] *= ky; });
-          s.width = (s.width || 2) * kx;
+          s.pts.forEach(function(pt){ pt[0] *= k; pt[1] *= k; });
+          s.width = (s.width || 2) * k;
         });
-        /* 高度也要跟著等比放大。原本 x 與 y 都乘 k，實際的畫布高度却永遠是 240：
-           畫布變寬（直式寫完轉橫式、或 175% 由雙欄翻成單欄後回來）時 k>1，
-           y 被推到 240 以上，畫布上看不見，strokesSvg 的 viewBox 也切掉－－
-           評閱端與唯讀重播看到的同樣是殘缺的那一份。
-           原註解只推演了 1024→768 的縮小方向。 */
       }
       if (p){ p.w = w; p.h = h; }
       cv.width = w * dpr; cv.height = h * dpr;
@@ -9073,11 +9159,14 @@ function viewSettings(){
           '<span aria-hidden="true">' + (on ? '☑' : '☐') + '</span>' +
           esc(a.title) + '　' + (on ? '已開放' : '尚未開放') + '</button>';
       }).join('') + '</div>' +
-      '<span class="muted small">按下去，這份派題的逐題答案就對已交卷的學生打開。' +
+      '<span class="muted small">按下去，這份派題的逐題答案就對已交卷的學生打開，' +
+      '<strong>知識建構空間也會一起打開</strong>（見 kbLocked 的第三道門）。' +
       '不按也會自動開的情形有兩種：同班每一位都交卷（單機或共用瀏覽器時才成立），' +
       '或是教師在派題精靈裡設過截止時間而且已經過期。' +
       '<strong>一人一台平板時請用這顆開關</strong>——每台裝置只看得到自己那一筆交卷紀錄，' +
-      '「全班都交完」在那個情境下永遠不會成立。</span></div>' +
+      '「全班都交完」在那個情境下永遠不會成立。' +
+      '這個設定也只存在<strong>這一台平板</strong>上，96 台要各按一次；' +
+      '施測中要在學生的平板上按，先在網址列打 <code>#/unlock</code> 換成教師身分。</span></div>' +
     '</div></div>' +
     /* 教師代碼。30-data.js 的註解原本說「研究者可以在系統設定頁改掉它」，
        而這一頁從來沒有這個欄位－－一句死註解配一個寫死的 '1234'。 */
@@ -10232,7 +10321,12 @@ function flushNoteFor(it){
      不讓對照組的分析單位數超過三個 AI 條件。 */
   const te = AAL.tele[it.id];
   const ts = (te && te.lastKey) || Date.now();
-  aalLog('NOTE', 'N', {t: ts, rel: ts - AAL.t0, text: txt, turn: noteTurnOf(it.id)}, it);
+  /* sent 與 ucode 要在寫入端就算好。ASK 事件一直都帶著它們，NOTE 沒有——
+     於是兩個匯出檔各自把對照組丟掉了一半：toENACsv 查不到 dialog 紀錄，
+     四個歷程欄整列輸出 0；toTelemetryCsv 只認 e.type==='ASK'，turns 恆為 0、
+     mean_sentiment 空白。在這裡補上，所有讀取端自動一致。 */
+  aalLog('NOTE', 'N', {t: ts, rel: ts - AAL.t0, text: txt, turn: noteTurnOf(it.id),
+    sent: sentimentOf(txt).score, ucode: codeUtteranceProcess(txt)}, it);
   return true;
 }
 function flushTypeTelemetry(){
@@ -10795,7 +10889,15 @@ function surveyDraftSave(){
     const respMerged = {};
     Object.keys(prevSv.resp || {}).forEach(function(x){ respMerged[x] = prevSv.resp[x]; });
     Object.keys(SURVEY.resp || {}).forEach(function(x){ respMerged[x] = SURVEY.resp[x]; });
-    all[pk] = {resp:respMerged, page:SURVEY.page, savedAt:Date.now()};
+    /* page 存的是「他自己走到哪一段」，rescuePage 才是被退回來的落點。
+       原本兩者共用同一個欄位：救援時就地覆寫 page，孩子這時被叫走或分頁
+       被回收，回來是從第 3 段重走，而不是回到已經走到的最後一段。
+       miss 也要存，缺答標記才跨得過重整。 */
+    all[pk] = {resp:respMerged,
+               page: SURVEY._returnTo || SURVEY.page,
+               rescuePage: SURVEY._returnTo ? SURVEY.page : null,
+               miss: (SURVEY._miss || []).filter(function(k){ return !SURVEY.resp[k]; }),
+               savedAt:Date.now()};
     localStorage.setItem(SURVEY_DRAFT_KEY, JSON.stringify(all));
     surveyDraftSave._fails = 0;
     SURVEY.dirty = false;
@@ -10885,7 +10987,9 @@ function viewSurvey(phase, page){
        操弄檢核是驗證三種角色操弄是否成立的唯一工具。 */
     SURVEY = {phase:phase, sid:me.id,
               resp: d ? d.resp : (done ? surveyRespToForm(done.resp, phase) : {}),
-              page: d ? d.page : 1};
+              /* 還原到他自己走到的那一段，不是救援落點（見 surveyDraftSave） */
+              page: d ? (d.page || 1) : 1,
+              _miss: (d && d.miss) ? d.miss.slice() : null};
   }
   SURVEY.page = Math.max(1, Math.min(page || SURVEY.page || 1, secs.length));
   /* 網址與畫面要說同一件事。原本越界的頁碼只在記憶體裡夾回範圍，
@@ -10991,10 +11095,45 @@ function viewSurvey(phase, page){
       (SURVEY.page > 1
         ? '<button class="btn" data-act="sv-page" data-v="' + (SURVEY.page - 1) + '">← 上一段</button>'
         : '<span></span>') +
+      /* 全部填完就一律畫出送出鈕，不論停在第幾段。
+         〈送出問卷〉原本只長在最後一段，而缺答救援會把孩子丟到第一段缺答的
+         頁碼——三個 AI 條件的後測有 12 段，缺答通常落在前幾段，他補完那一題
+         要連按 9–11 次〈下一段〉才回得到送出鈕，中間沒有任何段落索引可跳。 */
+      '<span class="row">' +
+      (!last && answered === total
+        ? '<button class="btn primary" data-act="sv-submit" data-id="' + phase + '">填完了，送出問卷</button>'
+        : '') +
       (last
         ? '<button class="btn primary" data-act="sv-submit" data-id="' + phase + '">送出問卷</button>'
-        : '<button class="btn primary" data-act="sv-page" data-v="' + (SURVEY.page + 1) + '">下一段 →</button>') +
+        : '<button class="btn' + (answered === total ? '' : ' primary') +
+          '" data-act="sv-page" data-v="' + (SURVEY.page + 1) + '">下一段 →</button>') +
+      '</span>' +
     '</div>';
+}
+
+/* 缺答標記要跨重繪存活。原本紅框、aria-invalid 與「這一段還有 N 題沒有選」
+   都只寫進當下的 DOM，任何一次 render()（換段、切身分、自動存檔的重繪）
+   都會把它們清掉，只剩抬頭「已完成 46 / 共 47 題」——孩子被退回來，
+   卻不知道要補哪一題。SURVEY._miss 記住鍵，這一支在每次重繪後重掛。 */
+function surveyPaintMiss(){
+  if (!SURVEY || !SURVEY._miss || !SURVEY._miss.length) return;
+  let first = null, n = 0;
+  SURVEY._miss.forEach(function(k){
+    if (SURVEY.resp[k]) return;              // 補好了就不再標
+    const el = document.querySelector('[data-k="' + k + '"]');
+    if (!el) return;                          // 不在這一段
+    const row = el.closest('.likert');
+    if (row){ row.classList.add('missing'); row.setAttribute('aria-invalid', 'true'); }
+    n++;
+    if (!first) first = el;
+  });
+  const box = document.getElementById('svMissSlot');
+  if (n && box && !document.getElementById('svMissAlert')){
+    box.insertAdjacentHTML('afterbegin',
+      '<p id="svMissAlert" role="alert" class="small" style="color:var(--crit);font-weight:600">' +
+      '這一段還有 ' + n + ' 題沒有選。</p>');
+  }
+  return first;
 }
 
 function surveySubmit(phase){
@@ -11021,29 +11160,19 @@ function surveySubmit(phase){
     }, function(){ surveySubmitCommit(phase); });
     confirmModal._onNo = function(){
       if (!SURVEY) return;
+      /* 記住他原本走到哪裡。草稿的 page 原本被就地覆寫成救援頁：
+         他這時被叫走或分頁被回收，回來是從第 3 段重走，而不是回到
+         原本已經走到的最後一段。 */
+      SURVEY._returnTo = SURVEY._returnTo || SURVEY.page;
+      SURVEY._miss = miss.slice();
       SURVEY.page = pg;
       surveyDraftSave();
       go('#/survey/' + phase + '/' + pg);
       setTimeout(function(){
         /* 這一段裡每一題缺答都要標，不是只標第一題——只標一題的話，
-           孩子填完它再按送出，又被退回來一次，不知道還有幾題。 */
-        let first = null, n = 0;
-        miss.forEach(function(k){
-          const el = document.querySelector('[data-k="' + k + '"]');
-          if (!el) return;
-          const row = el.closest('.likert');
-          if (row){ row.classList.add('missing'); row.setAttribute('aria-invalid', 'true'); }
-          n++;
-          if (!first) first = el;
-        });
-        if (n){
-          const box = document.getElementById('svMissSlot');
-          if (box && !document.getElementById('svMissAlert')){
-            box.insertAdjacentHTML('afterbegin',
-              '<p id="svMissAlert" role="alert" class="small" style="color:var(--crit);font-weight:600">' +
-              '這一段還有 ' + n + ' 題沒有選。</p>');
-          }
-        }
+           孩子填完它再按送出，又被退回來一次，不知道還有幾題。
+           實作搬到 surveyPaintMiss()，每次重繪都會再掛一次。 */
+        const first = surveyPaintMiss();
         if (first){ first.focus(); first.scrollIntoView({block:'center'}); }
       }, 0);
     };
@@ -12179,6 +12308,10 @@ function render(){
     const c = document.getElementById('aalChat');
     if (c) c.scrollTop = c.scrollHeight;
   }
+  /* 缺答標記要跨重繪存活。紅框、aria-invalid 與「這一段還有 N 題沒有選」
+     原本只寫進當下的 DOM，任何一次 render() 都會把它們清掉，
+     只剩抬頭「已完成 46 / 共 47 題」——孩子被退回來卻不知道要補哪一題。 */
+  if (ROUTE.name === 'survey' && typeof surveyPaintMiss === 'function') surveyPaintMiss();
 
   if (!samePage){
     try { window.scrollTo(0, 0); } catch (e) {}
@@ -12285,6 +12418,9 @@ function initCanvasDrag(){
       render();
       const again = document.querySelector('.note[data-note="' + id0 + '"]');
       if (again) again.focus({preventScroll:true});
+      /* 搬完要說出來。這個動作沒有復原，而且改的是同學的貼文——
+         指標路徑至少看得到自己在拖，鍵盤路徑原本完全無聲。 */
+      toast('已經把這則貼文搬到新的位置。');
       return;
     }
     if (e.key !== 'Enter' && e.key !== ' ' && e.key !== 'Spacebar') return;
@@ -12852,7 +12988,18 @@ function bindEvents(){
          .passage 現在有 tabindex="0"，是中性的落腳點：Space／PageDown
          捲的是文章本身，也不會誤觸到任何一句的標記。 */
       const p = document.querySelector('.aal-text .passage') || document.getElementById('passageTitle');
-      if (p){ p.focus({preventScroll:true}); p.scrollIntoView({block:'start'}); }
+      if (p){
+        p.focus({preventScroll:true});
+        /* 原本緊接著一行無條件的 scrollIntoView({block:'start'})，把上面那段
+           註解講的事整個抵銷掉：block:'start' 會把 .passage 的上緣對齊最近
+           可捲祖先的起緣（雙欄捲 .aal-text > .card-p，單欄捲視窗），等於把
+           捲動位置歸零——他讀到第 8 段，按一次這顆鈕就回到第一段，而
+           render() 還特地把 .card-p 的 scrollTop 放進 SCROLL_KEEP 跨重繪保存。
+           只有在文章確實不在視窗裡的時候才捲，而且用 'nearest'：
+           位置在的時候，這顆鈕就只是把焦點交回文章。 */
+        const r = p.getBoundingClientRect();
+        if (r.bottom < 0 || r.top > (window.innerHeight || 0)) p.scrollIntoView({block:'nearest'});
+      }
       return; }
     if (act === 'back-to-nav'){
       const nv = document.getElementById('aalNav');
@@ -12974,6 +13121,13 @@ function bindEvents(){
       if (typeof DEMO_LOGS !== 'undefined' && DEMO_LOGS.length)
         DEMO_LOGS = DEMO_LOGS.filter(function(e){ return !(e.aid === aid && e.sid === me.id); });
       aalDraftDrop(aid, me.id);
+      /* 課後問卷也要一起清。不清的話，重走一次交卷之後 toast 說「接下來是
+         這節課的問卷」、replaceHash 去 #/survey/post，而 viewSurvey 讀到
+         buildDemoSurveys 種下的那一筆（demo:true），直接回「這份問卷你已經
+         送出了」——側欄沒有待填徽章，首頁提醒卡也不出現，整條路走不下去。 */
+      state.surveys = (state.surveys || []).filter(function(s){
+        return !(s.sid === me.id && s.phase === 'post'); });
+      surveyDraftDrop(me.id, 'post');
       AAL = null;
       clearPads();
       save(); go('#/aal/' + aid);
@@ -13619,8 +13773,20 @@ function submitQuizCommit(aid){
   }
   quizDraftDrop(aid, me.id);   // 交出去了，草稿不用留（落地失敗時不會走到這一行）
   QUIZ = null;
-  toast('已交卷。往下看你的個人診斷。');
-  replaceHash('#/result/' + aid);
+  /* 前測交完卷不能承諾「往下看你的個人診斷」：viewResult 的第一道門就是
+     「前測且後測還沒交」——這一刻必然成立，孩子會落在一張標題寫〈等這節課
+     做完〉的擋板上，而 toast 還在畫面上說相反的話（toast 的存活時間隨字數
+     算，這一句約 3.9 秒，兩段互相否定的訊息同時在螢幕上）。
+     這道門是刻意的（先看前測對錯，後測就不算他自己讀出來的），所以要改的是
+     承諾與落點：話講真正會發生的事，人落在看得到下一步的地方。 */
+  const isPre = aid === 'a-pre' && !submitted('a-post', me.id);
+  if (isPre){
+    toast('已交卷。逐題結果要等這節課也做完才會打開。');
+    replaceHash('#/student');
+  } else {
+    toast('已交卷。往下看你的個人診斷。');
+    replaceHash('#/result/' + aid);
+  }
 }
 
 /* --- 測試連線 --- */

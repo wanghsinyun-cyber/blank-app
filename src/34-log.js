@@ -393,7 +393,14 @@ function toENACsv(){
     const k = classOfStudent(e.sid);
     const d = e.turn ? dialKey[e.sid + '|' + e.iid + '|' + e.turn + '|' + (e.type === 'AI' ? 'agent' : 'student')] : null;
     const txt = (d && d.text) || e.text || '';
-    const uc = d ? d.ucode : (e.code === 'A' ? (e.proc || '') : '');
+    /* 對照組沒有 state.dialog 紀錄，dialKey 查不到；'N' 又不是 'A'，
+       於是 uc 恆為空字串，每一列對照組筆記的 FR／SI／II／EE 四欄都輸出 0——
+       ENA 因此看不到對照組的任何歷程編碼，而 62-process.js 站內那一支
+       早就對 'N' 呼叫 codeUtteranceProcess 了。舊資料沒有 e.ucode，
+       所以退回現算一次。 */
+    const uc = d ? d.ucode
+             : (e.code === 'A' ? (e.proc || '')
+             : (e.code === 'N' ? (e.ucode || codeUtteranceProcess(e.text || '')) : ''));
     /* rel_code 要的是「相對歷程編碼」（BELOW／AT／ABOVE），
        而 e.rel 是 aalLog 給每一筆事件的「距這一次入座已經幾毫秒」。
        `e.rel || …` 於是把毫秒數寫進了這一欄－－匯出檔裡
@@ -463,7 +470,15 @@ function toTelemetryCsv(){
     if (e.code === 'M') r.mEv.push(e);
     if (e.code === 'O') r.opts++;
     if (e.code === 'C') r.cEv.push(e);
-    if (e.type === 'ASK'){ r.turns++; if (e.sent != null) r.sent.push(e.sent); }
+    /* 對照組的一則筆記在分析上等同一次發話——64-stats.js 的 analysisDataset
+       早就是這樣收的（voiced = ASK 或 code 'N'）。這裡原本只認 ASK，
+       於是每一列對照組的 turns=0、mean_sentiment 空白，四條件的比較缺一格。
+       舊資料的 NOTE 沒有 sent，退回現算一次，與 64-stats.js 逐字對齊。 */
+    if (e.type === 'ASK' || e.code === 'N'){
+      r.turns++;
+      const s = e.sent != null ? e.sent : (e.text ? sentimentOf(e.text).score : null);
+      if (s != null) r.sent.push(s);
+    }
   });
   Object.keys(byKey).forEach(function(k){
     const r = byKey[k], kl = classOfStudent(r.sid), it = getItem(r.iid);

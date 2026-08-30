@@ -798,7 +798,12 @@ function flushNoteFor(it){
      不讓對照組的分析單位數超過三個 AI 條件。 */
   const te = AAL.tele[it.id];
   const ts = (te && te.lastKey) || Date.now();
-  aalLog('NOTE', 'N', {t: ts, rel: ts - AAL.t0, text: txt, turn: noteTurnOf(it.id)}, it);
+  /* sent 與 ucode 要在寫入端就算好。ASK 事件一直都帶著它們，NOTE 沒有——
+     於是兩個匯出檔各自把對照組丟掉了一半：toENACsv 查不到 dialog 紀錄，
+     四個歷程欄整列輸出 0；toTelemetryCsv 只認 e.type==='ASK'，turns 恆為 0、
+     mean_sentiment 空白。在這裡補上，所有讀取端自動一致。 */
+  aalLog('NOTE', 'N', {t: ts, rel: ts - AAL.t0, text: txt, turn: noteTurnOf(it.id),
+    sent: sentimentOf(txt).score, ucode: codeUtteranceProcess(txt)}, it);
   return true;
 }
 function flushTypeTelemetry(){
@@ -1361,7 +1366,15 @@ function surveyDraftSave(){
     const respMerged = {};
     Object.keys(prevSv.resp || {}).forEach(function(x){ respMerged[x] = prevSv.resp[x]; });
     Object.keys(SURVEY.resp || {}).forEach(function(x){ respMerged[x] = SURVEY.resp[x]; });
-    all[pk] = {resp:respMerged, page:SURVEY.page, savedAt:Date.now()};
+    /* page 存的是「他自己走到哪一段」，rescuePage 才是被退回來的落點。
+       原本兩者共用同一個欄位：救援時就地覆寫 page，孩子這時被叫走或分頁
+       被回收，回來是從第 3 段重走，而不是回到已經走到的最後一段。
+       miss 也要存，缺答標記才跨得過重整。 */
+    all[pk] = {resp:respMerged,
+               page: SURVEY._returnTo || SURVEY.page,
+               rescuePage: SURVEY._returnTo ? SURVEY.page : null,
+               miss: (SURVEY._miss || []).filter(function(k){ return !SURVEY.resp[k]; }),
+               savedAt:Date.now()};
     localStorage.setItem(SURVEY_DRAFT_KEY, JSON.stringify(all));
     surveyDraftSave._fails = 0;
     SURVEY.dirty = false;
@@ -1451,7 +1464,9 @@ function viewSurvey(phase, page){
        操弄檢核是驗證三種角色操弄是否成立的唯一工具。 */
     SURVEY = {phase:phase, sid:me.id,
               resp: d ? d.resp : (done ? surveyRespToForm(done.resp, phase) : {}),
-              page: d ? d.page : 1};
+              /* 還原到他自己走到的那一段，不是救援落點（見 surveyDraftSave） */
+              page: d ? (d.page || 1) : 1,
+              _miss: (d && d.miss) ? d.miss.slice() : null};
   }
   SURVEY.page = Math.max(1, Math.min(page || SURVEY.page || 1, secs.length));
   /* 網址與畫面要說同一件事。原本越界的頁碼只在記憶體裡夾回範圍，
@@ -1557,10 +1572,45 @@ function viewSurvey(phase, page){
       (SURVEY.page > 1
         ? '<button class="btn" data-act="sv-page" data-v="' + (SURVEY.page - 1) + '">← 上一段</button>'
         : '<span></span>') +
+      /* 全部填完就一律畫出送出鈕，不論停在第幾段。
+         〈送出問卷〉原本只長在最後一段，而缺答救援會把孩子丟到第一段缺答的
+         頁碼——三個 AI 條件的後測有 12 段，缺答通常落在前幾段，他補完那一題
+         要連按 9–11 次〈下一段〉才回得到送出鈕，中間沒有任何段落索引可跳。 */
+      '<span class="row">' +
+      (!last && answered === total
+        ? '<button class="btn primary" data-act="sv-submit" data-id="' + phase + '">填完了，送出問卷</button>'
+        : '') +
       (last
         ? '<button class="btn primary" data-act="sv-submit" data-id="' + phase + '">送出問卷</button>'
-        : '<button class="btn primary" data-act="sv-page" data-v="' + (SURVEY.page + 1) + '">下一段 →</button>') +
+        : '<button class="btn' + (answered === total ? '' : ' primary') +
+          '" data-act="sv-page" data-v="' + (SURVEY.page + 1) + '">下一段 →</button>') +
+      '</span>' +
     '</div>';
+}
+
+/* 缺答標記要跨重繪存活。原本紅框、aria-invalid 與「這一段還有 N 題沒有選」
+   都只寫進當下的 DOM，任何一次 render()（換段、切身分、自動存檔的重繪）
+   都會把它們清掉，只剩抬頭「已完成 46 / 共 47 題」——孩子被退回來，
+   卻不知道要補哪一題。SURVEY._miss 記住鍵，這一支在每次重繪後重掛。 */
+function surveyPaintMiss(){
+  if (!SURVEY || !SURVEY._miss || !SURVEY._miss.length) return;
+  let first = null, n = 0;
+  SURVEY._miss.forEach(function(k){
+    if (SURVEY.resp[k]) return;              // 補好了就不再標
+    const el = document.querySelector('[data-k="' + k + '"]');
+    if (!el) return;                          // 不在這一段
+    const row = el.closest('.likert');
+    if (row){ row.classList.add('missing'); row.setAttribute('aria-invalid', 'true'); }
+    n++;
+    if (!first) first = el;
+  });
+  const box = document.getElementById('svMissSlot');
+  if (n && box && !document.getElementById('svMissAlert')){
+    box.insertAdjacentHTML('afterbegin',
+      '<p id="svMissAlert" role="alert" class="small" style="color:var(--crit);font-weight:600">' +
+      '這一段還有 ' + n + ' 題沒有選。</p>');
+  }
+  return first;
 }
 
 function surveySubmit(phase){
@@ -1587,29 +1637,19 @@ function surveySubmit(phase){
     }, function(){ surveySubmitCommit(phase); });
     confirmModal._onNo = function(){
       if (!SURVEY) return;
+      /* 記住他原本走到哪裡。草稿的 page 原本被就地覆寫成救援頁：
+         他這時被叫走或分頁被回收，回來是從第 3 段重走，而不是回到
+         原本已經走到的最後一段。 */
+      SURVEY._returnTo = SURVEY._returnTo || SURVEY.page;
+      SURVEY._miss = miss.slice();
       SURVEY.page = pg;
       surveyDraftSave();
       go('#/survey/' + phase + '/' + pg);
       setTimeout(function(){
         /* 這一段裡每一題缺答都要標，不是只標第一題——只標一題的話，
-           孩子填完它再按送出，又被退回來一次，不知道還有幾題。 */
-        let first = null, n = 0;
-        miss.forEach(function(k){
-          const el = document.querySelector('[data-k="' + k + '"]');
-          if (!el) return;
-          const row = el.closest('.likert');
-          if (row){ row.classList.add('missing'); row.setAttribute('aria-invalid', 'true'); }
-          n++;
-          if (!first) first = el;
-        });
-        if (n){
-          const box = document.getElementById('svMissSlot');
-          if (box && !document.getElementById('svMissAlert')){
-            box.insertAdjacentHTML('afterbegin',
-              '<p id="svMissAlert" role="alert" class="small" style="color:var(--crit);font-weight:600">' +
-              '這一段還有 ' + n + ' 題沒有選。</p>');
-          }
-        }
+           孩子填完它再按送出，又被退回來一次，不知道還有幾題。
+           實作搬到 surveyPaintMiss()，每次重繪都會再掛一次。 */
+        const first = surveyPaintMiss();
         if (first){ first.focus(); first.scrollIntoView({block:'center'}); }
       }, 0);
     };

@@ -213,14 +213,19 @@ function viewAssign(aid, tab){
       return '<div class="card card-p" style="margin-bottom:12px">' +
         '<div class="row" style="justify-content:space-between;gap:10px">' +
         '<span class="small">答案卡：' + (on ? '<strong>已對已交卷的學生打開</strong>' : '尚未開放') +
-        '。打開之後，交過卷的孩子就看得到每一題的選項與正解。</span>' +
+        '。打開之後，交過卷的孩子就看得到每一題的選項與正解，' +
+        '<strong>知識建構空間也會一起打開</strong>。</span>' +
         '<button type="button" class="btn sm' + (on ? ' primary' : '') +
         '" data-act="toggle-key" data-id="' + aid + '" aria-pressed="' + on + '">' +
         '<span aria-hidden="true">' + (on ? '☑' : '☐') + '</span>' +
         (on ? '收回答案卡' : '打開答案卡') + '</button></div>' +
         '<p class="muted small" style="margin:8px 0 0">一人一台平板時這是唯一真的會成立的' +
         '釋出路徑：每台裝置只看得到自己那一筆交卷紀錄，「全班都交完」在那個情境下' +
-        '永遠不會成立。</p></div>';
+        '永遠不會成立。<br>' +
+        /* 這兩件事原本一個字都沒說，而它們決定老師在教室裡實際要做什麼。 */
+        '這個設定只存在<strong>這一台平板</strong>的儲存空間裡——96 台要各按一次。' +
+        '施測中要在學生的平板上按，先在網址列打 <code>#/unlock</code> 換成教師身分，' +
+        '按完再換回去。</p></div>';
     })() +
     '<div class="tabs" role="tablist">' + tabs.map(function(t){
       const on = T === t[0];

@@ -447,9 +447,15 @@ function renderRail(){
     {g:'我的學習'},
     {h:'#/student', g2:'業', t:'我的作業'},
     {h:'#/kb', g2:'構', t:'知識建構空間',
-     b: kbLocked(me) ? (kbLockReason(me) === 'survey' ? '問卷後開放' : '測驗後開放')
+     /* 三種原因都要有自己的標示。原本只認 'survey'，把 'class' 折進
+        「測驗後開放」——而那個孩子早就交過卷了。字串表在 50-kb.js。 */
+     b: kbLocked(me) ? ((kbLockLabel(me) || {}).badge || '測驗後開放')
           : (unread ? unread : null)},
-    {h:'#/mygrowth', g2:'長', t:'我的學習軌跡'},
+    {h:'#/mygrowth', g2:'長', t:'我的學習軌跡',
+     /* 學習軌跡被同一道課後問卷門擋著（86-ui-dash.js 的 viewMyGrowth），
+        側欄這一項卻沒有任何徽章，看起來與平常一樣可點——點下去換來一張
+        整頁擋板。鎖著就要說出來。 */
+     b: (submitted('a-post', me.id) && !surveyOf(me.id, 'post')) ? '問卷後開放' : null},
     {g:'問卷'},
     {h:'#/survey/pre',  g2:'前', t:'課前問卷',
      /* 課上完之後就不再標成可補的待辦（見 surveyGate 對 'pre' 的說明） */

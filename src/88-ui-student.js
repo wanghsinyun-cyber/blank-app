@@ -139,13 +139,14 @@ function viewStudent(){
     '<div class="grid g4" style="margin-bottom:16px">' +
       statCard('待作答', asgs.filter(function(a){ return !submitted(a.id, me.id); }).length, '') +
       statCard('已完成', asgs.filter(function(a){ return submitted(a.id, me.id); }).length, '') +
+      /* 兩張卡都讀同一份字串表（50-kb.js 的 KB_LOCK_TEXT）。左邊那張原本
+         不分原因一律寫「交完卷就可以繼續」——而 survey 與 class 兩種原因下，
+         他十五分鐘前就交過卷了。 */
       (kbLocked(me)
-        ? statCard('我貼的想法', myNotes, '交完卷就可以繼續') +
+        ? statCard('我貼的想法', myNotes, (kbLockLabel(me) || {}).hint || '交完卷就可以繼續') +
           statCard('知識建構空間',
-            kbLockReason(me) === 'survey' ? '問卷後開放'
-              : kbLockReason(me) === 'class' ? '全班完成後開放' : '測驗後開放',
-            kbLockReason(me) === 'survey' ? '問卷填完就會打開'
-              : kbLockReason(me) === 'class' ? '等同學都做完' : '交完卷就會打開')
+            (kbLockLabel(me) || {}).badge || '測驗後開放',
+            (kbLockLabel(me) || {}).line || '交完卷就會打開')
         : statCard('我貼的想法', myNotes, '在知識建構空間') +
           statCard('未讀貼文', unread, '同學的新想法', unread ? 'warn' : '')) +
     '</div>' +
@@ -425,10 +426,19 @@ function viewQuiz(aid){
 
   function renderQuizItem(it, idx){
       if (it.type === 'cr'){
-        return '<div class="card"><div class="card-p">' +
-          '<div class="row" style="justify-content:space-between;margin-bottom:6px">' +
-          '<b>第 ' + (idx + 1) + ' 題　非選題</b>' +
+        /* 題號那一列要包成 .card-h。缺答救援唯一的文字線索寫在
+           .card.missing .card-h::after，而前測兩種題卡原本都是
+           .card > .card-p、整張卡沒有 .card-h——那行「還沒寫完」永遠不會
+           被建立，被〈回去寫完〉帶回來的孩子只看到一圈紅框（純顏色，1.4.1）。
+           175% 字級下一張題卡本身就比 768px 的螢幕高，scrollIntoView 之後
+           紅框的上下緣都在視窗外，他只看得到左右兩條紅線。
+           前測 θ 是 ANCOVA 的共變數，交卷不可逆，也沒有補交路徑——
+           這是最後一道救援。後測的 #aalAnswer 有 .card-h，同一條 CSS
+           在那裡一直是生效的。 */
+        return '<div class="card"><div class="card-h">' +
+          '<b>第 ' + (idx + 1) + ' 題　非選題</b><span class="spacer"></span>' +
           '<span class="row">' + itemPillsStudent(it) + '</span></div>' +
+          '<div class="card-p">' +
           '<div class="stem" id="qStem-' + esc(it.id) + '">' + esc(it.stem) + '</div>' +
           /* label 要有 for、控制項要有 id。原本七個 label 全是裸的：
              報讀器唸到輸入框只說「編輯，空白」，唸到色票只說「色彩選擇器」，
@@ -461,16 +471,23 @@ function viewQuiz(aid){
          再進到選項裡。這是作答負荷，不是閱讀理解負荷，而它會直接算進
          前測 θ。問卷（surveyGate 那一頁）早就是 radiogroup，這裡補齊。 */
       const sid = 'qs-' + esc(it.id);
-      return '<div class="card"><div class="card-p">' +
-        '<div class="row" style="justify-content:space-between;margin-bottom:6px">' +
-        '<b>第 ' + (idx + 1) + ' 題</b>' +
+      /* 題號列包成 .card-h，理由同上面那張非選題卡。 */
+      return '<div class="card"><div class="card-h">' +
+        '<b>第 ' + (idx + 1) + ' 題</b><span class="spacer"></span>' +
         '<span class="row">' + itemPillsStudent(it) + '</span></div>' +
+        '<div class="card-p">' +
         '<div class="stem" id="' + sid + '">' + esc(it.stem) + '</div>' +
         '<div class="opts" role="radiogroup" aria-labelledby="' + sid + '">' + it.options.map(function(o, k){
+          /* 選中態的 ✓ 佔位記號，與後測逐字相同：.opt.chosen 的底色
+             --q4-bg 對 --card 只有約 1.2:1（高對比更低），實際只剩 3px 的
+             inset 色條與原生 radio 圓點——顏色單獨傳達訊息（1.4.1）。
+             前後測的「我選了哪一個」要是同一套線索。 */
           return '<label class="opt' + (chosen === k ? ' chosen' : '') + '">' +
             '<input type="radio" name="q-' + it.id + '" data-act="quiz-pick" data-id="' + it.id + '" data-k="' + k + '"' +
             (chosen === k ? ' checked' : '') + '>' +
-            '<b>' + String.fromCharCode(65 + k) + '</b><span>' + esc(o) + '</span></label>';
+            '<b aria-hidden="true">' + String.fromCharCode(65 + k) +
+            '<span class="tick' + (chosen === k ? ' on' : '') + '">✓</span>' +
+            '</b><span>' + esc(o) + '</span></label>';
         }).join('') + '</div>' +
         /* 三個 radiogroup 介面只修了兩個。後測作答頁與問卷頁都印了這一句，
            理由寫在 92-ui-aal.js：原生 radiogroup 在一顆都沒選時，Tab 進來
@@ -935,18 +952,25 @@ function initPads(){
          資料還在、畫面沒了，而孩子最可能的反應是按〈清空〉整題重寫。
          這裡依新舊寬度比例換算，字跟著縮，不會掉出去。 */
       if (p && p.w && p.h && w && h && (Math.abs(p.w - w) > 0.5 || Math.abs(p.h - h) > 0.5)){
-        /* x 與 y 各自照自己那一軸的比例換算。原本兩軸都乘寬度比，
-           而高度永遠是 240：畫布變寬時 y 被推出畫布外。 */
-        const kx = w / p.w, ky = h / p.h;
+        /* 單一等比因子，取兩軸中較嚴的那一個。
+           兩軸各自換算（kx、ky 分開）在第 7 輪把畫布高度從固定像素改成
+           CSS 的 11rem 之後就變成非等比拉伸：孩子在作答途中把字級從 100%
+           調到 175%，高度 220→385 而寬度不動（教室平板 1024px 在兩個字級
+           都落在 data-narrow，欄寬鏈全是 px 與 %），kx=1、ky≈1.75，
+           寫好的字被縱向拉長 75%；平板由橫轉直則是 kx≈0.75、ky=1，
+           字被橫向壓成 75%，筆畫還同時變細（舊碼的筆寬只乘 kx）。
+           草稿還原走同一條，所以「在 100% 寫、回來時是 175%」一樣會歪。
+           手寫是不會注音打字的孩子在兩題建構反應題上唯一的作答通道，
+           而變形會被 padPayload 烘進交出去的那一份——評閱者看到的就是
+           被拉長或壓扁的中文字。
+           取 min：只有高度變大時 k=1（筆跡完全不動，多出來的空間留在下方，
+           正是放大字級該有的效果）；只有寬度變小時等比縮小；兩軸同時變時
+           取較嚴的那一個，永遠不會把筆畫推出畫布。 */
+        const k = Math.min(w / p.w, h / p.h);
         p.strokes.forEach(function(s){
-          s.pts.forEach(function(pt){ pt[0] *= kx; pt[1] *= ky; });
-          s.width = (s.width || 2) * kx;
+          s.pts.forEach(function(pt){ pt[0] *= k; pt[1] *= k; });
+          s.width = (s.width || 2) * k;
         });
-        /* 高度也要跟著等比放大。原本 x 與 y 都乘 k，實際的畫布高度却永遠是 240：
-           畫布變寬（直式寫完轉橫式、或 175% 由雙欄翻成單欄後回來）時 k>1，
-           y 被推到 240 以上，畫布上看不見，strokesSvg 的 viewBox 也切掉－－
-           評閱端與唯讀重播看到的同樣是殘缺的那一份。
-           原註解只推演了 1024→768 的縮小方向。 */
       }
       if (p){ p.w = w; p.h = h; }
       cv.width = w * dpr; cv.height = h * dpr;
