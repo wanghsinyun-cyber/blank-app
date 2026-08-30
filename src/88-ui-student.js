@@ -608,14 +608,23 @@ function viewResult(aid){
        不講清楚的話，只答一題的孩子會看到「1 / 1」而更困惑。 */
     /* 一題都沒作答時不要印「0 / 0　0%」，也不要餵 readingStars——
        那會憑空給出 ★★★☆☆。太少就明說太少。 */
-    (mc.length
-      ? statCard('選擇題答對', right + ' / ' + mc.length,
+    /* 答案卡還沒打開時，這張卡只報「參與」不報「表現」。
+       聚合分數看起來安全，其實兩端就是完整揭露：「16 / 16」等於把孩子
+       記得的整份答案宣告為正解，「0 / 16」等於替每一題刪掉一個選項，
+       中間值也給出逐題可信度——而他記得自己每題選了什麼正是這道鎖的前提。
+       這條路徑還不需要合併四班資料就成立，比逐題 pill 更容易在教室裡發生。 */
+    (!mc.length
+      ? statCard('選擇題答對', '—', '這一次作答的題目太少')
+      : keyLocked
+        ? statCard('已完成的題目', mc.length + ' / ' +
+            a.itemIds.map(getItem).filter(function(i){ return i && i.type === 'mc'; }).length,
+            '答對幾題要等答案打開之後才會算給你看')
+        : statCard('選擇題答對', right + ' / ' + mc.length,
           (function(){
             const total = a.itemIds.map(getItem).filter(function(i){ return i && i.type === 'mc'; }).length;
             const miss = total - mc.length;
             return pct(right / Math.max(1, mc.length)) + (miss ? '　另外 ' + miss + ' 題沒有作答' : '');
-          })())
-      : statCard('選擇題答對', '—', '這一次作答的題目太少')) +
+          })())) +
       statCard('我這次的閱讀力', (ps && mc.length) ? readingStars(ps.theta, diag.meanTheta) : '—',
         /* 沒有 ps 的真正原因不是「人不夠多」——這台平板上本來就只有自己
            那一筆，四個班的資料要由老師合併之後才算得出來。原本寫

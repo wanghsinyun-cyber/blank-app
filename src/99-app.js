@@ -379,6 +379,9 @@ function researchBundle(){
       logs: state.logs || [],
       dialog: state.dialog || [],
       aalNotes: state.aalNotes || [],
+      /* 被擋下的重複交卷。它是「這個孩子寫了但沒能落地」的唯一紀錄，
+         必須跟著資料包走，否則合併四台平板時就地消失。 */
+      orphanSubmits: state.orphanSubmits || [],
       surveys: (state.surveys || []).filter(function(s){ return !s.demo; })
     },
     processAnalytics: {
@@ -930,6 +933,27 @@ function bindEvents(){
     if (act === 'export-sdis'){ saveFile('kairos-sequences.sdis', toSDIS(), 'text/plain'); return; }
     if (act === 'export-tele'){ saveFile('kairos-telemetry.csv', toTelemetryCsv(), 'text/csv'); return; }
     if (act === 'export-ena'){ saveFile('kairos-ena-lines.csv', toENACsv(), 'text/csv'); return; }
+    if (act === 'orphan-show'){
+      const p = String(id).split('|');
+      const o = (state.orphanSubmits || []).find(function(x){ return x.aid === p[0] && x.sid === p[1]; });
+      if (!o) return;
+      const a = getAssignment(o.aid) || {itemIds:[]};
+      const items = a.itemIds.map(getItem).filter(Boolean);
+      alertModal({
+        title: esc(userName(o.sid)) + ' 那一份被擋下的作答',
+        body: items.map(function(it, i){
+          if (it.type === 'cr'){
+            const t = String((o.texts || {})[it.id] || '').trim();
+            const ink = (o.strokes || {})[it.id] ? '（另有手寫）' : '';
+            return '第 ' + (i + 1) + ' 題（非選）：' + (t ? t.slice(0, 120) : '（沒有打字）') + ink;
+          }
+          const c = (o.answers || {})[it.id];
+          return '第 ' + (i + 1) + ' 題：' + (c == null ? '（沒有作答）' : String.fromCharCode(65 + c));
+        }).join('\n'),
+        strong: '這一份沒有落地。已落地的是另一個分頁先交出去的那一份。',
+        note: '時間 ' + fmtDateTime(o.at) + '　·　完整內容在資料包的 raw.orphanSubmits'
+      });
+      return; }
     if (act === 'export-json'){ saveFile('kairos-research-data.json',
       JSON.stringify(researchBundle(), null, 2), 'application/json'); return; }
     if (act === 'export-csv'){ saveFile('kairos-responses.csv', responseCSV(), 'text/csv'); return; }
@@ -1615,11 +1639,30 @@ function submitQuizCommit(aid){
      也沒有補交路徑：被覆寫的孩子會以 16 題 null 進 Rasch。
      擋下時不要動 QUIZ——那半份作答是唯一還留著的救援材料。 */
   if (typeof submittedOnDisk === 'function' && submittedOnDisk(aid, me.id)){
+    /* 同 aalSubmitCommit：被擋下的那一份要另存，否則這道門會把一個
+       會自動修正的覆寫換成不可回復的資料遺失。 */
+    try {
+      state.orphanSubmits = (state.orphanSubmits || []).filter(function(o){
+        return !(o.aid === aid && o.sid === me.id); });
+      const strokes = {};
+      (getAssignment(aid) || {itemIds:[]}).itemIds.map(getItem).filter(Boolean)
+        .forEach(function(i){ if (i.type === 'cr'){ const p = padPayload(i.id); if (p) strokes[i.id] = p; } });
+      state.orphanSubmits.push({
+        aid: aid, sid: me.id, at: Date.now(), cond: conditionOfStudent(me.id),
+        reason: 'duplicate-submit',
+        answers: JSON.parse(JSON.stringify(QUIZ.answers || {})),
+        texts: JSON.parse(JSON.stringify(QUIZ.texts || {})),
+        strokes: strokes
+      });
+      save();
+    } catch (e) {
+      if (typeof console !== 'undefined' && console.error) console.error('[KAIROS] 被擋下的那一份存不起來', e);
+    }
     alertModal({
       title: '這一份已經交出去了',
       body: '另一個分頁（或另一次開啟）已經把這一份交出去了，所以這裡不會再存一次——' +
             '再存一次會把先交的那一份蓋掉。',
-      strong: '你剛剛在這一頁寫的東西沒有被存進去。',
+      strong: '你剛剛在這一頁寫的東西已經另外留起來了，沒有不見。',
       note: '請舉手告訴老師，不要自己關掉分頁。'
     });
     return;

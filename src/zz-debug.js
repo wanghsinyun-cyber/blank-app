@@ -399,7 +399,13 @@ window.assertStudentInvariants = function(){
   });
 
   /* 答案卡的門檻：後測還沒交的時候，兩份診斷都不可以出現正解。
-     這是 B1-02／B1-04 的核心，用一次可還原的模擬來驗。 */
+     這是 B1-02／B1-04 的核心，用一次可還原的模擬來驗。
+     ——原本這一段是空跑的：它把 a-post 的交卷紀錄移走，於是
+     #/result/a-pre 在「等這節課做完」那道門就 return、#/result/a-post 在
+     「這一份還沒交」那道門就 return，兩條路都渲染不出任何一張逐題卡片，
+     底下對「正解」與 .opt.right 的檢查是在掃兩張空狀態頁。
+     先確認頁面真的有題目卡片，沒有就報出來——空頁不算通過。
+     逐題揭露的完整檢查在 assertKeyLock()。 */
   (function(){
     const sid = state.classes[0].studentIds[0];
     const keep = state.submissions.filter(function(s){ return s.aid === 'a-post' && s.sid === sid; });
@@ -414,6 +420,26 @@ window.assertStudentInvariants = function(){
       } catch (e){ fails.push(h + ' → ' + e.message); }
     });
     state.submissions = state.submissions.concat(keep);
+    /* 這一次要真的走到有卡片的畫面：後測已交、但答案卡還鎖著。 */
+    state.settings.keyReleased = {};
+    const kls = classOfStudent(sid);
+    const held = kls ? kls.studentIds.slice(1, 3).map(function(x){
+      const rows = state.submissions.filter(function(s){ return s.aid === 'a-post' && s.sid === x; });
+      state.submissions = state.submissions.filter(function(s){ return !(s.aid === 'a-post' && s.sid === x); });
+      return rows;
+    }) : [];
+    if (!(state.surveys || []).some(function(s){ return s.sid === sid && s.phase === 'post'; }))
+      state.surveys.push({sid:sid, phase:'post', at:Date.now(), resp:{}, _tmp:true});
+    try {
+      location.hash = '#/result/a-post'; render();
+      const v = document.getElementById('view');
+      const cards = v.querySelectorAll('.item').length;
+      if (!cards) fails.push('答案卡鎖著時 #/result/a-post 一張逐題卡片都沒有——這個檢查在掃空頁');
+      if ((v.innerText || '').indexOf('正解') >= 0) fails.push('答案卡鎖著時仍印出「正解」');
+      if (v.querySelectorAll('.opt.right').length) fails.push('答案卡鎖著時仍標出正確選項');
+    } catch (e){ fails.push('#/result/a-post（鎖著）→ ' + e.message); }
+    state.surveys = (state.surveys || []).filter(function(s){ return !s._tmp; });
+    held.forEach(function(rows){ state.submissions = state.submissions.concat(rows); });
   })();
 
   state.ui.role = realRole; state.ui.impersonate = realImp; renderShell();
@@ -1405,11 +1431,19 @@ window.assertKeyLock = function(){
   if (/題很可惜|題你很厲害/.test(locked.text))
     fails.push('鎖著的時候還逐條列出第一／第二象限的題號');
   if (!locked.pills) fails.push('鎖著的時候逐題沒有改成中性的「已作答」');
-  /* 逐行掃：除了聚合分數與說明文字，不可以有任何「答對／答錯」 */
+  /* 逐行掃。用白名單列舉「可以出現的說明文字」很快就會失控（這一輪就先
+     踩了一次：新加的說明句自己撞到規則），所以改成抓真正的揭露形狀——
+     「答對／答錯」與『題號』或『分數』出現在同一行。
+     說明文字（「答對幾題要等答案打開之後才會算給你看」）兩者都沒有；
+     真正的洩漏（「第 8 題 答對」「選擇題答對 12 / 16」）一定有其中一個。 */
   const leaky = locked.text.split('\n').filter(function(l){
-    return /答對|答錯/.test(l) && !/^選擇題答對$/.test(l.trim()) && !/閱讀地圖要等答案打開/.test(l);
+    return /答對|答錯/.test(l) && /第\s*\d+\s*題|\d+\s*\/\s*\d+|\d+\s*%/.test(l);
   });
-  if (leaky.length) fails.push('鎖著的時候仍然出現逐題對錯：' + leaky.slice(0, 3).join(' ／ '));
+  if (leaky.length) fails.push('鎖著的時候仍然出現逐題對錯或分數：' + leaky.slice(0, 3).join(' ／ '));
+  /* 分數本身也不可以出現：兩端就是完整揭露（「16 / 16」＝整份答案都對，
+     「0 / 16」＝每一題都刪掉一個選項）。 */
+  if (/選擇題答對/.test(locked.text))
+    fails.push('鎖著的時候仍然印出「選擇題答對 N / M」——兩端等於完整揭露');
   /* 報讀器那一條路也要一起（kidmapSVG 的 <desc>） */
   if (/可惜的題目：/.test(locked.html)) fails.push('鎖著的時候 <desc> 仍然把可惜的題目念出來');
 
@@ -1424,5 +1458,86 @@ window.assertKeyLock = function(){
   location.hash = realHash || '#/teacher'; render();
   const r = {pass: fails.length === 0, fails: fails};
   console.log('[assertKeyLock]', r);
+  return r;
+};
+
+/* ==========================================================================
+   三個角色拿到的「話量與指示強度」要對等
+   32-aal.js 有一段註解指名這支斷言（「三句收斂到 6–7 字，見 zz-debug 的
+   assertStemParity」），但它從來沒有存在過——那條規格因此只靠註解維持，
+   而註解不會在改壞的時候報紅。
+   frame（27–28 字）、opener（12–18 字）、stem（6–7 字）都有寫死的規格；
+   PROMPT_ROLE 則完全沒有規格也沒有斷言，實測 53／72／65 字，
+   而「字數與另兩個角色相當」是這一輪自己新加的、沒有被量過的宣稱。
+   指示強度的不對等會直接變成三條件輸出行為的不對等，而輸出行為就是處遇本身。
+   console 一行：assertStemParity()
+   ========================================================================== */
+window.assertStemParity = function(){
+  const fails = [];
+  const roles = ['tutor', 'tutee', 'peer'];
+  const info = {};
+
+  /* (1) ROLE_STEM：6–7 字，而且三句最多差 1 字 */
+  const stems = roles.map(function(c){
+    const f = ROLE_STEM[c];
+    return f ? String(f('X')).replace(/X$/, '').length : -1;
+  });
+  info.stem = Object.fromEntries(roles.map(function(c, i){ return [c, stems[i]]; }));
+  stems.forEach(function(n, i){
+    if (n < 6 || n > 7) fails.push(roles[i] + ' 的 stem 是 ' + n + ' 字（規格 6–7）');
+  });
+  if (Math.max.apply(null, stems) - Math.min.apply(null, stems) > 1)
+    fails.push('三個 stem 的字數差超過 1：' + JSON.stringify(info.stem));
+
+  /* (2) frame：27–28 字（control 沒有 frame） */
+  info.frame = {};
+  CONDITIONS.forEach(function(c){
+    if (c.id === 'control') return;
+    const n = String(c.frame || '').length;
+    info.frame[c.id] = n;
+    if (n < 27 || n > 28) fails.push(c.id + ' 的 frame 是 ' + n + ' 字（規格 27–28）');
+  });
+
+  /* (3) opener：12–18 字，而且三個角色的池子大小一樣
+     （池子大小不同＝重複感不同，而重複感本身會影響投入） */
+  info.opener = {};
+  roles.forEach(function(c){
+    const p = ROLE_OPENER[c] || {first: [], later: []};
+    info.opener[c] = {first: (p.first || []).length, later: (p.later || []).length};
+    ['first', 'later'].forEach(function(which){
+      (p[which] || []).forEach(function(s, i){
+        const n = s.length;
+        if (n < 12 || n > 18)
+          fails.push(c + '/' + which + '[' + i + '] 是 ' + n + ' 字（規格 12–18）：' + s);
+      });
+    });
+  });
+  const firstN = roles.map(function(c){ return (ROLE_OPENER[c].first || []).length; });
+  const laterN = roles.map(function(c){ return (ROLE_OPENER[c].later || []).length; });
+  if (new Set(firstN).size !== 1 || new Set(laterN).size !== 1)
+    fails.push('三個角色的開場池大小不一致：' + JSON.stringify(info.opener));
+
+  /* (4) PROMPT_ROLE：三個角色模組的字數要落在同一個帶內。
+     這是這一輪新立的規格——原本只有一句沒被量過的註解。
+     帶寬取最短的 ±35%：社會框架本來就需要不同的字數說清楚，
+     但差到一半以上就不是「描述不同關係」而是「指示強度不同」了。 */
+  const pr = roles.map(function(c){ return String(PROMPT_ROLE[c] || '').length; });
+  info.promptRole = Object.fromEntries(roles.map(function(c, i){ return [c, pr[i]]; }));
+  const lo = Math.min.apply(null, pr), hi = Math.max.apply(null, pr);
+  if (lo <= 0) fails.push('有角色沒有提示詞模組：' + JSON.stringify(info.promptRole));
+  else if (hi / lo > 1.35)
+    fails.push('三個角色的提示詞模組字數差太多（' + JSON.stringify(info.promptRole) +
+      '，最長／最短 = ' + (hi / lo).toFixed(2) + '，上限 1.35）');
+
+  /* (5) 同一句「不要替他整理答案」三個角色都要有，或都不要有——
+     骨幹的嚴格禁止(5) 已經說過一次，重複叮嚀只給其中兩個就是強度不對等，
+     而漏掉的偏偏是最容易滑成「替孩子整理重點」的 tutee。 */
+  const remind = roles.map(function(c){ return /整理答案|整理重點/.test(String(PROMPT_ROLE[c] || '')); });
+  if (new Set(remind).size !== 1)
+    fails.push('「不要整理答案」這句提醒只有部分角色有：' +
+      JSON.stringify(Object.fromEntries(roles.map(function(c, i){ return [c, remind[i]]; }))));
+
+  const r = {pass: fails.length === 0, fails: fails, 量到的: info};
+  console.log('[assertStemParity]', r);
   return r;
 };

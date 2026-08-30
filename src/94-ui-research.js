@@ -599,6 +599,42 @@ function rExport(){
   '每次載入結果一致，可重現，但<strong>不得當成實徵結果引用</strong>。' +
   '你自己在平台上操作產生的事件會存進 localStorage 並一起匯出。</p></div></div>' +
 
+  /* 被擋下的重複交卷。有這一區，「請舉手告訴老師」才是一條真的路：
+     擋下來是對的（先交的那一份不可以被覆蓋），但「先按到的贏」不保證
+     先按到的是比較完整的那一份，而孩子那一份沒有任何介面讀得回來。 */
+  (function(){
+    const orphans = state.orphanSubmits || [];
+    if (!orphans.length) return '';
+    return '<div class="card" style="margin-top:16px;border-left:3px solid var(--crit)">' +
+    '<div class="card-h"><h3>被擋下的重複交卷</h3>' +
+    '<span class="pill q2"><span class="dot"></span>' + orphans.length + ' 筆</span></div>' +
+    '<div class="card-p">' +
+    '<p class="small" style="max-width:70ch">這些是「同一份已經交過了，所以第二次沒有落地」的作答。' +
+    '系統擋下來是為了不要覆蓋先交的那一份，但先按到的不一定是比較完整的那一份——' +
+    '請逐筆看過，決定要不要用它取代已落地的紀錄。</p>' +
+    '<div class="tablewrap"><table><thead><tr><th>學生</th><th>派題</th><th>時間</th>' +
+    '<th class="n">選擇題</th><th class="n">非選字數</th><th class="n">手寫</th>' +
+    '<th class="n">已落地的選擇題</th><th></th></tr></thead><tbody>' +
+    orphans.map(function(o){
+      const nMc = Object.keys(o.answers || {}).length;
+      const nTxt = Object.keys(o.texts || {}).reduce(function(a, k){
+        return a + String(o.texts[k] || '').trim().length; }, 0);
+      const nInk = Object.keys(o.strokes || {}).length;
+      const landed = state.responses.filter(function(r){
+        return r.aid === o.aid && r.sid === o.sid && r.choice != null; }).length;
+      return '<tr><td>' + esc(userName(o.sid)) + '</td>' +
+        '<td class="small">' + esc((getAssignment(o.aid) || {}).title || o.aid) + '</td>' +
+        '<td class="small num">' + fmtDateTime(o.at) + '</td>' +
+        '<td class="n">' + nMc + '</td><td class="n">' + nTxt + '</td><td class="n">' + nInk + '</td>' +
+        '<td class="n">' + landed + '</td>' +
+        '<td><button class="btn sm" data-act="orphan-show" data-id="' + esc(o.aid + '|' + o.sid) + '">看內容</button></td>' +
+        '</tr>';
+    }).join('') + '</tbody></table></div>' +
+    '<p class="muted small" style="margin-top:10px">它也在「完整研究資料包」的 raw.orphanSubmits 裡，' +
+    '合併其他平板的資料時會一起帶過來。</p>' +
+    '</div></div>';
+  })() +
+
   /* 題庫品質。第 8 輪量出 13/14 題的正解是唯一最長的選項，而那是一個
      不必讀文章就能用的作答規則——把數字印在這裡，換題就看得見。 */
   (function(){

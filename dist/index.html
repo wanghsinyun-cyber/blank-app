@@ -1896,21 +1896,47 @@ const PROMPT_BACKBONE =
 '【任務規則】你是一個嵌在「評量即學習」平台中的對話夥伴，陪國小四到六年級學生一起讀一篇文章。\n' +
 '【嚴格禁止】(1) 說出或暗示答案；(2) 指名答案在哪一個選項、第幾段或第幾句；(3) 判斷學生答對或答錯；\n' +
 '(4) 說出學生缺漏了哪一個得分要素；(5) 直接把文章重點整理給他。\n' +
+/* 「文章本身」原本不在這份清單裡，而清單是列舉式的——只列作答欄位與選項，
+   反而暗示文章看得到。送出去的提示詞從頭到尾只有題幹與學生剛剛講的話，
+   模型讀不到全文，於是孩子打「我覺得他後來很後悔」，三個角色都會很自然地
+   接一句「對啊，他一直想著那天的事」——一句憑空生成的文本內容，
+   而 leakGuard 攔的是判定語、選項字串、位置與指路語，攔不到它，
+   blocked 恆為 false，忠實度報表也看不見。II／EE 那幾題（主旨、語氣、
+   作者立場）孩子拿到的就是一句聽起來像出自原文、實際上是編的敘述。
+   把它寫進禁止清單，根因才收得掉——只刪掉 peer 那一句觸發器不夠，
+   排定的捏造沒了，被引出的捏造還在。 */
 '【你看不到的東西】你不會讀到學生的作答欄位，也不會知道他選了哪一個選項。\n' +
+'**你也讀不到那篇文章的全文**——你只拿得到題目本身。所以絕對不要描述、複述或' +
+'猜測文章裡寫了什麼（人物做了什麼、情節如何、作者的意思是什麼）。' +
+'你只能問他，不能告訴他文章在說什麼。\n' +
 '【每次回應】只做一件事：依系統指定的提問功能問一個問題。最多兩句話，' +
 '第一句回應學生剛剛說的內容，第二句提問。用國小中高年級聽得懂的口語，不要說教。\n' +
 '【回合上限】這一題最多與學生對話 6 個回合。';
 
 /* --- 角色提示模組（模組 1–3）：只有社會框架 --- */
 const PROMPT_ROLE = {
-  tutor: '【社會框架】你是陪學生讀的老師。用「我想確認你是怎麼看的」這種語氣，' +
-         '把問題丟回去給學生，不要幫他整理答案。',
+  /* 三個角色的模組現在同構：語氣一句、開場動作一句、同一句禁止、同一句交還。
+     只有「開場動作」隨社會框架而異——那正是要操弄的東西，其餘完全一樣。
+     原本 tutor 53 字、tutee 85、peer 97（比值 1.83），而 frame／opener／stem
+     三層都有寫死的規格、只有這一層沒有：指示強度的不對等會直接變成三條件
+     輸出行為的不對等，而輸出行為就是處遇本身。規格與斷言見
+     zz-debug 的 assertStemParity（那支斷言的名字在這個檔案裡被引用了好幾輪，
+     直到第 9 輪才真的存在）。
+     引用句一律不可含 LETTER_NEAR 的詞——那是這一輪踩了三次的坑
+     （tutee 的「可以」、peer 的「對」、tutee 開場句的「錯了」）。 */
+  tutor: '【社會框架】你是陪學生讀的老師，語氣是「我想確認你是怎麼看的」。' +
+         '每一輪先用一句話說你聽到他剛剛講的重點，不要加上你自己的看法，' +
+         '再把問題丟回去給他，不要替他整理答案。',
   /* 引用句原本是「我不太懂……你可以說給我聽嗎？」，含『可以』——而『可以』
      在 LETTER_NEAR 裡，與 peer 那一句「我們對一下」是同一個形狀：
      骨幹強制第一句回應學生剛講的內容，孩子報 A–D 是常態，
      兩者同段就被攔成「選項代號＋判定語」。指定語氣可以，指定字句不行。 */
-  tutee: '【社會框架】你是剛讀完這篇、但很多地方沒看懂的同學。你想請這位學生講給你聽，' +
-         '所以你的問題都要像「我不太懂……你說給我聽好不好？」而不是像在考他。',
+  /* 「不要替他整理答案」tutor 與 peer 各有一份，tutee 原本沒有——而 tutee
+     的社會框架就是「請你講給我聽」，最容易滑成模型反過來替孩子整理重點。
+     三個角色現在都有同一句提醒，指示強度才對得起來。 */
+  tutee: '【社會框架】你是剛讀完這篇、但很多地方沒看懂的同學，語氣是「這裡我還沒聽懂」。' +
+         '每一輪先用一句話說你哪裡沒聽懂，像在請他教你而不是在考他，' +
+         '再把問題交給他，不要替他整理答案。',
   /* 「先簡短說一句你自己讀到哪裡」已經拿掉。tutor 與 tutee 的角色模組
      都沒有任何自報進度的要求，只有 peer 有——而且括號只禁「第幾段第幾句」，
      擋不住「我讀到中間」「我卡在後面那段」這種軟位置線索。
@@ -1944,8 +1970,8 @@ const PROMPT_ROLE = {
      「限制內容」直接改成「不要求任何內容」，於是 LLM 路徑上的 peer 與
      tutor 幾乎只差一句引用語，而走哪一條路徑由網路逾時決定。 */
   peer:  '【社會框架】你是跟學生同時在讀這一篇的同學，語氣是對等的討論。' +
-         '每一輪先用一句話講你自己剛剛做的閱讀動作（像是又從頭讀了一遍、先看了題目），' +
-         '不要講文章的內容、位置或答案，再把同一個問題拋回去問他。'
+         '每一輪先用一句話講你自己剛剛的閱讀動作（像是「又從頭讀了一遍」），' +
+         '不要講文章內容或答案，再把問題拋回去問他，不要替他整理答案。'
 };
 
 /* --- 歷程提示模組（模組 4–7）：提問功能與子歷程提問庫 --- */
@@ -3459,6 +3485,8 @@ function rowKey(kind, r){
      卻一直不在合併清單裡——兩個分頁同時開著時，它會被無聲蓋掉，
      而這個損失只落在基準組。 */
   if (kind === 'aalNotes')    return [r.aid, r.sid, r.iid].join('|');
+  /* 被擋下的那一份（重複交卷）。每人每份留最後一次。 */
+  if (kind === 'orphanSubmits') return [r.aid, r.sid].join('|');
   return r.id != null ? String(r.id) : JSON.stringify(r);
 }
 
@@ -3478,7 +3506,7 @@ function rowKey(kind, r){
    只有 a11y 例外——那是本機的呈現設定。 */
 function mergeOntoDisk(disk){
   const out = disk;
-  ['logs', 'dialog', 'aalNotes', 'responses', 'submissions', 'surveys', 'notes', 'views'].forEach(function(kind){
+  ['logs', 'dialog', 'aalNotes', 'orphanSubmits', 'responses', 'submissions', 'surveys', 'notes', 'views'].forEach(function(kind){
     const mine = state[kind];
     if (!Array.isArray(mine)) return;
     const theirs = Array.isArray(out[kind]) ? out[kind] : [];
@@ -3555,7 +3583,7 @@ function mergeResearchBundle(bundle){
     throw new Error('這份資料包沒有 raw 區塊，可能是舊版匯出的。請在來源平板上重新匯出一次。');
   const roster = {};
   state.users.forEach(function(u){ roster[u.id] = true; });
-  const KINDS = ['responses', 'submissions', 'logs', 'dialog', 'aalNotes', 'surveys'];
+  const KINDS = ['responses', 'submissions', 'logs', 'dialog', 'aalNotes', 'orphanSubmits', 'surveys'];
   const added = {};
   let foreign = 0, demo = 0;
   KINDS.forEach(function(kind){
@@ -8708,14 +8736,23 @@ function viewResult(aid){
        不講清楚的話，只答一題的孩子會看到「1 / 1」而更困惑。 */
     /* 一題都沒作答時不要印「0 / 0　0%」，也不要餵 readingStars——
        那會憑空給出 ★★★☆☆。太少就明說太少。 */
-    (mc.length
-      ? statCard('選擇題答對', right + ' / ' + mc.length,
+    /* 答案卡還沒打開時，這張卡只報「參與」不報「表現」。
+       聚合分數看起來安全，其實兩端就是完整揭露：「16 / 16」等於把孩子
+       記得的整份答案宣告為正解，「0 / 16」等於替每一題刪掉一個選項，
+       中間值也給出逐題可信度——而他記得自己每題選了什麼正是這道鎖的前提。
+       這條路徑還不需要合併四班資料就成立，比逐題 pill 更容易在教室裡發生。 */
+    (!mc.length
+      ? statCard('選擇題答對', '—', '這一次作答的題目太少')
+      : keyLocked
+        ? statCard('已完成的題目', mc.length + ' / ' +
+            a.itemIds.map(getItem).filter(function(i){ return i && i.type === 'mc'; }).length,
+            '答對幾題要等答案打開之後才會算給你看')
+        : statCard('選擇題答對', right + ' / ' + mc.length,
           (function(){
             const total = a.itemIds.map(getItem).filter(function(i){ return i && i.type === 'mc'; }).length;
             const miss = total - mc.length;
             return pct(right / Math.max(1, mc.length)) + (miss ? '　另外 ' + miss + ' 題沒有作答' : '');
-          })())
-      : statCard('選擇題答對', '—', '這一次作答的題目太少')) +
+          })())) +
       statCard('我這次的閱讀力', (ps && mc.length) ? readingStars(ps.theta, diag.meanTheta) : '—',
         /* 沒有 ps 的真正原因不是「人不夠多」——這台平板上本來就只有自己
            那一筆，四個班的資料要由老師合併之後才算得出來。原本寫
@@ -11010,14 +11047,40 @@ function aalSubmitCommit(){
      缺答不進 Rasch，全站沒有補交路徑。
      擋下來的時候**不要丟草稿**：那一份還沒落地的作答是唯一的救援材料。 */
   if (submittedOnDisk(AAL.aid, me.id)){
-    AAL = null;
+    /* 把這一頁還沒落地的作答另存成「被擋下的那一份」。
+       擋下來是對的（先交的那一份不可以被覆蓋），但「先按到的贏」不保證
+       先按到的是比較完整的那一份——而草稿雖然留著卻沒有人讀得到：
+       viewAaL 在 submitted() 為真時一律轉去成績頁，aalInit 再也跑不到它，
+       〈再走一次〉又只在示範模式存在。沒有這一步，這道門就是把一個會自動
+       修正的覆寫換成不可回復的資料遺失。
+       存進 state 才進得了匯出檔與教師端；只存不覆蓋任何既有紀錄。 */
+    try {
+      state.orphanSubmits = (state.orphanSubmits || []).filter(function(o){
+        return !(o.aid === AAL.aid && o.sid === me.id); });
+      state.orphanSubmits.push({
+        aid: AAL.aid, sid: me.id, at: Date.now(), cond: AAL.cond,
+        reason: 'duplicate-submit',
+        answers: JSON.parse(JSON.stringify(AAL.answers || {})),
+        texts: JSON.parse(JSON.stringify(AAL.texts || {})),
+        strokes: (typeof aalPadsSnapshot === 'function') ? aalPadsSnapshot() : null
+      });
+      save();
+    } catch (e) {
+      if (typeof console !== 'undefined' && console.error) console.error('[KAIROS] 被擋下的那一份存不起來', e);
+    }
+    /* 不要在這裡把 AAL 清成 null。AAL 一為 null，measuringNow() 對這個分頁
+       就回傳 null——「施測中不可把 ui 寫回磁碟」與 storage 監聽器的施測守門
+       同時失效，而被擋下的分頁依定義正是那個身分可能已經過期的舊分頁；
+       同時 DOM 還停在作答頁，aalItem() 會丟 TypeError，上一題／下一題
+       變成按了沒反應的死鈕。先導離，AAL 由 render() 那一側釋放。 */
     alertModal({
       title: '這一份已經交出去了',
       body: '另一個分頁（或另一次開啟）已經把這一份交出去了，所以這裡不會再存一次——' +
             '再存一次會把先交的那一份蓋掉。',
-      strong: '你剛剛在這一頁寫的東西沒有被存進去。',
+      strong: '你剛剛在這一頁寫的東西已經另外留起來了，沒有不見。',
       note: '請舉手告訴老師，不要自己關掉分頁。'
     });
+    replaceHash('#/student');
     return;
   }
   AAL.items.forEach(function(it){
@@ -12453,6 +12516,42 @@ function rExport(){
   '每次載入結果一致，可重現，但<strong>不得當成實徵結果引用</strong>。' +
   '你自己在平台上操作產生的事件會存進 localStorage 並一起匯出。</p></div></div>' +
 
+  /* 被擋下的重複交卷。有這一區，「請舉手告訴老師」才是一條真的路：
+     擋下來是對的（先交的那一份不可以被覆蓋），但「先按到的贏」不保證
+     先按到的是比較完整的那一份，而孩子那一份沒有任何介面讀得回來。 */
+  (function(){
+    const orphans = state.orphanSubmits || [];
+    if (!orphans.length) return '';
+    return '<div class="card" style="margin-top:16px;border-left:3px solid var(--crit)">' +
+    '<div class="card-h"><h3>被擋下的重複交卷</h3>' +
+    '<span class="pill q2"><span class="dot"></span>' + orphans.length + ' 筆</span></div>' +
+    '<div class="card-p">' +
+    '<p class="small" style="max-width:70ch">這些是「同一份已經交過了，所以第二次沒有落地」的作答。' +
+    '系統擋下來是為了不要覆蓋先交的那一份，但先按到的不一定是比較完整的那一份——' +
+    '請逐筆看過，決定要不要用它取代已落地的紀錄。</p>' +
+    '<div class="tablewrap"><table><thead><tr><th>學生</th><th>派題</th><th>時間</th>' +
+    '<th class="n">選擇題</th><th class="n">非選字數</th><th class="n">手寫</th>' +
+    '<th class="n">已落地的選擇題</th><th></th></tr></thead><tbody>' +
+    orphans.map(function(o){
+      const nMc = Object.keys(o.answers || {}).length;
+      const nTxt = Object.keys(o.texts || {}).reduce(function(a, k){
+        return a + String(o.texts[k] || '').trim().length; }, 0);
+      const nInk = Object.keys(o.strokes || {}).length;
+      const landed = state.responses.filter(function(r){
+        return r.aid === o.aid && r.sid === o.sid && r.choice != null; }).length;
+      return '<tr><td>' + esc(userName(o.sid)) + '</td>' +
+        '<td class="small">' + esc((getAssignment(o.aid) || {}).title || o.aid) + '</td>' +
+        '<td class="small num">' + fmtDateTime(o.at) + '</td>' +
+        '<td class="n">' + nMc + '</td><td class="n">' + nTxt + '</td><td class="n">' + nInk + '</td>' +
+        '<td class="n">' + landed + '</td>' +
+        '<td><button class="btn sm" data-act="orphan-show" data-id="' + esc(o.aid + '|' + o.sid) + '">看內容</button></td>' +
+        '</tr>';
+    }).join('') + '</tbody></table></div>' +
+    '<p class="muted small" style="margin-top:10px">它也在「完整研究資料包」的 raw.orphanSubmits 裡，' +
+    '合併其他平板的資料時會一起帶過來。</p>' +
+    '</div></div>';
+  })() +
+
   /* 題庫品質。第 8 輪量出 13/14 題的正解是唯一最長的選項，而那是一個
      不必讀文章就能用的作答規則——把數字印在這裡，換題就看得見。 */
   (function(){
@@ -12914,6 +13013,9 @@ function researchBundle(){
       logs: state.logs || [],
       dialog: state.dialog || [],
       aalNotes: state.aalNotes || [],
+      /* 被擋下的重複交卷。它是「這個孩子寫了但沒能落地」的唯一紀錄，
+         必須跟著資料包走，否則合併四台平板時就地消失。 */
+      orphanSubmits: state.orphanSubmits || [],
       surveys: (state.surveys || []).filter(function(s){ return !s.demo; })
     },
     processAnalytics: {
@@ -13465,6 +13567,27 @@ function bindEvents(){
     if (act === 'export-sdis'){ saveFile('kairos-sequences.sdis', toSDIS(), 'text/plain'); return; }
     if (act === 'export-tele'){ saveFile('kairos-telemetry.csv', toTelemetryCsv(), 'text/csv'); return; }
     if (act === 'export-ena'){ saveFile('kairos-ena-lines.csv', toENACsv(), 'text/csv'); return; }
+    if (act === 'orphan-show'){
+      const p = String(id).split('|');
+      const o = (state.orphanSubmits || []).find(function(x){ return x.aid === p[0] && x.sid === p[1]; });
+      if (!o) return;
+      const a = getAssignment(o.aid) || {itemIds:[]};
+      const items = a.itemIds.map(getItem).filter(Boolean);
+      alertModal({
+        title: esc(userName(o.sid)) + ' 那一份被擋下的作答',
+        body: items.map(function(it, i){
+          if (it.type === 'cr'){
+            const t = String((o.texts || {})[it.id] || '').trim();
+            const ink = (o.strokes || {})[it.id] ? '（另有手寫）' : '';
+            return '第 ' + (i + 1) + ' 題（非選）：' + (t ? t.slice(0, 120) : '（沒有打字）') + ink;
+          }
+          const c = (o.answers || {})[it.id];
+          return '第 ' + (i + 1) + ' 題：' + (c == null ? '（沒有作答）' : String.fromCharCode(65 + c));
+        }).join('\n'),
+        strong: '這一份沒有落地。已落地的是另一個分頁先交出去的那一份。',
+        note: '時間 ' + fmtDateTime(o.at) + '　·　完整內容在資料包的 raw.orphanSubmits'
+      });
+      return; }
     if (act === 'export-json'){ saveFile('kairos-research-data.json',
       JSON.stringify(researchBundle(), null, 2), 'application/json'); return; }
     if (act === 'export-csv'){ saveFile('kairos-responses.csv', responseCSV(), 'text/csv'); return; }
@@ -14150,11 +14273,30 @@ function submitQuizCommit(aid){
      也沒有補交路徑：被覆寫的孩子會以 16 題 null 進 Rasch。
      擋下時不要動 QUIZ——那半份作答是唯一還留著的救援材料。 */
   if (typeof submittedOnDisk === 'function' && submittedOnDisk(aid, me.id)){
+    /* 同 aalSubmitCommit：被擋下的那一份要另存，否則這道門會把一個
+       會自動修正的覆寫換成不可回復的資料遺失。 */
+    try {
+      state.orphanSubmits = (state.orphanSubmits || []).filter(function(o){
+        return !(o.aid === aid && o.sid === me.id); });
+      const strokes = {};
+      (getAssignment(aid) || {itemIds:[]}).itemIds.map(getItem).filter(Boolean)
+        .forEach(function(i){ if (i.type === 'cr'){ const p = padPayload(i.id); if (p) strokes[i.id] = p; } });
+      state.orphanSubmits.push({
+        aid: aid, sid: me.id, at: Date.now(), cond: conditionOfStudent(me.id),
+        reason: 'duplicate-submit',
+        answers: JSON.parse(JSON.stringify(QUIZ.answers || {})),
+        texts: JSON.parse(JSON.stringify(QUIZ.texts || {})),
+        strokes: strokes
+      });
+      save();
+    } catch (e) {
+      if (typeof console !== 'undefined' && console.error) console.error('[KAIROS] 被擋下的那一份存不起來', e);
+    }
     alertModal({
       title: '這一份已經交出去了',
       body: '另一個分頁（或另一次開啟）已經把這一份交出去了，所以這裡不會再存一次——' +
             '再存一次會把先交的那一份蓋掉。',
-      strong: '你剛剛在這一頁寫的東西沒有被存進去。',
+      strong: '你剛剛在這一頁寫的東西已經另外留起來了，沒有不見。',
       note: '請舉手告訴老師，不要自己關掉分頁。'
     });
     return;

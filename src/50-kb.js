@@ -169,6 +169,8 @@ function rowKey(kind, r){
      卻一直不在合併清單裡——兩個分頁同時開著時，它會被無聲蓋掉，
      而這個損失只落在基準組。 */
   if (kind === 'aalNotes')    return [r.aid, r.sid, r.iid].join('|');
+  /* 被擋下的那一份（重複交卷）。每人每份留最後一次。 */
+  if (kind === 'orphanSubmits') return [r.aid, r.sid].join('|');
   return r.id != null ? String(r.id) : JSON.stringify(r);
 }
 
@@ -188,7 +190,7 @@ function rowKey(kind, r){
    只有 a11y 例外——那是本機的呈現設定。 */
 function mergeOntoDisk(disk){
   const out = disk;
-  ['logs', 'dialog', 'aalNotes', 'responses', 'submissions', 'surveys', 'notes', 'views'].forEach(function(kind){
+  ['logs', 'dialog', 'aalNotes', 'orphanSubmits', 'responses', 'submissions', 'surveys', 'notes', 'views'].forEach(function(kind){
     const mine = state[kind];
     if (!Array.isArray(mine)) return;
     const theirs = Array.isArray(out[kind]) ? out[kind] : [];
@@ -265,7 +267,7 @@ function mergeResearchBundle(bundle){
     throw new Error('這份資料包沒有 raw 區塊，可能是舊版匯出的。請在來源平板上重新匯出一次。');
   const roster = {};
   state.users.forEach(function(u){ roster[u.id] = true; });
-  const KINDS = ['responses', 'submissions', 'logs', 'dialog', 'aalNotes', 'surveys'];
+  const KINDS = ['responses', 'submissions', 'logs', 'dialog', 'aalNotes', 'orphanSubmits', 'surveys'];
   const added = {};
   let foreign = 0, demo = 0;
   KINDS.forEach(function(kind){

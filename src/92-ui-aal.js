@@ -1199,14 +1199,40 @@ function aalSubmitCommit(){
      缺答不進 Rasch，全站沒有補交路徑。
      擋下來的時候**不要丟草稿**：那一份還沒落地的作答是唯一的救援材料。 */
   if (submittedOnDisk(AAL.aid, me.id)){
-    AAL = null;
+    /* 把這一頁還沒落地的作答另存成「被擋下的那一份」。
+       擋下來是對的（先交的那一份不可以被覆蓋），但「先按到的贏」不保證
+       先按到的是比較完整的那一份——而草稿雖然留著卻沒有人讀得到：
+       viewAaL 在 submitted() 為真時一律轉去成績頁，aalInit 再也跑不到它，
+       〈再走一次〉又只在示範模式存在。沒有這一步，這道門就是把一個會自動
+       修正的覆寫換成不可回復的資料遺失。
+       存進 state 才進得了匯出檔與教師端；只存不覆蓋任何既有紀錄。 */
+    try {
+      state.orphanSubmits = (state.orphanSubmits || []).filter(function(o){
+        return !(o.aid === AAL.aid && o.sid === me.id); });
+      state.orphanSubmits.push({
+        aid: AAL.aid, sid: me.id, at: Date.now(), cond: AAL.cond,
+        reason: 'duplicate-submit',
+        answers: JSON.parse(JSON.stringify(AAL.answers || {})),
+        texts: JSON.parse(JSON.stringify(AAL.texts || {})),
+        strokes: (typeof aalPadsSnapshot === 'function') ? aalPadsSnapshot() : null
+      });
+      save();
+    } catch (e) {
+      if (typeof console !== 'undefined' && console.error) console.error('[KAIROS] 被擋下的那一份存不起來', e);
+    }
+    /* 不要在這裡把 AAL 清成 null。AAL 一為 null，measuringNow() 對這個分頁
+       就回傳 null——「施測中不可把 ui 寫回磁碟」與 storage 監聽器的施測守門
+       同時失效，而被擋下的分頁依定義正是那個身分可能已經過期的舊分頁；
+       同時 DOM 還停在作答頁，aalItem() 會丟 TypeError，上一題／下一題
+       變成按了沒反應的死鈕。先導離，AAL 由 render() 那一側釋放。 */
     alertModal({
       title: '這一份已經交出去了',
       body: '另一個分頁（或另一次開啟）已經把這一份交出去了，所以這裡不會再存一次——' +
             '再存一次會把先交的那一份蓋掉。',
-      strong: '你剛剛在這一頁寫的東西沒有被存進去。',
+      strong: '你剛剛在這一頁寫的東西已經另外留起來了，沒有不見。',
       note: '請舉手告訴老師，不要自己關掉分頁。'
     });
+    replaceHash('#/student');
     return;
   }
   AAL.items.forEach(function(it){
