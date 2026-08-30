@@ -694,10 +694,21 @@ function aalSubmit(){
     if (blank) missIdx.push(idx);
   });
 
+  /* 「交出去就不能再改」原本只出現在「全部寫完」那一支——兩支是 if / else if，
+     互斥。也就是說：唯一沒被告知不可逆的，正好是最可能想「先交、等一下回來補」
+     的那群孩子；而整個平台一路在教他「進度會保留」「接著上次繼續」，
+     這個誤讀完全合理。按下確定之後草稿被刪、從此被導去成績頁，
+     全站沒有任何補交路徑，缺答永久寫成 null 進不了 Rasch——
+     而缺答率與條件共變，程式自己在上面的註解裡標記過這個偏誤來源，
+     安全網卻只裝在他走不到的分支上。
+     不可逆那句提到兩支共用的前置，並把畫面上真的存在的第三條路
+     （〈先離開（進度會保留）〉）寫進去。 */
+  const FINAL = '交出去之後就不能再修改。';
   if (missIdx.length){
     const nos = missIdx.map(function(idx){ return '第 ' + (idx + 1) + ' 題'; }).join('、');
-    if (!confirm('還有 ' + missIdx.length + ' 題沒寫完：' + nos +
-                 '。\n\n按「確定」直接交卷，按「取消」回去把它寫完。')){
+    if (!confirm(FINAL + '\n\n還有 ' + missIdx.length + ' 題沒寫完：' + nos +
+                 '。\n\n按「確定」直接交卷；按「取消」回去把它寫完，' +
+                 '或用上面的〈先離開（進度會保留）〉，寫過的都會留著。')){
       /* 取消不是什麼都不做——把他帶到第一題沒寫完的地方 */
       AAL.idx = missIdx[0];
       aalSave();
@@ -711,7 +722,7 @@ function aalSubmit(){
       toast('帶你回到第 ' + (missIdx[0] + 1) + ' 題。');
       return;
     }
-  } else if (!confirm('要交卷了嗎？交出去之後就不能再修改。')){
+  } else if (!confirm(FINAL + '\n\n要交卷了嗎？')){
     return;
   }
 

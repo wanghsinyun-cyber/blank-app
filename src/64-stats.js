@@ -100,8 +100,10 @@ function analysisDataset(){
       const asks = logs.filter(function(e){ return e.type === 'ASK'; });
       const rel = {BELOW:0, AT:0, ABOVE:0};
       asks.forEach(function(e){ rel[e.rel || 'AT']++; });
-      const checks = logs.filter(function(e){ return e.code === 'C'; }).length;
-      const marks = logs.filter(function(e){ return e.code === 'M'; }).length;
+      /* 切換型事件要折疊：取消也被算一次的話，自我檢核勾選數（真的會跑 ANCOVA）
+         每題只有 5 個檢核項卻可能報出 9。見 34-log.js 的 foldedCount。 */
+      const checks = foldedCount(logs, 'C', 'idx');
+      const marks = foldedCount(logs, 'M', 'sent');
       // 情緒以「學生自己寫的文字」為準：對照組沒有對話，改採其筆記，四條件才可比較
       const voiced = logs.filter(function(e){ return e.type === 'ASK' || e.code === 'N'; });
       const sents = voiced.map(function(e){

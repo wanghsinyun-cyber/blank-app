@@ -203,6 +203,18 @@ function viewMyGrowth(){
   if (me.role !== 'student') return '<div class="empty"><h3>這一頁是學生看的</h3>' +
     '<a class="btn" href="#/teacher">回教師後台</a></div>';
 
+  /* 與 viewResult 同一道門檻，理由相同：這一頁會說「比課前有沒有進步：有往上」，
+     那是比分數更直接的績效回饋，而它就掛在側欄，整份問卷期間都點得到。
+     這裡原本連「有沒有交卷」都沒查。 */
+  if (submitted('a-post', me.id) && !surveyOf(me.id, 'post')){
+    return '<div class="empty"><h3>先把這節課的問卷填完</h3>' +
+      '<p style="max-width:60ch">問卷問的是你剛剛上這節課的感覺。先看到自己有沒有進步再回答，' +
+      '你的感覺就會被那個結果帶著走——所以我們把這一頁先收起來。填完就會打開。</p>' +
+      '<div class="row" style="margin-top:14px">' +
+      '<a class="btn primary" href="#/survey/post">去填課後問卷 →</a>' +
+      '<a class="btn" href="#/student">回我的作業</a></div></div>';
+  }
+
   /* 不走 dualTrack()：那一份只涵蓋知識建構示範班（settings.kbClassId）的 24 人，
      其餘 72 人會直接撞到空狀態。diagnose 的 roster 是四班 96 人，四個條件都有資料。 */
   const pre  = diagnose(state, 'a-pre');

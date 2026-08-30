@@ -70,6 +70,27 @@ function foldToggleLog(logs, code, keyField){
   });
   return Object.keys(on);
 }
+/* 一批日誌裡，某一種切換型事件最後「還開著」有幾個。
+   上面那條原則（寫入端記切換、讀取端必須折疊）本來只有 inspectMarks
+   與唯讀重播的自我檢核兩處遵守，其餘讀取端一律數原始筆數——
+   而取消標記寫的是 MARK/M 加 on:false、取消檢核寫的是 off:true，
+   於是「點了又取消」被算成兩次。
+   膨脹量與「反覆切換的傾向」共變，不是隨機誤差；而 checks 是
+   64-stats.js 的 outcomeList 裡真的會跑 ANCOVA 的結果變項
+   （每題只有 5 個檢核項，卻可能報出 9）。
+   必須先依題目分組再折疊：不同題目的 sent／idx 會互相碰撞
+   （每一題都有第 0 句、第 0 個檢核項）。 */
+function foldedCount(logs, code, keyField){
+  const byItem = {};
+  logs.forEach(function(e){
+    if (e.code !== code) return;
+    const k = e.iid || '_';
+    (byItem[k] = byItem[k] || []).push(e);
+  });
+  return Object.keys(byItem).reduce(function(n, k){
+    return n + foldToggleLog(byItem[k], code, keyField).length;
+  }, 0);
+}
 
 /* --- 條件查詢 --- */
 function conditionOfClass(cid){
@@ -325,17 +346,22 @@ function toTelemetryCsv(){
   allLogs().forEach(function(e){
     const k = e.sid + '|' + e.iid;
     const r = byKey[k] = byKey[k] || {sid:e.sid, iid:e.iid, cond:e.cond, proc:e.proc,
-      fkl:'', keys:'', del:'', pause:'', marks:0, opts:0, turns:0, checks:0,
+      fkl:'', keys:'', del:'', pause:'', mEv:[], cEv:[], opts:0, turns:0,
       t0:e.t, t1:e.t, sent:[], };
     r.t0 = Math.min(r.t0, e.t); r.t1 = Math.max(r.t1, e.t);
     if (e.type === 'TELEMETRY'){ r.fkl = e.firstKeyLatency; r.keys = e.keystrokes; r.del = e.deletions; r.pause = e.longPauses; }
-    if (e.code === 'M') r.marks++;
+    /* 標記與檢核是切換型事件，取消也會寫一筆——不能在這裡 ++。
+       先收起來，輸出時用 foldToggleLog 折成「最後還開著幾個」。
+       這一列的鍵已經是 sid|iid，所以不需要再依題目分組。 */
+    if (e.code === 'M') r.mEv.push(e);
     if (e.code === 'O') r.opts++;
-    if (e.code === 'C') r.checks++;
+    if (e.code === 'C') r.cEv.push(e);
     if (e.type === 'ASK'){ r.turns++; if (e.sent != null) r.sent.push(e.sent); }
   });
   Object.keys(byKey).forEach(function(k){
     const r = byKey[k], kl = classOfStudent(r.sid), it = getItem(r.iid);
+    r.marks = foldToggleLog(r.mEv, 'M', 'sent').length;
+    r.checks = foldToggleLog(r.cEv, 'C', 'idx').length;
     rows.push([r.sid, userName(r.sid), kl ? kl.name : '', r.cond, r.iid, r.proc,
       r.fkl, r.keys, r.del, r.pause, r.marks, r.opts, r.turns, r.checks,
       r.t1 - r.t0, r.sent.length ? (r.sent.reduce(function(a, b){ return a + b; }, 0) / r.sent.length).toFixed(3) : '']);

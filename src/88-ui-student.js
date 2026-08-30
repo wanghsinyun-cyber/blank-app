@@ -61,6 +61,8 @@ function viewStudent(){
       const done = submitted(a.id, me.id);
       const n = a.itemIds.length;
       const draftN = (!done && a.aal) ? aalDraftProgress(a.id, me.id) : 0;
+      /* 這節課交了、但課後問卷還沒送出：先不給任何成績訊號 */
+      const surveyPending = submitted('a-post', me.id) && !surveyOf(me.id, 'post');
       const right = state.responses.filter(function(r){
         return r.aid === a.id && r.sid === me.id && r.correct === true; }).length;
       return '<div class="card"><div class="card-p"><div class="row" style="justify-content:space-between">' +
@@ -73,7 +75,12 @@ function viewStudent(){
              鐘響、平板沒電、被叫走——寫到一半離開的孩子回來看到「尚未作答」，
              按鈕還寫著「開始這節課」，兩句都不是真的，而「開始」讀起來
              像要從頭來過。草稿一直都在 localStorage，只是首頁沒有講。 */
-          (done ? '<span class="pill q1"><span class="dot"></span>已完成 · 選擇題答對 ' + right + '</span>'
+          /* 課後問卷還沒送出時，這張卡片本身就不能印分數——
+             「已完成 · 選擇題答對 12」是一次績效回饋，而它就擺在
+             「去填課後問卷」的旁邊（見 viewResult 的門檻說明）。 */
+          (done ? (surveyPending
+                    ? '<span class="pill q1"><span class="dot"></span>已完成</span>'
+                    : '<span class="pill q1"><span class="dot"></span>已完成 · 選擇題答對 ' + right + '</span>')
                 : draftN ? '<span class="pill q4"><span class="dot"></span>寫到一半 · 已寫 ' + draftN + ' / ' + n + ' 題</span>'
                 : '<span class="pill">尚未作答</span>') +
         '</div></div>' +
@@ -81,7 +88,9 @@ function viewStudent(){
            示範模式下補一顆「再走一次」，讓人看得到這套流程長什麼樣子；
            正式施測時 demoSeed 為 false，這顆鈕不會出現。 */
         '<div class="row">' + (done
-          ? '<a class="btn" href="#/result/' + a.id + '">看我這次讀得怎麼樣</a>' +
+          ? (surveyPending
+              ? '<a class="btn primary" href="#/survey/post">去填課後問卷 →</a>'
+              : '<a class="btn" href="#/result/' + a.id + '">看我這次讀得怎麼樣</a>') +
             (state.demoSeed !== false && a.aal && !isImpersonating()
               ? ' <button class="btn sm" data-act="redo-demo" data-id="' + a.id +
                 '">再走一次（示範）</button>' : '')
@@ -252,6 +261,24 @@ function viewResult(aid){
       '<div class="row" style="margin-top:14px">' +
       '<a class="btn primary" href="#/' + (a.aal ? 'aal' : 'quiz') + '/' + a.id + '">' +
       (a.aal ? '回去把這節課做完 →' : '回去作答 →') + '</a>' +
+      '<a class="btn" href="#/student">回我的作業</a></div></div>';
+  }
+  /* 課後問卷還沒送出之前，這一頁不能開。
+     surveyGate() 只擋了一個方向（沒交卷不能填問卷），反方向完全沒有門檻：
+     孩子從問卷任何一段按側欄回「我的作業」，同一畫面上「去填課後問卷」旁邊
+     就是「看我這次讀得怎麼樣」，點進去拿到「選擇題答對 12 / 16　75%」、
+     五顆星等與閱讀地圖，看完再回頭把問卷填完。
+     而課後問卷裡的 eff（含「我相信我可以在這次閱讀測驗拿到不錯的成績」）、
+     anx、mot_in／mot_ex 是 phase:'both' 的前後測配對依變項——
+     先看到分數再作答，量到的是績效回饋不是介入效果。
+     更麻煩的是「會不會繞這一趟」是孩子自選的，與能力、作答節奏、
+     進而與條件共變，四組被污染的比例並不對等。 */
+  if (!isTeacher() && submitted('a-post', me.id) && !surveyOf(me.id, 'post')){
+    return '<div class="empty"><h3>先把這節課的問卷填完</h3>' +
+      '<p style="max-width:60ch">問卷問的是你剛剛上這節課的感覺。先看到分數再回答，' +
+      '你的感覺就會被分數帶著走——所以我們把這一頁先收起來。填完就會打開。</p>' +
+      '<div class="row" style="margin-top:14px">' +
+      '<a class="btn primary" href="#/survey/post">去填課後問卷 →</a>' +
       '<a class="btn" href="#/student">回我的作業</a></div></div>';
   }
   /* 前測診斷在後測交卷之前不給正解——後測用的是同一份題本。

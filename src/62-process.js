@@ -85,7 +85,12 @@ function enaLines(){
     (seqs[k] = seqs[k] || []).push(e);
   });
   Object.keys(seqs).forEach(function(k){
-    const s = seqs[k].sort(function(a, b){ return a.t - b.t; });
+    /* 「取消標記」「取消檢核」不是一次認知動作。原本 code 'M' 一律編成
+       EVID（援引依據）、'C' 一律編成 MON（監控），連取消都算——
+       於是反覆切換的孩子在認知網絡上看起來最會回到文本。
+       寫入端記的是切換（見 34-log.js 的原則），讀取端要先把取消排掉。 */
+    const s = seqs[k].filter(function(e){ return !(e.on === false || e.off === true); })
+                     .sort(function(a, b){ return a.t - b.t; });
     s.forEach(function(e, i){
       const c = {};
       if (e.type === 'ASK'){

@@ -1922,6 +1922,27 @@ function foldToggleLog(logs, code, keyField){
   });
   return Object.keys(on);
 }
+/* 一批日誌裡，某一種切換型事件最後「還開著」有幾個。
+   上面那條原則（寫入端記切換、讀取端必須折疊）本來只有 inspectMarks
+   與唯讀重播的自我檢核兩處遵守，其餘讀取端一律數原始筆數——
+   而取消標記寫的是 MARK/M 加 on:false、取消檢核寫的是 off:true，
+   於是「點了又取消」被算成兩次。
+   膨脹量與「反覆切換的傾向」共變，不是隨機誤差；而 checks 是
+   64-stats.js 的 outcomeList 裡真的會跑 ANCOVA 的結果變項
+   （每題只有 5 個檢核項，卻可能報出 9）。
+   必須先依題目分組再折疊：不同題目的 sent／idx 會互相碰撞
+   （每一題都有第 0 句、第 0 個檢核項）。 */
+function foldedCount(logs, code, keyField){
+  const byItem = {};
+  logs.forEach(function(e){
+    if (e.code !== code) return;
+    const k = e.iid || '_';
+    (byItem[k] = byItem[k] || []).push(e);
+  });
+  return Object.keys(byItem).reduce(function(n, k){
+    return n + foldToggleLog(byItem[k], code, keyField).length;
+  }, 0);
+}
 
 /* --- 條件查詢 --- */
 function conditionOfClass(cid){
@@ -2177,17 +2198,22 @@ function toTelemetryCsv(){
   allLogs().forEach(function(e){
     const k = e.sid + '|' + e.iid;
     const r = byKey[k] = byKey[k] || {sid:e.sid, iid:e.iid, cond:e.cond, proc:e.proc,
-      fkl:'', keys:'', del:'', pause:'', marks:0, opts:0, turns:0, checks:0,
+      fkl:'', keys:'', del:'', pause:'', mEv:[], cEv:[], opts:0, turns:0,
       t0:e.t, t1:e.t, sent:[], };
     r.t0 = Math.min(r.t0, e.t); r.t1 = Math.max(r.t1, e.t);
     if (e.type === 'TELEMETRY'){ r.fkl = e.firstKeyLatency; r.keys = e.keystrokes; r.del = e.deletions; r.pause = e.longPauses; }
-    if (e.code === 'M') r.marks++;
+    /* 標記與檢核是切換型事件，取消也會寫一筆——不能在這裡 ++。
+       先收起來，輸出時用 foldToggleLog 折成「最後還開著幾個」。
+       這一列的鍵已經是 sid|iid，所以不需要再依題目分組。 */
+    if (e.code === 'M') r.mEv.push(e);
     if (e.code === 'O') r.opts++;
-    if (e.code === 'C') r.checks++;
+    if (e.code === 'C') r.cEv.push(e);
     if (e.type === 'ASK'){ r.turns++; if (e.sent != null) r.sent.push(e.sent); }
   });
   Object.keys(byKey).forEach(function(k){
     const r = byKey[k], kl = classOfStudent(r.sid), it = getItem(r.iid);
+    r.marks = foldToggleLog(r.mEv, 'M', 'sent').length;
+    r.checks = foldToggleLog(r.cEv, 'C', 'idx').length;
     rows.push([r.sid, userName(r.sid), kl ? kl.name : '', r.cond, r.iid, r.proc,
       r.fkl, r.keys, r.del, r.pause, r.marks, r.opts, r.turns, r.checks,
       r.t1 - r.t0, r.sent.length ? (r.sent.reduce(function(a, b){ return a + b; }, 0) / r.sent.length).toFixed(3) : '']);
@@ -3511,7 +3537,12 @@ function enaLines(){
     (seqs[k] = seqs[k] || []).push(e);
   });
   Object.keys(seqs).forEach(function(k){
-    const s = seqs[k].sort(function(a, b){ return a.t - b.t; });
+    /* 「取消標記」「取消檢核」不是一次認知動作。原本 code 'M' 一律編成
+       EVID（援引依據）、'C' 一律編成 MON（監控），連取消都算——
+       於是反覆切換的孩子在認知網絡上看起來最會回到文本。
+       寫入端記的是切換（見 34-log.js 的原則），讀取端要先把取消排掉。 */
+    const s = seqs[k].filter(function(e){ return !(e.on === false || e.off === true); })
+                     .sort(function(a, b){ return a.t - b.t; });
     s.forEach(function(e, i){
       const c = {};
       if (e.type === 'ASK'){
@@ -3790,8 +3821,10 @@ function analysisDataset(){
       const asks = logs.filter(function(e){ return e.type === 'ASK'; });
       const rel = {BELOW:0, AT:0, ABOVE:0};
       asks.forEach(function(e){ rel[e.rel || 'AT']++; });
-      const checks = logs.filter(function(e){ return e.code === 'C'; }).length;
-      const marks = logs.filter(function(e){ return e.code === 'M'; }).length;
+      /* 切換型事件要折疊：取消也被算一次的話，自我檢核勾選數（真的會跑 ANCOVA）
+         每題只有 5 個檢核項卻可能報出 9。見 34-log.js 的 foldedCount。 */
+      const checks = foldedCount(logs, 'C', 'idx');
+      const marks = foldedCount(logs, 'M', 'sent');
       // 情緒以「學生自己寫的文字」為準：對照組沒有對話，改採其筆記，四條件才可比較
       const voiced = logs.filter(function(e){ return e.type === 'ASK' || e.code === 'N'; });
       const sents = voiced.map(function(e){
@@ -5877,7 +5910,7 @@ function tabReplay(diag){
   const rows = inspectRoster(a.id).map(function(sid){
     const cond = condition(conditionOfStudent(sid));
     const said = dial.filter(function(d){ return d.sid === sid && d.speaker === 'student'; }).length;
-    const marks = logs.filter(function(e){ return e.sid === sid && e.code === 'M'; }).length;
+    const marks = foldedCount(logs.filter(function(e){ return e.sid === sid; }), 'M', 'sent');
     const ans = state.responses.filter(function(r){
       return r.aid === a.id && r.sid === sid &&
              (r.choice != null || (r.text && r.text.length)); }).length;
@@ -5890,7 +5923,7 @@ function tabReplay(diag){
     statCard('有對話記錄', withDialog, '對照組沒有 AI 夥伴，屬正常') +
     statCard('學生發話總數', dial.filter(function(d){ return d.speaker === 'student'; }).length,
              '每題上限 ' + ((state.settings && state.settings.maxTurns) || MAX_TURNS) + ' 次') +
-    statCard('文句標記總數', logs.filter(function(e){ return e.code === 'M'; }).length, '學生在文本上畫的線') +
+    statCard('文句標記總數', foldedCount(logs, 'M', 'sent'), '學生在文本上畫的線（取消的不算）') +
     '</div>' +
 
     '<div class="card card-p" style="margin-bottom:16px;border-left:3px solid var(--accent)">' +
@@ -6620,6 +6653,18 @@ function viewMyGrowth(){
   if (me.role !== 'student') return '<div class="empty"><h3>這一頁是學生看的</h3>' +
     '<a class="btn" href="#/teacher">回教師後台</a></div>';
 
+  /* 與 viewResult 同一道門檻，理由相同：這一頁會說「比課前有沒有進步：有往上」，
+     那是比分數更直接的績效回饋，而它就掛在側欄，整份問卷期間都點得到。
+     這裡原本連「有沒有交卷」都沒查。 */
+  if (submitted('a-post', me.id) && !surveyOf(me.id, 'post')){
+    return '<div class="empty"><h3>先把這節課的問卷填完</h3>' +
+      '<p style="max-width:60ch">問卷問的是你剛剛上這節課的感覺。先看到自己有沒有進步再回答，' +
+      '你的感覺就會被那個結果帶著走——所以我們把這一頁先收起來。填完就會打開。</p>' +
+      '<div class="row" style="margin-top:14px">' +
+      '<a class="btn primary" href="#/survey/post">去填課後問卷 →</a>' +
+      '<a class="btn" href="#/student">回我的作業</a></div></div>';
+  }
+
   /* 不走 dualTrack()：那一份只涵蓋知識建構示範班（settings.kbClassId）的 24 人，
      其餘 72 人會直接撞到空狀態。diagnose 的 roster 是四班 96 人，四個條件都有資料。 */
   const pre  = diagnose(state, 'a-pre');
@@ -6795,6 +6840,8 @@ function viewStudent(){
       const done = submitted(a.id, me.id);
       const n = a.itemIds.length;
       const draftN = (!done && a.aal) ? aalDraftProgress(a.id, me.id) : 0;
+      /* 這節課交了、但課後問卷還沒送出：先不給任何成績訊號 */
+      const surveyPending = submitted('a-post', me.id) && !surveyOf(me.id, 'post');
       const right = state.responses.filter(function(r){
         return r.aid === a.id && r.sid === me.id && r.correct === true; }).length;
       return '<div class="card"><div class="card-p"><div class="row" style="justify-content:space-between">' +
@@ -6807,7 +6854,12 @@ function viewStudent(){
              鐘響、平板沒電、被叫走——寫到一半離開的孩子回來看到「尚未作答」，
              按鈕還寫著「開始這節課」，兩句都不是真的，而「開始」讀起來
              像要從頭來過。草稿一直都在 localStorage，只是首頁沒有講。 */
-          (done ? '<span class="pill q1"><span class="dot"></span>已完成 · 選擇題答對 ' + right + '</span>'
+          /* 課後問卷還沒送出時，這張卡片本身就不能印分數——
+             「已完成 · 選擇題答對 12」是一次績效回饋，而它就擺在
+             「去填課後問卷」的旁邊（見 viewResult 的門檻說明）。 */
+          (done ? (surveyPending
+                    ? '<span class="pill q1"><span class="dot"></span>已完成</span>'
+                    : '<span class="pill q1"><span class="dot"></span>已完成 · 選擇題答對 ' + right + '</span>')
                 : draftN ? '<span class="pill q4"><span class="dot"></span>寫到一半 · 已寫 ' + draftN + ' / ' + n + ' 題</span>'
                 : '<span class="pill">尚未作答</span>') +
         '</div></div>' +
@@ -6815,7 +6867,9 @@ function viewStudent(){
            示範模式下補一顆「再走一次」，讓人看得到這套流程長什麼樣子；
            正式施測時 demoSeed 為 false，這顆鈕不會出現。 */
         '<div class="row">' + (done
-          ? '<a class="btn" href="#/result/' + a.id + '">看我這次讀得怎麼樣</a>' +
+          ? (surveyPending
+              ? '<a class="btn primary" href="#/survey/post">去填課後問卷 →</a>'
+              : '<a class="btn" href="#/result/' + a.id + '">看我這次讀得怎麼樣</a>') +
             (state.demoSeed !== false && a.aal && !isImpersonating()
               ? ' <button class="btn sm" data-act="redo-demo" data-id="' + a.id +
                 '">再走一次（示範）</button>' : '')
@@ -6986,6 +7040,24 @@ function viewResult(aid){
       '<div class="row" style="margin-top:14px">' +
       '<a class="btn primary" href="#/' + (a.aal ? 'aal' : 'quiz') + '/' + a.id + '">' +
       (a.aal ? '回去把這節課做完 →' : '回去作答 →') + '</a>' +
+      '<a class="btn" href="#/student">回我的作業</a></div></div>';
+  }
+  /* 課後問卷還沒送出之前，這一頁不能開。
+     surveyGate() 只擋了一個方向（沒交卷不能填問卷），反方向完全沒有門檻：
+     孩子從問卷任何一段按側欄回「我的作業」，同一畫面上「去填課後問卷」旁邊
+     就是「看我這次讀得怎麼樣」，點進去拿到「選擇題答對 12 / 16　75%」、
+     五顆星等與閱讀地圖，看完再回頭把問卷填完。
+     而課後問卷裡的 eff（含「我相信我可以在這次閱讀測驗拿到不錯的成績」）、
+     anx、mot_in／mot_ex 是 phase:'both' 的前後測配對依變項——
+     先看到分數再作答，量到的是績效回饋不是介入效果。
+     更麻煩的是「會不會繞這一趟」是孩子自選的，與能力、作答節奏、
+     進而與條件共變，四組被污染的比例並不對等。 */
+  if (!isTeacher() && submitted('a-post', me.id) && !surveyOf(me.id, 'post')){
+    return '<div class="empty"><h3>先把這節課的問卷填完</h3>' +
+      '<p style="max-width:60ch">問卷問的是你剛剛上這節課的感覺。先看到分數再回答，' +
+      '你的感覺就會被分數帶著走——所以我們把這一頁先收起來。填完就會打開。</p>' +
+      '<div class="row" style="margin-top:14px">' +
+      '<a class="btn primary" href="#/survey/post">去填課後問卷 →</a>' +
       '<a class="btn" href="#/student">回我的作業</a></div></div>';
   }
   /* 前測診斷在後測交卷之前不給正解——後測用的是同一份題本。
@@ -8316,10 +8388,21 @@ function aalSubmit(){
     if (blank) missIdx.push(idx);
   });
 
+  /* 「交出去就不能再改」原本只出現在「全部寫完」那一支——兩支是 if / else if，
+     互斥。也就是說：唯一沒被告知不可逆的，正好是最可能想「先交、等一下回來補」
+     的那群孩子；而整個平台一路在教他「進度會保留」「接著上次繼續」，
+     這個誤讀完全合理。按下確定之後草稿被刪、從此被導去成績頁，
+     全站沒有任何補交路徑，缺答永久寫成 null 進不了 Rasch——
+     而缺答率與條件共變，程式自己在上面的註解裡標記過這個偏誤來源，
+     安全網卻只裝在他走不到的分支上。
+     不可逆那句提到兩支共用的前置，並把畫面上真的存在的第三條路
+     （〈先離開（進度會保留）〉）寫進去。 */
+  const FINAL = '交出去之後就不能再修改。';
   if (missIdx.length){
     const nos = missIdx.map(function(idx){ return '第 ' + (idx + 1) + ' 題'; }).join('、');
-    if (!confirm('還有 ' + missIdx.length + ' 題沒寫完：' + nos +
-                 '。\n\n按「確定」直接交卷，按「取消」回去把它寫完。')){
+    if (!confirm(FINAL + '\n\n還有 ' + missIdx.length + ' 題沒寫完：' + nos +
+                 '。\n\n按「確定」直接交卷；按「取消」回去把它寫完，' +
+                 '或用上面的〈先離開（進度會保留）〉，寫過的都會留著。')){
       /* 取消不是什麼都不做——把他帶到第一題沒寫完的地方 */
       AAL.idx = missIdx[0];
       aalSave();
@@ -8333,7 +8416,7 @@ function aalSubmit(){
       toast('帶你回到第 ' + (missIdx[0] + 1) + ' 題。');
       return;
     }
-  } else if (!confirm('要交卷了嗎？交出去之後就不能再修改。')){
+  } else if (!confirm(FINAL + '\n\n要交卷了嗎？')){
     return;
   }
 
@@ -10649,7 +10732,14 @@ function submitQuiz(aid){
   const items = a.itemIds.map(getItem).filter(Boolean);
   const mcs = items.filter(function(i){ return i.type === 'mc'; });
   const missing = mcs.filter(function(i){ return QUIZ.answers[i.id] === undefined; });
-  if (missing.length && !confirm('還有 ' + missing.length + ' 題沒作答，確定要交卷嗎？')) return;
+  /* 同 aalSubmit：不可逆那句要放在前面，而且要列出題號。
+     原本這一支更短——「還有 N 題沒作答，確定要交卷嗎？」，連是哪幾題都沒說，
+     孩子按取消之後畫面留在原地，只能自己一題一題找。 */
+  if (missing.length){
+    const nos = missing.map(function(i){ return itemLabel(aid, i.id); }).join('、');
+    if (!confirm('交出去之後就不能再修改。\n\n還有 ' + missing.length + ' 題沒作答：' +
+                 nos + '。\n\n按「確定」直接交卷，按「取消」回去把它寫完。')) return;
+  } else if (!confirm('交出去之後就不能再修改。\n\n要交卷了嗎？')) return;
   items.forEach(function(it){
     state.responses = state.responses.filter(function(r){
       return !(r.aid === aid && r.sid === me.id && r.iid === it.id); });

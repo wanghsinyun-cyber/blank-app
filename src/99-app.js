@@ -1069,7 +1069,14 @@ function submitQuiz(aid){
   const items = a.itemIds.map(getItem).filter(Boolean);
   const mcs = items.filter(function(i){ return i.type === 'mc'; });
   const missing = mcs.filter(function(i){ return QUIZ.answers[i.id] === undefined; });
-  if (missing.length && !confirm('還有 ' + missing.length + ' 題沒作答，確定要交卷嗎？')) return;
+  /* 同 aalSubmit：不可逆那句要放在前面，而且要列出題號。
+     原本這一支更短——「還有 N 題沒作答，確定要交卷嗎？」，連是哪幾題都沒說，
+     孩子按取消之後畫面留在原地，只能自己一題一題找。 */
+  if (missing.length){
+    const nos = missing.map(function(i){ return itemLabel(aid, i.id); }).join('、');
+    if (!confirm('交出去之後就不能再修改。\n\n還有 ' + missing.length + ' 題沒作答：' +
+                 nos + '。\n\n按「確定」直接交卷，按「取消」回去把它寫完。')) return;
+  } else if (!confirm('交出去之後就不能再修改。\n\n要交卷了嗎？')) return;
   items.forEach(function(it){
     state.responses = state.responses.filter(function(r){
       return !(r.aid === aid && r.sid === me.id && r.iid === it.id); });

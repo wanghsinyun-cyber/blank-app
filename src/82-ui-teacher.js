@@ -613,7 +613,7 @@ function tabReplay(diag){
   const rows = inspectRoster(a.id).map(function(sid){
     const cond = condition(conditionOfStudent(sid));
     const said = dial.filter(function(d){ return d.sid === sid && d.speaker === 'student'; }).length;
-    const marks = logs.filter(function(e){ return e.sid === sid && e.code === 'M'; }).length;
+    const marks = foldedCount(logs.filter(function(e){ return e.sid === sid; }), 'M', 'sent');
     const ans = state.responses.filter(function(r){
       return r.aid === a.id && r.sid === sid &&
              (r.choice != null || (r.text && r.text.length)); }).length;
@@ -626,7 +626,7 @@ function tabReplay(diag){
     statCard('有對話記錄', withDialog, '對照組沒有 AI 夥伴，屬正常') +
     statCard('學生發話總數', dial.filter(function(d){ return d.speaker === 'student'; }).length,
              '每題上限 ' + ((state.settings && state.settings.maxTurns) || MAX_TURNS) + ' 次') +
-    statCard('文句標記總數', logs.filter(function(e){ return e.code === 'M'; }).length, '學生在文本上畫的線') +
+    statCard('文句標記總數', foldedCount(logs, 'M', 'sent'), '學生在文本上畫的線（取消的不算）') +
     '</div>' +
 
     '<div class="card card-p" style="margin-bottom:16px;border-left:3px solid var(--accent)">' +
