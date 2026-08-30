@@ -221,8 +221,11 @@ function viewMyGrowth(){
   const post = diagnose(state, 'a-post');
   const pp = pre  && pre.ready  ? pre.perStudent.find(function(p){ return p.sid === me.id; })  : null;
   const qp = post && post.ready ? post.perStudent.find(function(p){ return p.sid === me.id; }) : null;
+  /* 「等前測與後測都完成」只講了一半：兩次都交完之後，還要老師把四個班的
+     資料合併起來跑一次共同校準，θ 才估得出來。只講前半的話，已經交完兩次
+     的孩子會停在這一頁等一個不會來的東西。 */
   if (!pp && !qp) return '<div class="empty"><h3>還沒有可以看的紀錄</h3>' +
-    '<p style="max-width:60ch">你的紀錄要等前測與後測都完成之後才算得出來。</p>' +
+    '<p style="max-width:60ch">你的紀錄要等前測與後測都交完，而且老師把四個班的資料合起來之後才算得出來。</p>' +
     '<a class="btn" href="#/student">回我的作業</a></div>';
 
   /* 母體是「自己班」，不是示範班。用預設範圍的話，示範班以外的 72 位學生

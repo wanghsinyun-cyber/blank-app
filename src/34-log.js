@@ -437,13 +437,13 @@ function toTelemetryCsv(){
   })();
   const rows = [['sid','name','class','condition','item','item_process',
                  'first_key_latency_ms','keystrokes','deletions','long_pauses',
-                 'marks','option_clicks','turns','self_checks','dwell_ms','mean_sentiment']];
+                 'marks','option_clicks','turns','self_checks','dwell_ms','revisits','mean_sentiment']];
   const byKey = {};
   allLogs().forEach(function(e){
     const k = e.sid + '|' + e.iid;
     const r = byKey[k] = byKey[k] || {sid:e.sid, iid:e.iid, cond:e.cond, proc:e.proc,
       fkl:'', keys:'', del:'', pause:'', mEv:[], cEv:[], opts:0, turns:0, visits:[],
-      t0:e.t, t1:e.t, sent:[], };
+      revisits:'', t0:e.t, t1:e.t, sent:[], };
     r.t0 = Math.min(r.t0, e.t); r.t1 = Math.max(r.t1, e.t);
     /* 停留時間要用 ENTER→EXIT 的區間累加，不能用 max(t) − min(t)：
        aalSubmit 會在交卷的同一毫秒替每一題補寫 TELEMETRY 與 SUBMIT，
@@ -454,7 +454,9 @@ function toTelemetryCsv(){
       const open = r.visits.filter(function(v){ return v.out === null; }).pop();
       if (open) open.out = e.t;
     }
-    if (e.type === 'TELEMETRY'){ r.fkl = e.firstKeyLatency; r.keys = e.keystrokes; r.del = e.deletions; r.pause = e.longPauses; }
+    if (e.type === 'TELEMETRY'){ r.fkl = e.firstKeyLatency; r.keys = e.keystrokes; r.del = e.deletions; r.pause = e.longPauses;
+      /* 舊資料沒有這一欄；ENTER 的 visit 也算得出來，兩者取大的那個。 */
+      r.revisits = e.revisits != null ? e.revisits : r.revisits; }
     /* 標記與檢核是切換型事件，取消也會寫一筆——不能在這裡 ++。
        先收起來，輸出時用 foldToggleLog 折成「最後還開著幾個」。
        這一列的鍵已經是 sid|iid，所以不需要再依題目分組。 */
@@ -481,7 +483,8 @@ function toTelemetryCsv(){
       : (r.t1 - r.t0);
     rows.push([r.sid, userName(r.sid), kl ? kl.name : '', r.cond, r.iid, r.proc,
       r.fkl, r.keys, r.del, r.pause, r.marks, r.opts, r.turns, r.checks,
-      r.dwell, r.sent.length ? (r.sent.reduce(function(a, b){ return a + b; }, 0) / r.sent.length).toFixed(3) : '']);
+      r.dwell, r.revisits === '' ? Math.max(0, r.visits.length - 1) : r.revisits,
+      r.sent.length ? (r.sent.reduce(function(a, b){ return a + b; }, 0) / r.sent.length).toFixed(3) : '']);
   });
   return rows.map(function(r){
     return r.map(function(c){ return '"' + String(c).replace(/"/g, '""') + '"'; }).join(',');

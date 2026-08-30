@@ -19,7 +19,14 @@ const CONDITIONS = [
       而多出來的那一段還是一則明示的閱讀策略指示（「你是從哪裡看出來的」），
       只有一個條件拿得到：EVID 的組間差異會有一部分是被這句話教出來的。
       三句一律兩句話、27–28 字、只描述社會關係，不指名任何閱讀策略。 */
-   frame:'我是陪你讀的老師。我不會告訴你答案，我會一直問你問題。',
+   /* 原本是「……我會一直問你問題。」——但夥伴永遠不會先開口（agentTurn 在
+      學生路徑上的唯一呼叫端是 aalSay），承諾的問題要等孩子先打完字才會出現。
+      三句裡只有這一句沒把發言權交給孩子：tutee 是「你可以講給我聽嗎？」、
+      peer 是「我們各自說說」，都明確要求孩子先講。照字面等待的孩子，
+      這一題（很可能整節課）的學生發話回合就是 0——而回合數就是三個 AI
+      條件的處遇劑量，RQ1 量到的差異會有一部分來自開場文案，不是社會框架。
+      改文案不改劑量，維持兩句、28 字、只描述社會關係、不指名閱讀策略。 */
+   frame:'我是陪你讀的老師。我不會告訴你答案，先聽你怎麼讀這一篇。',
    mech:'適性鷹架與形成性提問',
    note:'指導性鷹架可能壓縮學習者自主性，故本平台限制其僅能提問、不得評價。'},
   {id:'tutee',   name:'同學小葉', en:'AI-as-Tutee',  cls:'sc3', mark:'●',
@@ -358,7 +365,7 @@ function agentTurn(conditionId, item, turn, rnd){
     (ROLE_STEM[conditionId] || function(q){ return q; })(body);
 
   return {
-    text: leakGuard(text, item).text,
+    text: leakGuard(text, item, conditionId).text,
     qfn: qfnId,
     sub: sub ? sub.id : null,
     process: sub ? sub.p : pid,
@@ -370,9 +377,36 @@ function agentTurn(conditionId, item, turn, rnd){
    規則引擎本來就不會產生答案，但外部語言模型會。輸出後一律過這一關，
    攔截次數本身就是一項可報告的實施忠實度指標。 */
 const VERDICT_WORDS = ['答對', '答錯', '正確答案', '你錯了', '你對了', '正解是', '應該選', '答案是', '選項是'];
+/* 不含「答案」二字的判定語。孩子的原話會原樣送進提示詞（【學生剛剛說】），
+   骨幹又要求第一句回應他剛剛說的內容——於是外部模型對「答案是不是 B？」
+   最自然的回覆是「B 我覺得不太對耶」「不是 B 喔」「對耶」「沒錯」「再想想」
+   「很接近了」，上面那一組一個都不命中，原文照送、blocked 為 false。
+   而「AI 不可判斷對錯」是硬不變量，leakGuard 是全站唯一的執行機制
+   （提示詞只是請求，模型不保證遵守）。孩子逐一報字母討價還價，每題 6 個
+   回合足以刷掉三個誘答，四選一的猜對機率從 .25 逼近 1.0。 */
+const VERDICT_SOFT = ['對了', '對耶', '沒錯', '正確', '不正確', '不對', '不是這個',
+                      '錯了', '猜對', '再想想', '差一點', '很接近', '接近了', '就是這個'];
+/* 判定語的鄰近詞。裸露的 A–D 只要跟這些字出現在同一句就攔——
+   不再要求 (選|答案|正解) 前綴，也不再只比對正解那一個字母。 */
+const LETTER_NEAR = ['對', '錯', '不是', '是不是', '應該', '沒錯', '就是', '選', '可以'];
 /* 指路語。判定詞擋的是「說出答案」，這一組擋的是「帶他去某個地方找」——
    兩者都是提示。內建引擎不會產生它們，這一組是給外部模型用的。 */
 const POINTER_WORDS = ['線索在', '你去看', '再看看第', '答案在', '提示：', '往前找', '往後找'];
+/* 攔截後的替換文依角色而異。原本三個角色一律換上同一句
+   『這個我不能說喔。換個方式問你：……』——它明說自己知道答案只是不講，
+   還用「換個方式問你」這種施教者口吻，完全不經 ROLE_OPENER／ROLE_STEM。
+   對 tutor 它在框架內（小葵的 frame 本來就寫「我不會告訴你答案」），對
+   tutee（剛讀完、很多地方沒看懂的同學）與 peer（一起讀的同學）則直接否定
+   該條件的社會框架：門生效應要成立的前提是孩子相信小葉真的不會、需要他教，
+   一句「這個我不能說喔」就把小葉變回一個藏著答案的老師。
+   而一直逼問答案的孩子正是最常觸發攔截的人——框架破口的頻率由受試者自己的
+   行為決定，那個行為又與投入、能力共變。三句等長，語域各自對齊。 */
+const GUARD_REPLY = {
+  tutor: '這個我不能說喔。你剛剛是從哪一句看出來的？',
+  tutee: '那裡我也還沒看懂。你剛剛是從哪一句想到的？',
+  peer:  '這個我也還沒想清楚。你是從哪一句看出來的？'
+};
+const GUARD_REPLY_FALLBACK = '這個我不能說喔。你剛剛是從哪一句看出來的？';
 /* 「第 N 段」「第二段」都要認得。CN 只到十——文本沒有超過十段的。 */
 const CN_NUM = ['零','一','二','三','四','五','六','七','八','九','十'];
 function posRe(n, unit){
@@ -380,14 +414,30 @@ function posRe(n, unit){
   return new RegExp('第\\s*(' + n + cn + ')\\s*' + unit);
 }
 
-function leakGuard(text, item){
+function leakGuard(text, item, conditionId){
   let t = String(text), hits = [];
-  VERDICT_WORDS.forEach(function(w){ if (t.indexOf(w) >= 0) hits.push(w); });
+  /* 兩類分開記：'verdict' 是判斷對錯，'leak' 是洩答或指路。
+     忠實度報表要分得開這兩件事——它們違反的是不同的不變量。 */
+  function verdict(w){ hits.push('verdict:' + w); }
+  function leak(w){ hits.push('leak:' + w); }
+  VERDICT_WORDS.forEach(function(w){ if (t.indexOf(w) >= 0) verdict(w); });
+  VERDICT_SOFT.forEach(function(w){ if (t.indexOf(w) >= 0) verdict(w); });
   if (item && item.type === 'mc' && item.options){
-    const ans = item.options[item.answer];
-    if (ans && ans.length > 3 && t.indexOf(ans) >= 0) hits.push('正解字串');
-    const letter = String.fromCharCode(65 + item.answer);
-    if (new RegExp('(選|答案|正解)\\s*' + letter + '\\b').test(t)) hits.push('正解代號');
+    /* 誘答字串也要比對，不只正解。「B 不是這個意思」照樣把一個選項刷掉。 */
+    item.options.forEach(function(o, k){
+      if (o && o.length > 3 && t.indexOf(o) >= 0) leak(k === item.answer ? '正解字串' : '誘答字串');
+    });
+    /* 任何裸露的 A–D 只要跟判定語出現在同一句就攔。原本的規則要求
+       (選|答案|正解) 前綴、而且只比對正解那一個字母：「不是 B 喔」
+       （B 是誘答）完全不命中，而那正是刷掉誘答最有效的一句話。 */
+    const sentences = t.split(/[。！？!?\n]/);
+    for (let s = 0; s < sentences.length; s++){
+      const seg = sentences[s];
+      if (!/[A-D]/.test(seg)) continue;
+      if (LETTER_NEAR.some(function(w){ return seg.indexOf(w) >= 0; })){
+        verdict('選項代號＋判定語'); break;
+      }
+    }
   }
   /* 位置線索一律擋，不再只擋「這一題正解所在的那一個位置」。
      原本比對的是 item.answerPara／answerSent：正解在第 2 段而模型回
@@ -397,20 +447,23 @@ function leakGuard(text, item){
      更嚴重的是兩題建構反應題的 answerPara／answerSent 都是 null，
      整條位置規則對它們從來沒有生效過。
      「AI 不可給提示」是不變量，任何指路都違反它，不管指得對不對。 */
-  for (let n = 1; n <= 10 && !hits.length; n++){
-    if (posRe(n, '段').test(t)) hits.push('指名段落位置');
+  for (let n = 1; n <= 10; n++){
+    if (posRe(n, '段').test(t)){ leak('指名段落位置'); break; }
   }
   for (let n = 1; n <= 40; n++){
-    if (posRe(n, '句').test(t)){ hits.push('指名句次位置'); break; }
+    if (posRe(n, '句').test(t)){ leak('指名句次位置'); break; }
   }
   /* 判定詞之外還有指路語。VERDICT_WORDS 只收「答對／正解是」這一類，
      擋不住「線索在」「你去看」「再看看第」——那些同樣是提示。 */
-  POINTER_WORDS.forEach(function(w){ if (t.indexOf(w) >= 0) hits.push(w); });
+  POINTER_WORDS.forEach(function(w){ if (t.indexOf(w) >= 0) leak(w); });
   if (hits.length){
-    return {text:'這個我不能說喔。換個方式問你：你剛剛是從文章的哪一句得到這個想法的？',
-            blocked:true, hits:hits};
+    const kinds = [];
+    if (hits.some(function(h){ return h.indexOf('verdict:') === 0; })) kinds.push('verdict');
+    if (hits.some(function(h){ return h.indexOf('leak:') === 0; })) kinds.push('leak');
+    return {text: GUARD_REPLY[conditionId] || GUARD_REPLY_FALLBACK,
+            blocked:true, hits:hits, kinds:kinds};
   }
-  return {text:t, blocked:false, hits:[]};
+  return {text:t, blocked:false, hits:[], kinds:[]};
 }
 
 /* ==========================================================================

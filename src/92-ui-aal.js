@@ -110,11 +110,15 @@ function aalSave(){
        交給學生的瀏覽器：清掉網站資料就能重新領 6 次。額度改由已落地的
        state.dialog 推導，見 aalStudentTurns()。 */
     const prev = all[aalDraftId()] || {};
+    /* noteWritten 也要存：它是「這一題的這一段文字已經寫過一筆 'N' 了」的
+       帳本。不存的話，重整之後同一段沒改過的筆記會再記一筆，對照組的
+       分析單位數就跟著孩子重整幾次而變動。 */
     const mine = {answers:AAL.answers, texts:AAL.texts, notes:AAL.notes,
                   marks:AAL.marks, checks:AAL.checks, tele:AAL.tele,
-                  drafts:AAL.drafts, says:AAL.says, strokes:aalPadsSnapshot()};
+                  drafts:AAL.drafts, says:AAL.says, noteWritten:AAL._noteWritten || {},
+                  strokes:aalPadsSnapshot()};
     const merged = mergeDraftMaps(prev, mine,
-      ['answers','texts','notes','marks','checks','tele','drafts','says','strokes']);
+      ['answers','texts','notes','marks','checks','tele','drafts','says','noteWritten','strokes']);
     merged.idx = AAL.idx;
     merged.savedAt = Date.now();
     all[aalDraftId()] = merged;
@@ -169,6 +173,7 @@ function aalInit(aid){
       AAL.tele    = d.tele    || {};
       AAL.drafts  = d.drafts  || {};
       AAL.says    = d.says    || {};
+      AAL._noteWritten = d.noteWritten || {};
       aalPadsRestore(d.strokes);
       /* 每一題的 enter 重設為現在。不重設的話，離線的那幾個小時會被
          算進 firstKeyLatency，產生沒有意義的離群值。
@@ -258,7 +263,7 @@ function aalStudentTurns(iid){
 }
 function aalTele(iid){
   return AAL.tele[iid] = AAL.tele[iid] || {firstKeyLatency:null, keystrokes:0, deletions:0,
-    longPauses:0, lastKey:null, enter:Date.now(), prevLen:0};
+    longPauses:0, lastKey:null, enter:Date.now(), prevLen:0, revisits:0};
 }
 
 /* 進出題目的邊界。這一支同時修掉兩個結構性失效的匯出變項：
@@ -280,9 +285,24 @@ function aalEnterItem(it){
   if (!AAL || !it) return;
   if (AAL._curIid === it.id) return;
   aalExitItem();
+  const fresh = !AAL.tele[it.id];
   AAL._curIid = it.id;
-  aalTele(it.id);
-  aalLog('ENTER', null, {}, it);
+  const t = aalTele(it.id);
+  /* 場內重入也要重設，理由與 aalInit 的續作路徑完全相同，只是那裡做了、
+     這裡沒有。aalTele 對已存在的紀錄是 no-op，於是 enter 永遠釘在
+     「這一場次第一次進入該題」——題本是 T1 選擇題 → C01 → T2 選擇題 → C02，
+     導覽只有上一題／下一題、沒有跳題，最典型的做法就是先跳過兩題作文、
+     繞一圈再回來寫。firstKeyLatency 於是把中間在別題的十幾分鐘全算進去，
+     回來第一筆時 lastKey 還停在離開前，又多記一次 longPause。
+     這兩欄只長在那兩題非選上，沒有別題可以稀釋，膨脹量正比於換題次數，
+     而換題節奏本身與條件共變。
+     只對「還沒下過筆」的題目重設 enter——已經量到的值再重設就是把對的蓋掉。 */
+  if (!fresh){
+    if (t.firstKeyLatency === null) t.enter = Date.now();
+    t.lastKey = null;
+    t.revisits = (t.revisits || 0) + 1;
+  }
+  aalLog('ENTER', null, {visit: (t.revisits || 0) + 1}, it);
 }
 function aalExitItem(){
   if (!AAL || !AAL._curIid) return;
@@ -766,7 +786,19 @@ function flushNoteFor(it){
   if (AAL._noteWritten && AAL._noteWritten[it.id] === txt) return false;
   AAL._noteWritten = AAL._noteWritten || {};
   AAL._noteWritten[it.id] = txt;
-  aalLog('NOTE', 'N', {text: txt, turn: noteTurnOf(it.id)}, it);
+  /* 時間戳要用「最後一次按鍵」，不是 flush 的那一刻。
+     這裡是全庫唯一寫 code:'N' 的地方，而觸發它的是換題／交卷／離開路由／
+     beforeunload——用 Date.now() 的話，'N' 在依 sid|iid|visit 切出來的每一段
+     序列裡結構性地永遠排在最後（其後只可能接交卷批次補寫的 'S'）。
+     三個 AI 條件的 ASK 是孩子按下送出的當下寫入、位置自由，於是 RQ4 的
+     LSA／ENA／SDIS 會拿一個位置由 flush 時機決定的條件，去比三個位置由
+     行為決定的條件：M→N、O→N、W→N 這些轉移在對照組結構上永遠測不到，
+     而 N→S 則被強制吃下 N 的全部出邊。寫入時間是唯一的時間戳，事後無法重建。
+     密度不動——仍然是每題每次造訪最多一筆（見上面的 _noteWritten 守門），
+     不讓對照組的分析單位數超過三個 AI 條件。 */
+  const te = AAL.tele[it.id];
+  const ts = (te && te.lastKey) || Date.now();
+  aalLog('NOTE', 'N', {t: ts, rel: ts - AAL.t0, text: txt, turn: noteTurnOf(it.id)}, it);
   return true;
 }
 function flushTypeTelemetry(){
@@ -796,7 +828,11 @@ async function aalSay(){
   let box = document.getElementById('aalSay');
   if (!box) return;
   const text = box.value.trim();
-  if (!text) return;
+  /* 空白送出原本是裸 return：沒有 toast、沒有任何畫面變化。
+     照字面等夥伴先開口的孩子，唯一能按的按鈕給他完全的沉默——
+     而「夥伴不會先講話」這件事三個角色都成立，只有 tutor 的開場白
+     曾經承諾過相反的事（見 32-aal.js 的 frame）。 */
+  if (!text){ toast('先在框裡打一句話再送出。'); try { box.focus(); } catch (e) {} return; }
   const it = aalItem();
   /* 記下這一輪是在哪一題發起的。await 期間學生可能已經按了下一題，
      it 是舊題、DOM 是新題的節點，寫回去就會出現「一句話沒講就剩 1 次」。 */
@@ -872,9 +908,11 @@ async function aalSay(){
           {role:'system', content: composePrompt(ctx.cond, it.process || 'FR', qfnNow)},
           {role:'user', content:'【題目】' + it.stem + '\n【學生剛剛說】' + text}
         ], {max_tokens:200, temperature:0.7, signal: ac ? ac.signal : undefined});
-        const g = leakGuard(raw, it);
+        /* 條件要傳進去：攔截後的替換文依角色而異，三個角色共用一句
+           施教者口吻的話會把 tutee／peer 的社會框架直接否定。 */
+        const g = leakGuard(raw, it, ctx.cond);
         reply = {text:g.text, qfn:qfnNow,
-                 sub:null, engine:'llm', blocked:g.blocked, hits:g.hits};
+                 sub:null, engine:'llm', blocked:g.blocked, hits:g.hits, kinds:g.kinds};
       } catch (err) {
         /* 退回內建規則引擎。fallback 原本只賦值、沒有任何讀取端，於是
            「因為網路慢而由規則引擎頂上的那一輪」在匯出資料裡與「整場研究
@@ -916,6 +954,10 @@ async function aalSay(){
         aid:ctx.aid, iid:ctx.it.id, proc:ctx.it.process || 'FR', type:'AI', code:'A',
         text:reply.text, qfn:reply.qfn, sub:reply.sub, turn:ctx.turn,
         engine:reply.engine, blocked: !!reply.blocked,
+        /* 攔截原因分兩類：'verdict'（判斷對錯）與 'leak'（洩答或指路）。
+           忠實度報表要分得開——它們違反的是不同的不變量。 */
+        blockKinds: (reply.kinds && reply.kinds.length) ? reply.kinds.join('+') : null,
+        blockHits: (reply.hits && reply.hits.length) ? reply.hits.join(',') : null,
         /* 設定的引擎與這一輪實際跑的引擎不一定相同，事後要分得出來。 */
         engineWanted: useLlm ? 'llm' : 'builtin',
         fallback: reply.fallback || null});
@@ -1106,7 +1148,11 @@ function aalSubmitCommit(){
         cid:(classOfStudent(me.id) || {}).id, cond:AAL.cond, lang:'zh', aid:AAL.aid,
         iid:it.id, proc:it.process, type:'TELEMETRY',
         firstKeyLatency:t.firstKeyLatency, keystrokes:t.keystrokes,
-        deletions:t.deletions, longPauses:t.longPauses});
+        deletions:t.deletions, longPauses:t.longPauses,
+        /* 「這一題的 latency 是在第幾次造訪量到的」要在資料裡看得見：
+           重入會重設 enter，所以 latency 本身是乾淨的，但分析端仍需要
+           知道這一題被繞回來幾次才決定要不要另計。 */
+        revisits:t.revisits || 0});
     }
     const nC = (AAL.checks[it.id] || []).length;
     logEvent({t:Date.now(), rel:Date.now() - AAL.t0, sid:me.id,
@@ -1119,9 +1165,17 @@ function aalSubmitCommit(){
        欄位與 dialog 對齊，分析端要納入時自己 concat。 */
     if (AAL.cond === 'control' && (AAL.notes[it.id] || '').trim()){
       state.aalNotes = state.aalNotes || [];
+      /* 先濾掉同 aid|sid|iid 的舊列再 push，與正上方的 state.responses 同形。
+         純 push 的話，同一位學生同一題重交會留下兩筆，而 inspectNotePane
+         把命中的列直接串起來顯示——老師的唯讀重播裡會看到重複的段落。 */
+      state.aalNotes = state.aalNotes.filter(function(n){
+        return !(n.aid === AAL.aid && n.sid === me.id && n.iid === it.id); });
       state.aalNotes.push({t:Date.now(), rel:Date.now() - AAL.t0, sid:me.id,
         cid:(classOfStudent(me.id) || {}).id, cond:AAL.cond, lang:'zh',
         aid:AAL.aid, iid:it.id, proc:it.process, text:AAL.notes[it.id],
+        /* 上面的註解說「欄位與 dialog 對齊」，但 turn 與 speaker 一直沒補上，
+           分析端要 concat 進 dialog 時這兩欄會是 undefined。 */
+        turn:noteTurnOf(it.id), speaker:'student',
         ucode:codeUtteranceProcess(AAL.notes[it.id]),
         sent:sentimentOf(AAL.notes[it.id]).score});
     }

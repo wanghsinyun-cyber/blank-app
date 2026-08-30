@@ -584,8 +584,11 @@ function viewResult(aid){
           })())
       : statCard('選擇題答對', '—', '這一次作答的題目太少')) +
       statCard('我這次的閱讀力', (ps && mc.length) ? readingStars(ps.theta, diag.meanTheta) : '—',
+        /* 沒有 ps 的真正原因不是「人不夠多」——這台平板上本來就只有自己
+           那一筆，四個班的資料要由老師合併之後才算得出來。原本寫
+           「需要更多人完成」，孩子會以為再等一下就會出現。 */
         !mc.length ? '這一次作答的題目太少，畫不出來'
-                   : (ps ? '和所有做過的同學比起來的位置' : '需要更多人完成')) +
+                   : (ps ? '和所有做過的同學比起來的位置' : '要等老師把大家的資料合起來')) +
       statCard('可惜的題目', ps ? ps.q[2] : '—', '這幾題你其實讀得懂，只是這次沒答對') +
       statCard('厲害的題目', ps ? ps.q[1] : '—', '這幾題比較難，你答對了', 'good') +
     '</div>' +
@@ -607,8 +610,12 @@ function viewResult(aid){
         ' 題你很厲害。</strong>這幾題比較難，你答對了。' +
         '到知識建構空間把你的想法貼出來——班上有同學正卡在同一題。</p></div>' : '') +
       '</div></div>'
-      : '<div class="card card-p" style="margin-bottom:16px"><p class="muted small">班上還沒有夠多人做完，' +
-        '所以還畫不出你的閱讀地圖。等大家都交了再回來看。</p></div>') +
+      /* 「等大家都交了再回來看」是一個不會兌現的承諾：這台平板上只有孩子
+         自己那一筆，同班別人交不交都不會讓這裡長出東西。真正的條件是
+         老師把四個班的資料合併起來跑一次共同校準——講清楚它，孩子才不會
+         一直回來看一個永遠不會變的畫面。 */
+      : '<div class="card card-p" style="margin-bottom:16px"><p class="muted small">閱讀地圖要把四個班的作答放在一起才算得出來，' +
+        '老師還沒把大家的資料合起來。這一頁下面的逐題檢視現在就可以看。</p></div>') +
     '<div class="card" style="margin-bottom:16px"><div class="card-h"><h3>逐題檢視</h3>' +
     (keyLocked ? '<span class="pill"><span class="dot"></span>答案還沒打開</span>' : '') + '</div>' +
     /* 文案要講真正的條件。原本寫「這一節課上完之後」，而實際條件是

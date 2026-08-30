@@ -108,12 +108,23 @@ function rDesign(){
       '</div></div>' +
 
       '<div class="card"><div class="card-h"><h3>防洩答攔截</h3></div><div class="card-p">' +
-      '<p class="small">每一則夥伴發話送出前都會過一次篩檢：出現判定詞（' +
-      esc(VERDICT_WORDS.slice(0, 5).join('、')) + '…）、正解字串或正解代號一律攔下並改為固定語句。' +
+      '<p class="small">每一則夥伴發話送出前都會過一次篩檢，攔下的分兩類：' +
+      '<strong>判斷對錯</strong>（' + esc(VERDICT_WORDS.slice(0, 3).join('、')) + '、' +
+      esc(VERDICT_SOFT.slice(0, 4).join('、')) + '…，以及任何與判定語同句出現的裸露 A–D 代號）與' +
+      '<strong>洩答或指路</strong>（任一選項的原文、「第 N 段」「第 N 句」、' +
+      esc(POINTER_WORDS.slice(0, 3).join('、')) + '…）。兩者違反的是不同的不變量：' +
+      '前者是「AI 不可判斷對錯」，後者是「AI 不可給提示」。' +
       '規則引擎本來就不會產生這些內容，這一關是為外部語言模型準備的——' +
       '<strong>攔截次數本身就是一項可報告的忠實度指標</strong>。</p>' +
       '<div class="row" style="margin-top:8px">' +
-      statCard('已攔截', allLogs().filter(function(e){ return e.blocked; }).length, '本機累計') +
+      (function(){
+        const B = allLogs().filter(function(e){ return e.blocked; });
+        const kind = function(k){ return B.filter(function(e){
+          return String(e.blockKinds || '').indexOf(k) >= 0; }).length; };
+        return statCard('已攔截', B.length, '本機累計') +
+          statCard('判斷對錯', kind('verdict'), 'verdict') +
+          statCard('洩答／指路', kind('leak'), 'leak');
+      })() +
       '</div></div></div>' +
     '</div></div>';
 }
@@ -587,6 +598,35 @@ function rExport(){
   '<div class="card-p"><p class="muted small">示範資料是由固定種子產生的模擬資料——' +
   '每次載入結果一致，可重現，但<strong>不得當成實徵結果引用</strong>。' +
   '你自己在平台上操作產生的事件會存進 localStorage 並一起匯出。</p></div></div>' +
+
+  /* 合併其他平板的資料。沒有這一條，「四班共用同一次 Rasch 校準」在
+     一人一台平板的部署形態下永遠做不到——本機只有自己那一筆。 */
+  (function(){
+    const asg = getAssignment('a-post') || getAssignment('a-pre');
+    const d = asg ? diagnose(state, asg.id) : null;
+    const done = d ? d.done.length : 0;
+    const need = d ? d.minN : RASCH_MIN_N;
+    const ok = d ? d.ready : false;
+    return '<div class="card" style="margin-top:16px;border-left:3px solid ' +
+      (ok ? 'var(--ok)' : 'var(--warn)') + '">' +
+    '<div class="card-h"><h3>合併其他平板的資料</h3>' +
+    '<span class="pill ' + (ok ? 'q1' : 'q2') + '"><span class="dot"></span>' +
+      '本機已有 ' + done + ' / ' + need + ' 人</span></div>' +
+    '<div class="card-p">' +
+    '<p class="small" style="max-width:70ch">閱讀地圖與四象限要有一次<strong>四個班共用的 Rasch 校準</strong>才能比較，' +
+    '而每一台平板上只有坐在它前面那個孩子的作答。把每一台的「完整研究資料包（JSON）」都收回來，' +
+    '在其中一台依序匯入，校準才組得出來。</p>' +
+    '<p class="small muted" style="max-width:70ch">以鍵取聯集，不覆蓋既有列：同一個檔案匯入兩次不會產生重複，順序也不影響結果。' +
+    '不在本機名單裡的學生一律不收，示範問卷也不收。合併的是作答、交卷、歷程事件、對話、對照組筆記與問卷六類。</p>' +
+    '<div class="row" style="margin-top:10px">' +
+    '<label class="btn" for="mergeFile">選一份資料包（JSON）</label>' +
+    '<input id="mergeFile" type="file" accept="application/json,.json" data-act="merge-bundle" ' +
+      'style="position:absolute;width:1px;height:1px;opacity:0;pointer-events:none">' +
+    '<span class="muted small" id="mergeOut">' +
+      (ok ? '樣本數已達門檻，校準跑得起來。' : '還差 ' + Math.max(0, need - done) + ' 人才會開始估。') +
+    '</span></div>' +
+    '</div></div>';
+  })() +
 
   /* 施測前的清場。不做這一步，真的孩子登入會看到「已完成」與別人的模擬答案。 */
   '<div class="card" style="margin-top:16px;border-left:3px solid ' +

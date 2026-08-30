@@ -354,6 +354,18 @@ function researchBundle(){
     }),
     logs: allLogs(),
     dialogue: allDialog(),
+    /* 原樣的儲存形狀，供「合併其他平板的資料」使用。
+       上面的 surveys／logs／dialogue 是分析形狀（surveys 帶 scores 而不是
+       resp，logs／dialogue 含示範資料），照著併回去會污染校準；
+       這一區塊只有這台裝置上真的發生過的事，而且鍵可以對得起來。 */
+    raw: {
+      responses: state.responses,
+      submissions: state.submissions,
+      logs: state.logs || [],
+      dialog: state.dialog || [],
+      aalNotes: state.aalNotes || [],
+      surveys: (state.surveys || []).filter(function(s){ return !s.demo; })
+    },
     processAnalytics: {
       lsa: (function(){ const r = lsa(); return {codes:r.codes, F:r.F, Z:r.Z, sig:r.sig, N:r.N}; })(),
       lsaByCondition: CONDITIONS.reduce(function(o, c){
@@ -921,6 +933,9 @@ function bindEvents(){
       state.submissions = state.submissions.filter(function(s){ return !(s.aid === aid && s.sid === me.id); });
       state.responses   = state.responses.filter(function(r){ return !(r.aid === aid && r.sid === me.id); });
       state.dialog      = (state.dialog || []).filter(function(d){ return !(d.aid === aid && d.sid === me.id); });
+      /* 對照組的對應語料。漏掉它的話，示範帳號每按一次〈再走一次〉就多留
+         一份筆記，而畫面說的是「重新走一次流程」。 */
+      state.aalNotes    = (state.aalNotes || []).filter(function(n){ return !(n.aid === aid && n.sid === me.id); });
       /* 「再走一次」原本只清這三樣，於是重來的其實只有一半：
          · state.logs 留著——標記、選項、打字的歷程事件全都還在，
            而標記現在是從日誌重建的（見 aalInit），孩子會看到上一次的
@@ -997,6 +1012,12 @@ function bindEvents(){
       state.views = [];
       state.notes = [];
       state.dialog = [];
+      /* state.aalNotes 是對照組整節課唯一的全文語料，地位等同三個 AI 條件的
+         state.dialog——上一行清了 dialog 卻漏了它，於是備課與試玩時在對照組
+         帳號上寫的筆記，會帶著真實 sid 與時間戳留到施測當天，跟孩子自己寫的
+         混在同一個陣列裡，沒有任何欄位分得開。污染只落在基準組，方向與條件
+         系統性相關，而 ucode 與 sent 兩個衍生欄位也一併被污染。 */
+      state.aalNotes = [];
       DEMO_LOGS = []; DEMO_DIALOG = [];
       /* DEMO_LOGS 是種出來的那一半，state.logs 是「真的有人在這台機器上操作」
          產生的那一半——備課、試玩、示範給同事看，全都寫在裡面。
@@ -1028,6 +1049,44 @@ function bindEvents(){
   /* change 事件 */
   document.addEventListener('change', function(e){
     const t = e.target.closest('[data-act]');
+    /* 合併其他平板的資料包。放在最前面：它自己處理完就回，
+       不必經過下面那一長串以 state 為前提的分支。 */
+    if (t && t.dataset.act === 'merge-bundle'){
+      const f = e.target.files && e.target.files[0];
+      const out = document.getElementById('mergeOut');
+      e.target.value = '';                       // 同一個檔案要能再選一次
+      if (!f) return;
+      if (out) out.textContent = '讀取中……';
+      const fr = new FileReader();
+      fr.onerror = function(){
+        if (out) out.textContent = '讀不到這個檔案。';
+        toast('讀不到這個檔案。');
+      };
+      fr.onload = function(){
+        let r;
+        try {
+          r = mergeResearchBundle(JSON.parse(String(fr.result)));
+        } catch (err) {
+          const m = String((err && err.message) || err);
+          if (out) out.textContent = '合併失敗：' + m;
+          alertModal({title:'合併失敗', body:m});
+          return;
+        }
+        const parts = Object.keys(r.added)
+          .filter(function(k){ return r.added[k]; })
+          .map(function(k){ return k + ' ' + r.added[k]; });
+        const msg = r.total
+          ? '已合併 ' + r.total + ' 列（' + parts.join('、') + '）'
+          : '這一份裡沒有本機還缺的列（可能已經匯過了）';
+        const extra = (r.foreign ? '；略過名單外的 ' + r.foreign + ' 列' : '') +
+                      (r.demo ? '；略過示範問卷 ' + r.demo + ' 列' : '');
+        if (out) out.textContent = msg + extra + '。';
+        toast(msg + '。');
+        render();
+      };
+      fr.readAsText(f);
+      return;
+    }
     if (e.target.id === 'who'){
       /* 用身分下拉離開代為檢視也要結束模式，否則 impersonate 旗標會留著，
          把整站對「已經回到自己身分」的老師鎖在唯讀狀態，而且沒有任何說明。 */
@@ -1107,7 +1166,7 @@ function bindEvents(){
         state.unitOverrides[it.id] = t.value; save(); toast('已重新歸類。'); }
       return; }
     if (act === 'set-thr'){ state.settings.misThreshold = Math.max(1, Math.min(60, +t.value || 15)); save(); toast('已儲存。'); return; }
-    if (act === 'set-minn'){ state.settings.minN = Math.max(3, Math.min(40, +t.value || 3)); save(); render(); return; }
+    if (act === 'set-minn'){ state.settings.minN = Math.max(RASCH_MIN_N, Math.min(200, +t.value || RASCH_MIN_N)); save(); render(); return; }
     if (act === 'set-kur'){
       const v = parseFloat(t.value);
       state.settings.keyUnlockRatio = isFinite(v) ? Math.max(0, Math.min(1, v)) : 0.5;

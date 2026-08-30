@@ -676,7 +676,17 @@ input[type=checkbox],input[type=radio]{ width:1.15em; height:1.15em; accent-colo
    頁內錨點與 scrollIntoView 也一併吃到。--sticky-top 由 syncTopbar 依實際
    高度寫入，所以 175% 字級下頂列長高時這條線會跟著走。 */
 html{ scroll-padding-top: calc(var(--sticky-top) + 12px) }
-.msg{max-width:88%; padding:8px 12px; border-radius:12px; font-size:1rem; line-height:1.6}
+/* position:relative 的理由與 .tablewrap、.tabs a 完全相同，只是這一處漏掉了。
+   每一則泡泡裡都有 <b class="sr-only">（「我說的」「系統訊息」），而 .chat
+   自己不是已定位元素——sr-only 於是跳過這個 15rem 的捲動容器，改以 .stage
+   為基準停在「它在未捲動版面中的位置」。對話一超過 15rem，這些 1px 盒子就
+   落到對話卡下緣以下數百 px，把 .stage 的可捲高度、進而把整份文件撐長。
+   而這件事只發生在三個 AI 條件（對照組同一格是 textarea，裡面沒有 sr-only），
+   長度又隨對話回合數單調增加——與操弄劑量共變，違反的正是本檔 .aal 那一段
+   自己訂下的「捲動深度與畫面留白在條件之間一致」。
+   不要改成 .chat{position:relative}：那只是把基準換成捲動容器，sr-only 仍隨
+   內容跑；掛在 .msg 這一層，包含區塊才會回到自己的泡泡裡。 */
+.msg{max-width:88%; padding:8px 12px; border-radius:12px; font-size:1rem; line-height:1.6; position:relative}
 .msg b{display:block; font-size:0.8rem; letter-spacing:.04em; color:var(--ink-4); font-weight:600; margin-bottom:2px}
 .msg.agent{align-self:flex-start; background:var(--shade); border:1px solid var(--rule-soft); border-bottom-left-radius:3px}
 .msg.me{align-self:flex-end; background:var(--accent); color:var(--accent-ink); border-bottom-right-radius:3px}

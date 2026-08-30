@@ -117,9 +117,12 @@ function viewSettings(){
       '<div class="field"><label for="thr">迷思橋接門檻（%）</label>' +
       '<input id="thr" type="number" min="1" max="60" value="' + s.misThreshold + '" data-act="set-thr">' +
       '<span class="muted small">一題的迷思(II)比例達到這個值，就會出現在「迷思橋接」清單裡。出廠預設 12%；門檻越低，被標出來一起討論的題目越多。</span></div>' +
-      '<div class="field"><label for="minn">KIDMAP 最低樣本數</label>' +
-      '<input id="minn" type="number" min="3" max="40" value="' + s.minN + '" data-act="set-minn">' +
-      '<span class="muted small">低於這個人數不執行 Rasch 估計。人數太少時難度與能力的估計會非常不穩定。</span></div>' +
+      '<div class="field"><label for="minn">閱讀地圖最低樣本數</label>' +
+      '<input id="minn" type="number" min="' + RASCH_MIN_N + '" max="200" value="' + s.minN + '" data-act="set-minn">' +
+      '<span class="muted small">低於這個人數不執行 Rasch 估計。硬下限是 ' + RASCH_MIN_N +
+      ' 人，只能往上調——14 題、3 個人的 JMLE 只是把三個人的總分重新排一次，' +
+      '而成績頁掛的是「和所有做過的同學比起來的位置」。' +
+      '一人一台平板時本機只有自己那一筆，要先用下面的「合併其他平板的資料」把四個班併起來。</span></div>' +
       /* 這個門檻原本硬編碼在 keyUnlocked() 裡、預設物件也沒有這個鍵，
          正式施測時連調都調不了。 */
       '<div class="field"><label for="kur">答案卡釋出門檻（作答比例）</label>' +

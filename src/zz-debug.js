@@ -674,3 +674,215 @@ window.assertNoClobber = function(){
   console.log('[assertNoClobber]', r);
   return r;
 };
+
+/* ==========================================================================
+   防洩答攔截的三條不變量
+   第 8 輪的效度車道指出 leakGuard 攔不住用肯定／否定講出來的對錯判斷
+   （「不是 B 喔」「對耶」「再想想」），而 blocked 次數正是要拿來報告的
+   實施忠實度指標——事後看會顯示「一次都沒洩」。放寬規則之後有一個新風險：
+   規則引擎自己踩到自己的守門，那樣每一則夥伴發話都會被換成攔截語句，
+   整場研究的對話內容一起消失。所以這三件事要一起釘住：
+   (1) 內建引擎在 3 角色 × 6 回合 × 全部題目下，一次都不可以被自己攔下；
+   (2) 三個角色的攔截替換文等長——它們和 frame／opener／stem 一樣是話量對等
+       的一部分，而攔截頻率由孩子自己的行為決定，與投入、能力共變；
+   (3) 效度車道舉的每一句都要真的攔得下來，並且分到正確的類別。
+   console 一行：assertLeakGuard()
+   ========================================================================== */
+window.assertLeakGuard = function(){
+  const fails = [];
+  const roles = ['tutor', 'tutee', 'peer'];
+
+  /* (1) 內建引擎不可自攔 */
+  let selfBlocked = 0, firstSelf = null;
+  roles.forEach(function(c){
+    for (let turn = 0; turn < MAX_TURNS; turn++){
+      ITEMS.forEach(function(it){
+        const a = agentTurn(c, it, turn, function(){ return 0.5; });
+        const g = leakGuard(a.text, it, c);
+        if (g.blocked){ selfBlocked++; if (!firstSelf) firstSelf = c + '/' + it.id + '/t' + turn + '：' + a.text + ' → ' + g.hits.join(','); }
+      });
+    }
+  });
+  if (selfBlocked) fails.push('內建引擎被自己的守門攔下 ' + selfBlocked + ' 次（' + firstSelf + '）');
+
+  /* (2) 三句替換文等長 */
+  const lens = roles.map(function(c){ return String(GUARD_REPLY[c] || '').length; });
+  if (new Set(lens).size !== 1)
+    fails.push('三個角色的攔截替換文長度不一致：' + roles.map(function(c, i){ return c + '=' + lens[i]; }).join('、'));
+  roles.forEach(function(c){ if (!GUARD_REPLY[c]) fails.push(c + ' 沒有自己的攔截替換文'); });
+
+  /* (3) 該攔的要攔到，而且分對類別 */
+  const mc = ITEMS.find(function(i){ return i.type === 'mc'; });
+  const must = [
+    ['B 我覺得不太對耶', 'verdict'], ['不是 B 喔', 'verdict'], ['對耶', 'verdict'],
+    ['沒錯', 'verdict'], ['再想想', 'verdict'], ['很接近了', 'verdict'],
+    ['你答對了', 'verdict'], ['答案是 B', 'verdict'],
+    ['線索在第 3 段', 'leak'], ['你去看第二句', 'leak']
+  ];
+  must.forEach(function(p){
+    const g = leakGuard(p[0], mc, 'tutee');
+    if (!g.blocked) fails.push('沒攔下：「' + p[0] + '」');
+    else if (g.kinds.indexOf(p[1]) < 0)
+      fails.push('「' + p[0] + '」分類錯：得到 ' + g.kinds.join('+') + '，應含 ' + p[1]);
+  });
+  /* 攔下之後回的是自己角色的那一句 */
+  roles.forEach(function(c){
+    const g = leakGuard('你答對了', mc, c);
+    if (g.text !== GUARD_REPLY[c]) fails.push(c + ' 攔截後回的不是自己角色的替換文');
+  });
+
+  const r = {pass: fails.length === 0, fails: fails, 自攔次數: selfBlocked, 替換文長度: lens[0]};
+  console.log('[assertLeakGuard]', r);
+  return r;
+};
+
+/* ==========================================================================
+   對話區的絕對定位溢出
+   .sr-only 是 position:absolute，包含區塊是最近的已定位祖先。.chat 是固定
+   15rem 的捲動容器，.msg 原本沒有 position——每一則泡泡裡的「我說的」「系統
+   訊息」於是跳過 .chat，改以 .stage 為基準停在未捲動版面中的位置，把整份
+   文件撐長。這件事只發生在三個 AI 條件（對照組同一格是 textarea），長度又
+   隨對話回合數單調增加，與操弄劑量共變。
+   既有的對等測試量的是 #view.offsetHeight，而絕對定位的溢出不計入
+   offsetHeight——所以掃四個字級都不會報紅，非得另外量 scrollHeight 不可，
+   而且要先把對話填滿才量得到。
+   console 一行：assertChatOverflow()
+   ========================================================================== */
+window.assertChatOverflow = function(){
+  const realRole = state.ui.role, realHash = location.hash;
+  const realDialog = (state.dialog || []).slice();
+  const fails = [];
+  const rows = [];
+
+  function stageScroll(){
+    const s = document.getElementById('stage');
+    return s ? Math.round(s.scrollHeight) : Math.round(document.documentElement.scrollHeight);
+  }
+  function pick(cond){
+    const k = state.classes.find(function(c){ return c.condition === cond; });
+    return k ? k.studentIds[0] : null;
+  }
+  function open(sid){
+    state.ui.role = sid; renderShell();
+    if (typeof AAL !== 'undefined') AAL = null;
+    try {
+      const all = JSON.parse(localStorage.getItem('kairos-draft') || '{}');
+      Object.keys(all).forEach(function(x){ if (x.indexOf('|' + sid) >= 0) delete all[x]; });
+      localStorage.setItem('kairos-draft', JSON.stringify(all));
+    } catch (e){}
+    location.hash = '#/aal/a-post'; render();
+  }
+
+  ['tutor', 'tutee', 'peer'].forEach(function(cond){
+    const sid = pick(cond); if (!sid) return;
+    const had = submitted('a-post', sid);
+    if (had) state.submissions = state.submissions.filter(function(s){ return !(s.aid === 'a-post' && s.sid === sid); });
+
+    state.dialog = realDialog.filter(function(d){ return d.sid !== sid; });
+    open(sid);
+    const iid = (typeof AAL !== 'undefined' && AAL) ? AAL.items[0].id : 'R01';
+    const empty = stageScroll();
+
+    /* 填滿額度：6 個學生回合 + 6 個夥伴回合 */
+    for (let n = 1; n <= MAX_TURNS; n++){
+      state.dialog.push({t:Date.now() + n * 2, sid:sid, cond:cond, aid:'a-post', iid:iid,
+        turn:n, speaker:'student', text:'我覺得這一段在講的是另一件事', rel:'AT'});
+      state.dialog.push({t:Date.now() + n * 2 + 1, sid:sid, cond:cond, aid:'a-post', iid:iid,
+        turn:n, speaker:'agent', text:'你剛剛是從哪一句看出來的？'});
+    }
+    render();
+    const full = stageScroll();
+
+    /* 對話卡是固定高度的捲動容器，填滿它不應該讓文件長高。 */
+    const grew = full - empty;
+    rows.push({條件:cond, 空:empty, 滿:full, 差:grew});
+    if (grew > 4) fails.push(cond + '：對話填滿之後文件高度多了 ' + grew + 'px（.sr-only 逃出 .chat）');
+
+    /* 直接量包含區塊。不能用 getBoundingClientRect 比對 .chat 的可視矩形——
+       捲出視窗的訊息本來就落在容器矩形之外，那是正常的。要問的是
+       「這個 sr-only 以誰為基準」，也就是它的 offsetParent 是不是自己的泡泡。 */
+    const chat = document.getElementById('aalChat');
+    if (chat){
+      const out = Array.prototype.filter.call(chat.querySelectorAll('.sr-only'), function(el){
+        const own = el.closest('.msg');
+        return !own || el.offsetParent !== own;
+      });
+      if (out.length) fails.push(cond + '：有 ' + out.length + ' 個 .sr-only 的包含區塊不是自己的 .msg');
+    }
+    if (had) state.submissions.push({aid:'a-post', sid:sid, at:Date.now()});
+  });
+
+  state.dialog = realDialog;
+  state.ui.role = realRole; renderShell();
+  location.hash = realHash || '#/teacher'; render();
+  const r = {pass: fails.length === 0, fails: fails, rows: rows};
+  console.log('[assertChatOverflow]', r);
+  return r;
+};
+
+/* ==========================================================================
+   合併其他平板的資料包
+   「四個班共用同一次 Rasch 校準」是本平台宣告的不變量，而作答矩陣只由這台
+   裝置的 submissions／responses 組成——一人一台平板時 done.length 恆為 1。
+   這一支釘住合併路徑的四件事：能把缺的補回來、同一份匯兩次不會重複、
+   名單外的學生一律不收、舊版（沒有 raw 區塊）的資料包要明確報錯而不是
+   無聲吃掉。第四件尤其重要：資料包上層的 surveys／logs 是分析形狀
+   （帶 scores 而不是 resp、含示範資料），照著併回去會污染校準。
+   console 一行：assertBundleMerge()
+   ========================================================================== */
+window.assertBundleMerge = function(){
+  const fails = [];
+  const snap = JSON.parse(JSON.stringify({
+    responses: state.responses, submissions: state.submissions,
+    logs: state.logs || [], dialog: state.dialog || [],
+    aalNotes: state.aalNotes || [], surveys: state.surveys || []
+  }));
+
+  /* 挑一位真的有作答的學生，把他整份從本機拿掉，做成「另一台平板」的資料包 */
+  const sid = (state.submissions.find(function(s){ return s.aid === 'a-post'; }) || {}).sid;
+  if (!sid){ const r = {pass:false, fails:['種子裡找不到任何後測交卷紀錄']}; console.log('[assertBundleMerge]', r); return r; }
+  const mine = function(arr){ return (arr || []).filter(function(x){ return x.sid === sid; }); };
+  const away = {raw: JSON.parse(JSON.stringify({
+    responses: mine(state.responses), submissions: mine(state.submissions),
+    logs: mine(state.logs), dialog: mine(state.dialog),
+    aalNotes: mine(state.aalNotes), surveys: mine(state.surveys)
+  }))};
+  const nAway = Object.keys(away.raw).reduce(function(a, k){ return a + away.raw[k].length; }, 0);
+  if (!nAway) fails.push('取樣的學生沒有任何列可以搬走');
+
+  ['responses','submissions','logs','dialog','aalNotes','surveys'].forEach(function(k){
+    state[k] = (state[k] || []).filter(function(x){ return x.sid !== sid; });
+  });
+  const gone = submitted('a-post', sid);
+  if (gone) fails.push('搬走之後 submitted() 仍為 true，取樣有問題');
+
+  /* (1) 補得回來。示範問卷（demo:true）依設計不收，所以帳要這樣對：
+     收下的 + 略過的示範 + 略過的名單外 = 搬走的。 */
+  const r1 = mergeResearchBundle(JSON.parse(JSON.stringify(away)));
+  if (r1.total + r1.demo + r1.foreign !== nAway)
+    fails.push('第一次合併帳對不起來：收 ' + r1.total + ' + 示範 ' + r1.demo +
+               ' + 名單外 ' + r1.foreign + ' ≠ 搬走的 ' + nAway);
+  if (!r1.total) fails.push('第一次合併一列都沒收');
+  if (!submitted('a-post', sid)) fails.push('合併之後 submitted() 還是 false');
+
+  /* (2) 同一份匯兩次不重複 */
+  const r2 = mergeResearchBundle(JSON.parse(JSON.stringify(away)));
+  if (r2.total !== 0) fails.push('第二次合併又加了 ' + r2.total + ' 列（應該是 0）');
+
+  /* (3) 名單外的學生不收 */
+  const r3 = mergeResearchBundle({raw:{responses:[
+    {aid:'a-post', sid:'u-not-in-roster', iid:'R01', choice:0, correct:true}]}});
+  if (r3.total !== 0 || r3.foreign !== 1) fails.push('名單外的列沒有被擋下：' + JSON.stringify(r3));
+
+  /* (4) 舊版資料包要報錯 */
+  let threw = false;
+  try { mergeResearchBundle({meta:{}, surveys:[], logs:[]}); } catch (e){ threw = true; }
+  if (!threw) fails.push('沒有 raw 區塊的舊資料包被無聲接受了');
+
+  /* 還原 */
+  Object.keys(snap).forEach(function(k){ state[k] = snap[k]; });
+  save();
+  const r = {pass: fails.length === 0, fails: fails, 搬走的列數: nAway};
+  console.log('[assertBundleMerge]', r);
+  return r;
+};

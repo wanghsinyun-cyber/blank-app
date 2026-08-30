@@ -165,6 +165,10 @@ function rowKey(kind, r){
   if (kind === 'responses')   return [r.aid, r.sid, r.iid].join('|');
   if (kind === 'submissions') return [r.aid, r.sid].join('|');
   if (kind === 'surveys')     return [r.sid, r.phase].join('|');
+  /* 對照組整節課唯一的全文語料。它的地位等同三個 AI 條件的 dialog，
+     卻一直不在合併清單裡——兩個分頁同時開著時，它會被無聲蓋掉，
+     而這個損失只落在基準組。 */
+  if (kind === 'aalNotes')    return [r.aid, r.sid, r.iid].join('|');
   return r.id != null ? String(r.id) : JSON.stringify(r);
 }
 
@@ -184,7 +188,7 @@ function rowKey(kind, r){
    只有 a11y 例外——那是本機的呈現設定。 */
 function mergeOntoDisk(disk){
   const out = disk;
-  ['logs', 'dialog', 'responses', 'submissions', 'surveys', 'notes', 'views'].forEach(function(kind){
+  ['logs', 'dialog', 'aalNotes', 'responses', 'submissions', 'surveys', 'notes', 'views'].forEach(function(kind){
     const mine = state[kind];
     if (!Array.isArray(mine)) return;
     const theirs = Array.isArray(out[kind]) ? out[kind] : [];
@@ -202,6 +206,55 @@ function mergeOntoDisk(disk){
   out.ui = state.ui;
   if (out.settings && state.settings) out.settings.a11y = state.settings.a11y;
   return out;
+}
+
+/* ==========================================================================
+   合併其他平板匯出的資料包
+   「四個班共用同一次 Rasch 校準」是本平台宣告的不變量，而 diagnose() 的
+   作答矩陣只由這台裝置的 submissions／responses 組成——一人一台平板時
+   done.length 恆為 1，校準永遠跑不起來；共用平板時 n=3 也會被當成全體。
+   沒有這條合併路徑，那個不變量在任何真實部署形態下都做不到。
+   合併是以鍵取聯集，不覆蓋既有列：同一把鍵已經在手上的就跳過，
+   所以同一個檔案匯入兩次不會產生重複，順序也不影響結果。
+   ========================================================================== */
+function mergeResearchBundle(bundle){
+  if (!bundle || typeof bundle !== 'object') throw new Error('這不是一份 KAIROS 資料包。');
+  /* 只吃 raw 區塊。資料包上層的 surveys／logs／dialogue 是給分析用的衍生形狀
+     （surveys 帶 scores 而不是 resp，logs／dialogue 是 allLogs()＝示範資料
+     ＋真實資料），照著併回去會把別台平板的示範事件一起收進校準。
+     raw 是原樣的儲存形狀，這條路徑只認它。 */
+  const raw = bundle.raw;
+  if (!raw || typeof raw !== 'object')
+    throw new Error('這份資料包沒有 raw 區塊，可能是舊版匯出的。請在來源平板上重新匯出一次。');
+  const roster = {};
+  state.users.forEach(function(u){ roster[u.id] = true; });
+  const KINDS = ['responses', 'submissions', 'logs', 'dialog', 'aalNotes', 'surveys'];
+  const added = {};
+  let foreign = 0, demo = 0;
+  KINDS.forEach(function(kind){
+    const incoming = raw[kind];
+    added[kind] = 0;
+    if (!Array.isArray(incoming)) return;
+    state[kind] = Array.isArray(state[kind]) ? state[kind] : [];
+    const seen = {};
+    state[kind].forEach(function(r){ seen[rowKey(kind, r)] = true; });
+    incoming.forEach(function(r){
+      if (!r || typeof r !== 'object') return;
+      /* 不在本機名單裡的 sid 一律不收：匯錯檔案（別的研究、別的學校）
+         會無聲地把陌生人的作答併進校準，而 δ 是全體共用的。 */
+      if (r.sid && !roster[r.sid]){ foreign++; return; }
+      /* 示範問卷不收——它是種子產生的，併進來只會稀釋真實樣本。 */
+      if (r.demo === true){ demo++; return; }
+      const k = rowKey(kind, r);
+      if (seen[k]) return;
+      seen[k] = true;
+      state[kind].push(r);
+      added[kind]++;
+    });
+  });
+  save();
+  return {added: added, foreign: foreign, demo: demo,
+          total: KINDS.reduce(function(a, k){ return a + added[k]; }, 0)};
 }
 
 function save(){

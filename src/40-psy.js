@@ -11,6 +11,10 @@ const QUAD = {
   4:{key:'q4', roman:'IV',  name:'合理答對',  short:'合理對',  desc:'簡單題答對，屬合理範圍。'}
 };
 
+/* 執行校準的硬下限。設定頁的 minN 只能往上調，往下調不會生效——
+   δ 與 θ 的穩定性不是操作者可以用設定值換掉的東西。 */
+const RASCH_MIN_N = 30;
+
 function logistic(x){ return 1 / (1 + Math.exp(-x)); }
 
 /* 由作答矩陣估計 Rasch 參數。
@@ -159,7 +163,14 @@ function diagnose(state, aid){
     });
   });
 
-  const minN = (state.settings && state.settings.minN) || 3;
+  /* 3 個人估不出可以用的 δ 與 θ。14 題、n=3 的 JMLE 只是把三個人的總分
+     重新排一次，而成績頁卻掛著「和所有做過的同學比起來的位置」的副標，
+     四象限又是孩子決定回頭重讀哪幾題的依據——等於拿三個人的雜訊當診斷。
+     真正的部署形態有兩種，門檻要同時擋住兩邊：一人一台平板時
+     done.length 恆為 1（本機只有自己的作答，必須先匯入其他平板的資料），
+     共用平板時 n 會慢慢長上來但在 30 之前都不該當成校準。
+     RASCH_MIN_N 是硬下限，設定頁的 minN 只能往上調、不能往下。 */
+  const minN = Math.max(RASCH_MIN_N, (state.settings && state.settings.minN) || RASCH_MIN_N);
   const ready = done.length >= minN && items.length >= 3;
   const est = ready ? estimateRasch(X) : null;
 

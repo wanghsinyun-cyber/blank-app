@@ -693,7 +693,17 @@ input[type=checkbox],input[type=radio]{ width:1.15em; height:1.15em; accent-colo
    頁內錨點與 scrollIntoView 也一併吃到。--sticky-top 由 syncTopbar 依實際
    高度寫入，所以 175% 字級下頂列長高時這條線會跟著走。 */
 html{ scroll-padding-top: calc(var(--sticky-top) + 12px) }
-.msg{max-width:88%; padding:8px 12px; border-radius:12px; font-size:1rem; line-height:1.6}
+/* position:relative 的理由與 .tablewrap、.tabs a 完全相同，只是這一處漏掉了。
+   每一則泡泡裡都有 <b class="sr-only">（「我說的」「系統訊息」），而 .chat
+   自己不是已定位元素——sr-only 於是跳過這個 15rem 的捲動容器，改以 .stage
+   為基準停在「它在未捲動版面中的位置」。對話一超過 15rem，這些 1px 盒子就
+   落到對話卡下緣以下數百 px，把 .stage 的可捲高度、進而把整份文件撐長。
+   而這件事只發生在三個 AI 條件（對照組同一格是 textarea，裡面沒有 sr-only），
+   長度又隨對話回合數單調增加——與操弄劑量共變，違反的正是本檔 .aal 那一段
+   自己訂下的「捲動深度與畫面留白在條件之間一致」。
+   不要改成 .chat{position:relative}：那只是把基準換成捲動容器，sr-only 仍隨
+   內容跑；掛在 .msg 這一層，包含區塊才會回到自己的泡泡裡。 */
+.msg{max-width:88%; padding:8px 12px; border-radius:12px; font-size:1rem; line-height:1.6; position:relative}
 .msg b{display:block; font-size:0.8rem; letter-spacing:.04em; color:var(--ink-4); font-weight:600; margin-bottom:2px}
 .msg.agent{align-self:flex-start; background:var(--shade); border:1px solid var(--rule-soft); border-bottom-left-radius:3px}
 .msg.me{align-self:flex-end; background:var(--accent); color:var(--accent-ink); border-bottom-right-radius:3px}
@@ -1599,7 +1609,7 @@ function buildSeedState(){
     settings: {
       engine:'builtin', provider:'anthropic', baseUrl:'https://api.anthropic.com/v1',
       apiKey:'', model:'claude-sonnet-5',
-      misThreshold: 12, minN: 3, maxTurns: 6, kbClassId: 'c-1',
+      misThreshold: 12, minN: 30, maxTurns: 6, kbClassId: 'c-1',
       /* 答案卡的釋出門檻：至少要作答到這個比例，而且同班都交完了
          （見 88-ui-student.js 的 keyUnlocked／classKeyReleased）。
          原本只硬編碼在函式裡、預設物件沒有這個鍵，也沒有任何 UI 寫得到它——
@@ -1663,7 +1673,14 @@ const CONDITIONS = [
       而多出來的那一段還是一則明示的閱讀策略指示（「你是從哪裡看出來的」），
       只有一個條件拿得到：EVID 的組間差異會有一部分是被這句話教出來的。
       三句一律兩句話、27–28 字、只描述社會關係，不指名任何閱讀策略。 */
-   frame:'我是陪你讀的老師。我不會告訴你答案，我會一直問你問題。',
+   /* 原本是「……我會一直問你問題。」——但夥伴永遠不會先開口（agentTurn 在
+      學生路徑上的唯一呼叫端是 aalSay），承諾的問題要等孩子先打完字才會出現。
+      三句裡只有這一句沒把發言權交給孩子：tutee 是「你可以講給我聽嗎？」、
+      peer 是「我們各自說說」，都明確要求孩子先講。照字面等待的孩子，
+      這一題（很可能整節課）的學生發話回合就是 0——而回合數就是三個 AI
+      條件的處遇劑量，RQ1 量到的差異會有一部分來自開場文案，不是社會框架。
+      改文案不改劑量，維持兩句、28 字、只描述社會關係、不指名閱讀策略。 */
+   frame:'我是陪你讀的老師。我不會告訴你答案，先聽你怎麼讀這一篇。',
    mech:'適性鷹架與形成性提問',
    note:'指導性鷹架可能壓縮學習者自主性，故本平台限制其僅能提問、不得評價。'},
   {id:'tutee',   name:'同學小葉', en:'AI-as-Tutee',  cls:'sc3', mark:'●',
@@ -2002,7 +2019,7 @@ function agentTurn(conditionId, item, turn, rnd){
     (ROLE_STEM[conditionId] || function(q){ return q; })(body);
 
   return {
-    text: leakGuard(text, item).text,
+    text: leakGuard(text, item, conditionId).text,
     qfn: qfnId,
     sub: sub ? sub.id : null,
     process: sub ? sub.p : pid,
@@ -2014,9 +2031,36 @@ function agentTurn(conditionId, item, turn, rnd){
    規則引擎本來就不會產生答案，但外部語言模型會。輸出後一律過這一關，
    攔截次數本身就是一項可報告的實施忠實度指標。 */
 const VERDICT_WORDS = ['答對', '答錯', '正確答案', '你錯了', '你對了', '正解是', '應該選', '答案是', '選項是'];
+/* 不含「答案」二字的判定語。孩子的原話會原樣送進提示詞（【學生剛剛說】），
+   骨幹又要求第一句回應他剛剛說的內容——於是外部模型對「答案是不是 B？」
+   最自然的回覆是「B 我覺得不太對耶」「不是 B 喔」「對耶」「沒錯」「再想想」
+   「很接近了」，上面那一組一個都不命中，原文照送、blocked 為 false。
+   而「AI 不可判斷對錯」是硬不變量，leakGuard 是全站唯一的執行機制
+   （提示詞只是請求，模型不保證遵守）。孩子逐一報字母討價還價，每題 6 個
+   回合足以刷掉三個誘答，四選一的猜對機率從 .25 逼近 1.0。 */
+const VERDICT_SOFT = ['對了', '對耶', '沒錯', '正確', '不正確', '不對', '不是這個',
+                      '錯了', '猜對', '再想想', '差一點', '很接近', '接近了', '就是這個'];
+/* 判定語的鄰近詞。裸露的 A–D 只要跟這些字出現在同一句就攔——
+   不再要求 (選|答案|正解) 前綴，也不再只比對正解那一個字母。 */
+const LETTER_NEAR = ['對', '錯', '不是', '是不是', '應該', '沒錯', '就是', '選', '可以'];
 /* 指路語。判定詞擋的是「說出答案」，這一組擋的是「帶他去某個地方找」——
    兩者都是提示。內建引擎不會產生它們，這一組是給外部模型用的。 */
 const POINTER_WORDS = ['線索在', '你去看', '再看看第', '答案在', '提示：', '往前找', '往後找'];
+/* 攔截後的替換文依角色而異。原本三個角色一律換上同一句
+   『這個我不能說喔。換個方式問你：……』——它明說自己知道答案只是不講，
+   還用「換個方式問你」這種施教者口吻，完全不經 ROLE_OPENER／ROLE_STEM。
+   對 tutor 它在框架內（小葵的 frame 本來就寫「我不會告訴你答案」），對
+   tutee（剛讀完、很多地方沒看懂的同學）與 peer（一起讀的同學）則直接否定
+   該條件的社會框架：門生效應要成立的前提是孩子相信小葉真的不會、需要他教，
+   一句「這個我不能說喔」就把小葉變回一個藏著答案的老師。
+   而一直逼問答案的孩子正是最常觸發攔截的人——框架破口的頻率由受試者自己的
+   行為決定，那個行為又與投入、能力共變。三句等長，語域各自對齊。 */
+const GUARD_REPLY = {
+  tutor: '這個我不能說喔。你剛剛是從哪一句看出來的？',
+  tutee: '那裡我也還沒看懂。你剛剛是從哪一句想到的？',
+  peer:  '這個我也還沒想清楚。你是從哪一句看出來的？'
+};
+const GUARD_REPLY_FALLBACK = '這個我不能說喔。你剛剛是從哪一句看出來的？';
 /* 「第 N 段」「第二段」都要認得。CN 只到十——文本沒有超過十段的。 */
 const CN_NUM = ['零','一','二','三','四','五','六','七','八','九','十'];
 function posRe(n, unit){
@@ -2024,14 +2068,30 @@ function posRe(n, unit){
   return new RegExp('第\\s*(' + n + cn + ')\\s*' + unit);
 }
 
-function leakGuard(text, item){
+function leakGuard(text, item, conditionId){
   let t = String(text), hits = [];
-  VERDICT_WORDS.forEach(function(w){ if (t.indexOf(w) >= 0) hits.push(w); });
+  /* 兩類分開記：'verdict' 是判斷對錯，'leak' 是洩答或指路。
+     忠實度報表要分得開這兩件事——它們違反的是不同的不變量。 */
+  function verdict(w){ hits.push('verdict:' + w); }
+  function leak(w){ hits.push('leak:' + w); }
+  VERDICT_WORDS.forEach(function(w){ if (t.indexOf(w) >= 0) verdict(w); });
+  VERDICT_SOFT.forEach(function(w){ if (t.indexOf(w) >= 0) verdict(w); });
   if (item && item.type === 'mc' && item.options){
-    const ans = item.options[item.answer];
-    if (ans && ans.length > 3 && t.indexOf(ans) >= 0) hits.push('正解字串');
-    const letter = String.fromCharCode(65 + item.answer);
-    if (new RegExp('(選|答案|正解)\\s*' + letter + '\\b').test(t)) hits.push('正解代號');
+    /* 誘答字串也要比對，不只正解。「B 不是這個意思」照樣把一個選項刷掉。 */
+    item.options.forEach(function(o, k){
+      if (o && o.length > 3 && t.indexOf(o) >= 0) leak(k === item.answer ? '正解字串' : '誘答字串');
+    });
+    /* 任何裸露的 A–D 只要跟判定語出現在同一句就攔。原本的規則要求
+       (選|答案|正解) 前綴、而且只比對正解那一個字母：「不是 B 喔」
+       （B 是誘答）完全不命中，而那正是刷掉誘答最有效的一句話。 */
+    const sentences = t.split(/[。！？!?\n]/);
+    for (let s = 0; s < sentences.length; s++){
+      const seg = sentences[s];
+      if (!/[A-D]/.test(seg)) continue;
+      if (LETTER_NEAR.some(function(w){ return seg.indexOf(w) >= 0; })){
+        verdict('選項代號＋判定語'); break;
+      }
+    }
   }
   /* 位置線索一律擋，不再只擋「這一題正解所在的那一個位置」。
      原本比對的是 item.answerPara／answerSent：正解在第 2 段而模型回
@@ -2041,20 +2101,23 @@ function leakGuard(text, item){
      更嚴重的是兩題建構反應題的 answerPara／answerSent 都是 null，
      整條位置規則對它們從來沒有生效過。
      「AI 不可給提示」是不變量，任何指路都違反它，不管指得對不對。 */
-  for (let n = 1; n <= 10 && !hits.length; n++){
-    if (posRe(n, '段').test(t)) hits.push('指名段落位置');
+  for (let n = 1; n <= 10; n++){
+    if (posRe(n, '段').test(t)){ leak('指名段落位置'); break; }
   }
   for (let n = 1; n <= 40; n++){
-    if (posRe(n, '句').test(t)){ hits.push('指名句次位置'); break; }
+    if (posRe(n, '句').test(t)){ leak('指名句次位置'); break; }
   }
   /* 判定詞之外還有指路語。VERDICT_WORDS 只收「答對／正解是」這一類，
      擋不住「線索在」「你去看」「再看看第」——那些同樣是提示。 */
-  POINTER_WORDS.forEach(function(w){ if (t.indexOf(w) >= 0) hits.push(w); });
+  POINTER_WORDS.forEach(function(w){ if (t.indexOf(w) >= 0) leak(w); });
   if (hits.length){
-    return {text:'這個我不能說喔。換個方式問你：你剛剛是從文章的哪一句得到這個想法的？',
-            blocked:true, hits:hits};
+    const kinds = [];
+    if (hits.some(function(h){ return h.indexOf('verdict:') === 0; })) kinds.push('verdict');
+    if (hits.some(function(h){ return h.indexOf('leak:') === 0; })) kinds.push('leak');
+    return {text: GUARD_REPLY[conditionId] || GUARD_REPLY_FALLBACK,
+            blocked:true, hits:hits, kinds:kinds};
   }
-  return {text:t, blocked:false, hits:[]};
+  return {text:t, blocked:false, hits:[], kinds:[]};
 }
 
 /* ==========================================================================
@@ -2567,13 +2630,13 @@ function toTelemetryCsv(){
   })();
   const rows = [['sid','name','class','condition','item','item_process',
                  'first_key_latency_ms','keystrokes','deletions','long_pauses',
-                 'marks','option_clicks','turns','self_checks','dwell_ms','mean_sentiment']];
+                 'marks','option_clicks','turns','self_checks','dwell_ms','revisits','mean_sentiment']];
   const byKey = {};
   allLogs().forEach(function(e){
     const k = e.sid + '|' + e.iid;
     const r = byKey[k] = byKey[k] || {sid:e.sid, iid:e.iid, cond:e.cond, proc:e.proc,
       fkl:'', keys:'', del:'', pause:'', mEv:[], cEv:[], opts:0, turns:0, visits:[],
-      t0:e.t, t1:e.t, sent:[], };
+      revisits:'', t0:e.t, t1:e.t, sent:[], };
     r.t0 = Math.min(r.t0, e.t); r.t1 = Math.max(r.t1, e.t);
     /* 停留時間要用 ENTER→EXIT 的區間累加，不能用 max(t) − min(t)：
        aalSubmit 會在交卷的同一毫秒替每一題補寫 TELEMETRY 與 SUBMIT，
@@ -2584,7 +2647,9 @@ function toTelemetryCsv(){
       const open = r.visits.filter(function(v){ return v.out === null; }).pop();
       if (open) open.out = e.t;
     }
-    if (e.type === 'TELEMETRY'){ r.fkl = e.firstKeyLatency; r.keys = e.keystrokes; r.del = e.deletions; r.pause = e.longPauses; }
+    if (e.type === 'TELEMETRY'){ r.fkl = e.firstKeyLatency; r.keys = e.keystrokes; r.del = e.deletions; r.pause = e.longPauses;
+      /* 舊資料沒有這一欄；ENTER 的 visit 也算得出來，兩者取大的那個。 */
+      r.revisits = e.revisits != null ? e.revisits : r.revisits; }
     /* 標記與檢核是切換型事件，取消也會寫一筆——不能在這裡 ++。
        先收起來，輸出時用 foldToggleLog 折成「最後還開著幾個」。
        這一列的鍵已經是 sid|iid，所以不需要再依題目分組。 */
@@ -2611,7 +2676,8 @@ function toTelemetryCsv(){
       : (r.t1 - r.t0);
     rows.push([r.sid, userName(r.sid), kl ? kl.name : '', r.cond, r.iid, r.proc,
       r.fkl, r.keys, r.del, r.pause, r.marks, r.opts, r.turns, r.checks,
-      r.dwell, r.sent.length ? (r.sent.reduce(function(a, b){ return a + b; }, 0) / r.sent.length).toFixed(3) : '']);
+      r.dwell, r.revisits === '' ? Math.max(0, r.visits.length - 1) : r.revisits,
+      r.sent.length ? (r.sent.reduce(function(a, b){ return a + b; }, 0) / r.sent.length).toFixed(3) : '']);
   });
   return rows.map(function(r){
     return r.map(function(c){ return '"' + String(c).replace(/"/g, '""') + '"'; }).join(',');
@@ -2846,6 +2912,10 @@ const QUAD = {
   4:{key:'q4', roman:'IV',  name:'合理答對',  short:'合理對',  desc:'簡單題答對，屬合理範圍。'}
 };
 
+/* 執行校準的硬下限。設定頁的 minN 只能往上調，往下調不會生效——
+   δ 與 θ 的穩定性不是操作者可以用設定值換掉的東西。 */
+const RASCH_MIN_N = 30;
+
 function logistic(x){ return 1 / (1 + Math.exp(-x)); }
 
 /* 由作答矩陣估計 Rasch 參數。
@@ -2994,7 +3064,14 @@ function diagnose(state, aid){
     });
   });
 
-  const minN = (state.settings && state.settings.minN) || 3;
+  /* 3 個人估不出可以用的 δ 與 θ。14 題、n=3 的 JMLE 只是把三個人的總分
+     重新排一次，而成績頁卻掛著「和所有做過的同學比起來的位置」的副標，
+     四象限又是孩子決定回頭重讀哪幾題的依據——等於拿三個人的雜訊當診斷。
+     真正的部署形態有兩種，門檻要同時擋住兩邊：一人一台平板時
+     done.length 恆為 1（本機只有自己的作答，必須先匯入其他平板的資料），
+     共用平板時 n 會慢慢長上來但在 30 之前都不該當成校準。
+     RASCH_MIN_N 是硬下限，設定頁的 minN 只能往上調、不能往下。 */
+  const minN = Math.max(RASCH_MIN_N, (state.settings && state.settings.minN) || RASCH_MIN_N);
   const ready = done.length >= minN && items.length >= 3;
   const est = ready ? estimateRasch(X) : null;
 
@@ -3234,6 +3311,10 @@ function rowKey(kind, r){
   if (kind === 'responses')   return [r.aid, r.sid, r.iid].join('|');
   if (kind === 'submissions') return [r.aid, r.sid].join('|');
   if (kind === 'surveys')     return [r.sid, r.phase].join('|');
+  /* 對照組整節課唯一的全文語料。它的地位等同三個 AI 條件的 dialog，
+     卻一直不在合併清單裡——兩個分頁同時開著時，它會被無聲蓋掉，
+     而這個損失只落在基準組。 */
+  if (kind === 'aalNotes')    return [r.aid, r.sid, r.iid].join('|');
   return r.id != null ? String(r.id) : JSON.stringify(r);
 }
 
@@ -3253,7 +3334,7 @@ function rowKey(kind, r){
    只有 a11y 例外——那是本機的呈現設定。 */
 function mergeOntoDisk(disk){
   const out = disk;
-  ['logs', 'dialog', 'responses', 'submissions', 'surveys', 'notes', 'views'].forEach(function(kind){
+  ['logs', 'dialog', 'aalNotes', 'responses', 'submissions', 'surveys', 'notes', 'views'].forEach(function(kind){
     const mine = state[kind];
     if (!Array.isArray(mine)) return;
     const theirs = Array.isArray(out[kind]) ? out[kind] : [];
@@ -3271,6 +3352,55 @@ function mergeOntoDisk(disk){
   out.ui = state.ui;
   if (out.settings && state.settings) out.settings.a11y = state.settings.a11y;
   return out;
+}
+
+/* ==========================================================================
+   合併其他平板匯出的資料包
+   「四個班共用同一次 Rasch 校準」是本平台宣告的不變量，而 diagnose() 的
+   作答矩陣只由這台裝置的 submissions／responses 組成——一人一台平板時
+   done.length 恆為 1，校準永遠跑不起來；共用平板時 n=3 也會被當成全體。
+   沒有這條合併路徑，那個不變量在任何真實部署形態下都做不到。
+   合併是以鍵取聯集，不覆蓋既有列：同一把鍵已經在手上的就跳過，
+   所以同一個檔案匯入兩次不會產生重複，順序也不影響結果。
+   ========================================================================== */
+function mergeResearchBundle(bundle){
+  if (!bundle || typeof bundle !== 'object') throw new Error('這不是一份 KAIROS 資料包。');
+  /* 只吃 raw 區塊。資料包上層的 surveys／logs／dialogue 是給分析用的衍生形狀
+     （surveys 帶 scores 而不是 resp，logs／dialogue 是 allLogs()＝示範資料
+     ＋真實資料），照著併回去會把別台平板的示範事件一起收進校準。
+     raw 是原樣的儲存形狀，這條路徑只認它。 */
+  const raw = bundle.raw;
+  if (!raw || typeof raw !== 'object')
+    throw new Error('這份資料包沒有 raw 區塊，可能是舊版匯出的。請在來源平板上重新匯出一次。');
+  const roster = {};
+  state.users.forEach(function(u){ roster[u.id] = true; });
+  const KINDS = ['responses', 'submissions', 'logs', 'dialog', 'aalNotes', 'surveys'];
+  const added = {};
+  let foreign = 0, demo = 0;
+  KINDS.forEach(function(kind){
+    const incoming = raw[kind];
+    added[kind] = 0;
+    if (!Array.isArray(incoming)) return;
+    state[kind] = Array.isArray(state[kind]) ? state[kind] : [];
+    const seen = {};
+    state[kind].forEach(function(r){ seen[rowKey(kind, r)] = true; });
+    incoming.forEach(function(r){
+      if (!r || typeof r !== 'object') return;
+      /* 不在本機名單裡的 sid 一律不收：匯錯檔案（別的研究、別的學校）
+         會無聲地把陌生人的作答併進校準，而 δ 是全體共用的。 */
+      if (r.sid && !roster[r.sid]){ foreign++; return; }
+      /* 示範問卷不收——它是種子產生的，併進來只會稀釋真實樣本。 */
+      if (r.demo === true){ demo++; return; }
+      const k = rowKey(kind, r);
+      if (seen[k]) return;
+      seen[k] = true;
+      state[kind].push(r);
+      added[kind]++;
+    });
+  });
+  save();
+  return {added: added, foreign: foreign, demo: demo,
+          total: KINDS.reduce(function(a, k){ return a + added[k]; }, 0)};
 }
 
 function save(){
@@ -6335,8 +6465,16 @@ function viewAssign(aid, tab){
       '<a class="btn" href="#/teacher">回教師後台</a>') +
     /* 八個分頁裡七個是四班合計卻用班級語彙，老師會以為那是她班上的數字 */
     '<div class="card card-p" style="margin-bottom:12px;border-left:3px solid var(--accent)">' +
-    '<p class="small" style="margin:0">這一頁的統計範圍是<strong>四個班級共 ' + diag.roster.length +
-    ' 人</strong>——四班共用同一次 Rasch 校準，條件之間才可以比較。' +
+    /* roster.length 是「名單上有幾個人」，恆為 96；done.length 才是「這台
+       裝置上真的有幾筆作答」。原本無條件印 96 並宣告「四班共用同一次
+       Rasch 校準」，而一人一台平板時本機其實只有 1 筆——那句話會在校準
+       根本沒跑起來的時候，讓老師以為她看的是全體的數字。 */
+    '<p class="small" style="margin:0">這一頁的統計範圍是名單上的<strong>四個班級共 ' + diag.roster.length +
+    ' 人</strong>，其中<strong>' + diag.done.length + ' 人</strong>的作答在這台裝置上。' +
+    (diag.ready
+      ? '四班共用同一次 Rasch 校準，條件之間才可以比較。'
+      : '樣本數還不到 ' + diag.minN + ' 人，<strong>校準尚未執行</strong>——' +
+        'θ、δ 與四象限都還是空的。請到研究控制台的「資料匯出」合併其他平板的資料包。') +
     '只有「理解歷程」分頁另外把本班拆出來。</p></div>' +
     /* 答案卡釋出開關。它原本只在 #/settings，而那一頁在 RESEARCHER_ONLY 裡－－
        role==='teacher' 的老師根本進不去，而三條釋出路徑裡另外兩條
@@ -7564,8 +7702,11 @@ function viewMyGrowth(){
   const post = diagnose(state, 'a-post');
   const pp = pre  && pre.ready  ? pre.perStudent.find(function(p){ return p.sid === me.id; })  : null;
   const qp = post && post.ready ? post.perStudent.find(function(p){ return p.sid === me.id; }) : null;
+  /* 「等前測與後測都完成」只講了一半：兩次都交完之後，還要老師把四個班的
+     資料合併起來跑一次共同校準，θ 才估得出來。只講前半的話，已經交完兩次
+     的孩子會停在這一頁等一個不會來的東西。 */
   if (!pp && !qp) return '<div class="empty"><h3>還沒有可以看的紀錄</h3>' +
-    '<p style="max-width:60ch">你的紀錄要等前測與後測都完成之後才算得出來。</p>' +
+    '<p style="max-width:60ch">你的紀錄要等前測與後測都交完，而且老師把四個班的資料合起來之後才算得出來。</p>' +
     '<a class="btn" href="#/student">回我的作業</a></div>';
 
   /* 母體是「自己班」，不是示範班。用預設範圍的話，示範班以外的 72 位學生
@@ -8256,8 +8397,11 @@ function viewResult(aid){
           })())
       : statCard('選擇題答對', '—', '這一次作答的題目太少')) +
       statCard('我這次的閱讀力', (ps && mc.length) ? readingStars(ps.theta, diag.meanTheta) : '—',
+        /* 沒有 ps 的真正原因不是「人不夠多」——這台平板上本來就只有自己
+           那一筆，四個班的資料要由老師合併之後才算得出來。原本寫
+           「需要更多人完成」，孩子會以為再等一下就會出現。 */
         !mc.length ? '這一次作答的題目太少，畫不出來'
-                   : (ps ? '和所有做過的同學比起來的位置' : '需要更多人完成')) +
+                   : (ps ? '和所有做過的同學比起來的位置' : '要等老師把大家的資料合起來')) +
       statCard('可惜的題目', ps ? ps.q[2] : '—', '這幾題你其實讀得懂，只是這次沒答對') +
       statCard('厲害的題目', ps ? ps.q[1] : '—', '這幾題比較難，你答對了', 'good') +
     '</div>' +
@@ -8279,8 +8423,12 @@ function viewResult(aid){
         ' 題你很厲害。</strong>這幾題比較難，你答對了。' +
         '到知識建構空間把你的想法貼出來——班上有同學正卡在同一題。</p></div>' : '') +
       '</div></div>'
-      : '<div class="card card-p" style="margin-bottom:16px"><p class="muted small">班上還沒有夠多人做完，' +
-        '所以還畫不出你的閱讀地圖。等大家都交了再回來看。</p></div>') +
+      /* 「等大家都交了再回來看」是一個不會兌現的承諾：這台平板上只有孩子
+         自己那一筆，同班別人交不交都不會讓這裡長出東西。真正的條件是
+         老師把四個班的資料合併起來跑一次共同校準——講清楚它，孩子才不會
+         一直回來看一個永遠不會變的畫面。 */
+      : '<div class="card card-p" style="margin-bottom:16px"><p class="muted small">閱讀地圖要把四個班的作答放在一起才算得出來，' +
+        '老師還沒把大家的資料合起來。這一頁下面的逐題檢視現在就可以看。</p></div>') +
     '<div class="card" style="margin-bottom:16px"><div class="card-h"><h3>逐題檢視</h3>' +
     (keyLocked ? '<span class="pill"><span class="dot"></span>答案還沒打開</span>' : '') + '</div>' +
     /* 文案要講真正的條件。原本寫「這一節課上完之後」，而實際條件是
@@ -8843,9 +8991,12 @@ function viewSettings(){
       '<div class="field"><label for="thr">迷思橋接門檻（%）</label>' +
       '<input id="thr" type="number" min="1" max="60" value="' + s.misThreshold + '" data-act="set-thr">' +
       '<span class="muted small">一題的迷思(II)比例達到這個值，就會出現在「迷思橋接」清單裡。出廠預設 12%；門檻越低，被標出來一起討論的題目越多。</span></div>' +
-      '<div class="field"><label for="minn">KIDMAP 最低樣本數</label>' +
-      '<input id="minn" type="number" min="3" max="40" value="' + s.minN + '" data-act="set-minn">' +
-      '<span class="muted small">低於這個人數不執行 Rasch 估計。人數太少時難度與能力的估計會非常不穩定。</span></div>' +
+      '<div class="field"><label for="minn">閱讀地圖最低樣本數</label>' +
+      '<input id="minn" type="number" min="' + RASCH_MIN_N + '" max="200" value="' + s.minN + '" data-act="set-minn">' +
+      '<span class="muted small">低於這個人數不執行 Rasch 估計。硬下限是 ' + RASCH_MIN_N +
+      ' 人，只能往上調——14 題、3 個人的 JMLE 只是把三個人的總分重新排一次，' +
+      '而成績頁掛的是「和所有做過的同學比起來的位置」。' +
+      '一人一台平板時本機只有自己那一筆，要先用下面的「合併其他平板的資料」把四個班併起來。</span></div>' +
       /* 這個門檻原本硬編碼在 keyUnlocked() 裡、預設物件也沒有這個鍵，
          正式施測時連調都調不了。 */
       '<div class="field"><label for="kur">答案卡釋出門檻（作答比例）</label>' +
@@ -9337,11 +9488,15 @@ function aalSave(){
        交給學生的瀏覽器：清掉網站資料就能重新領 6 次。額度改由已落地的
        state.dialog 推導，見 aalStudentTurns()。 */
     const prev = all[aalDraftId()] || {};
+    /* noteWritten 也要存：它是「這一題的這一段文字已經寫過一筆 'N' 了」的
+       帳本。不存的話，重整之後同一段沒改過的筆記會再記一筆，對照組的
+       分析單位數就跟著孩子重整幾次而變動。 */
     const mine = {answers:AAL.answers, texts:AAL.texts, notes:AAL.notes,
                   marks:AAL.marks, checks:AAL.checks, tele:AAL.tele,
-                  drafts:AAL.drafts, says:AAL.says, strokes:aalPadsSnapshot()};
+                  drafts:AAL.drafts, says:AAL.says, noteWritten:AAL._noteWritten || {},
+                  strokes:aalPadsSnapshot()};
     const merged = mergeDraftMaps(prev, mine,
-      ['answers','texts','notes','marks','checks','tele','drafts','says','strokes']);
+      ['answers','texts','notes','marks','checks','tele','drafts','says','noteWritten','strokes']);
     merged.idx = AAL.idx;
     merged.savedAt = Date.now();
     all[aalDraftId()] = merged;
@@ -9396,6 +9551,7 @@ function aalInit(aid){
       AAL.tele    = d.tele    || {};
       AAL.drafts  = d.drafts  || {};
       AAL.says    = d.says    || {};
+      AAL._noteWritten = d.noteWritten || {};
       aalPadsRestore(d.strokes);
       /* 每一題的 enter 重設為現在。不重設的話，離線的那幾個小時會被
          算進 firstKeyLatency，產生沒有意義的離群值。
@@ -9485,7 +9641,7 @@ function aalStudentTurns(iid){
 }
 function aalTele(iid){
   return AAL.tele[iid] = AAL.tele[iid] || {firstKeyLatency:null, keystrokes:0, deletions:0,
-    longPauses:0, lastKey:null, enter:Date.now(), prevLen:0};
+    longPauses:0, lastKey:null, enter:Date.now(), prevLen:0, revisits:0};
 }
 
 /* 進出題目的邊界。這一支同時修掉兩個結構性失效的匯出變項：
@@ -9507,9 +9663,24 @@ function aalEnterItem(it){
   if (!AAL || !it) return;
   if (AAL._curIid === it.id) return;
   aalExitItem();
+  const fresh = !AAL.tele[it.id];
   AAL._curIid = it.id;
-  aalTele(it.id);
-  aalLog('ENTER', null, {}, it);
+  const t = aalTele(it.id);
+  /* 場內重入也要重設，理由與 aalInit 的續作路徑完全相同，只是那裡做了、
+     這裡沒有。aalTele 對已存在的紀錄是 no-op，於是 enter 永遠釘在
+     「這一場次第一次進入該題」——題本是 T1 選擇題 → C01 → T2 選擇題 → C02，
+     導覽只有上一題／下一題、沒有跳題，最典型的做法就是先跳過兩題作文、
+     繞一圈再回來寫。firstKeyLatency 於是把中間在別題的十幾分鐘全算進去，
+     回來第一筆時 lastKey 還停在離開前，又多記一次 longPause。
+     這兩欄只長在那兩題非選上，沒有別題可以稀釋，膨脹量正比於換題次數，
+     而換題節奏本身與條件共變。
+     只對「還沒下過筆」的題目重設 enter——已經量到的值再重設就是把對的蓋掉。 */
+  if (!fresh){
+    if (t.firstKeyLatency === null) t.enter = Date.now();
+    t.lastKey = null;
+    t.revisits = (t.revisits || 0) + 1;
+  }
+  aalLog('ENTER', null, {visit: (t.revisits || 0) + 1}, it);
 }
 function aalExitItem(){
   if (!AAL || !AAL._curIid) return;
@@ -9993,7 +10164,19 @@ function flushNoteFor(it){
   if (AAL._noteWritten && AAL._noteWritten[it.id] === txt) return false;
   AAL._noteWritten = AAL._noteWritten || {};
   AAL._noteWritten[it.id] = txt;
-  aalLog('NOTE', 'N', {text: txt, turn: noteTurnOf(it.id)}, it);
+  /* 時間戳要用「最後一次按鍵」，不是 flush 的那一刻。
+     這裡是全庫唯一寫 code:'N' 的地方，而觸發它的是換題／交卷／離開路由／
+     beforeunload——用 Date.now() 的話，'N' 在依 sid|iid|visit 切出來的每一段
+     序列裡結構性地永遠排在最後（其後只可能接交卷批次補寫的 'S'）。
+     三個 AI 條件的 ASK 是孩子按下送出的當下寫入、位置自由，於是 RQ4 的
+     LSA／ENA／SDIS 會拿一個位置由 flush 時機決定的條件，去比三個位置由
+     行為決定的條件：M→N、O→N、W→N 這些轉移在對照組結構上永遠測不到，
+     而 N→S 則被強制吃下 N 的全部出邊。寫入時間是唯一的時間戳，事後無法重建。
+     密度不動——仍然是每題每次造訪最多一筆（見上面的 _noteWritten 守門），
+     不讓對照組的分析單位數超過三個 AI 條件。 */
+  const te = AAL.tele[it.id];
+  const ts = (te && te.lastKey) || Date.now();
+  aalLog('NOTE', 'N', {t: ts, rel: ts - AAL.t0, text: txt, turn: noteTurnOf(it.id)}, it);
   return true;
 }
 function flushTypeTelemetry(){
@@ -10023,7 +10206,11 @@ async function aalSay(){
   let box = document.getElementById('aalSay');
   if (!box) return;
   const text = box.value.trim();
-  if (!text) return;
+  /* 空白送出原本是裸 return：沒有 toast、沒有任何畫面變化。
+     照字面等夥伴先開口的孩子，唯一能按的按鈕給他完全的沉默——
+     而「夥伴不會先講話」這件事三個角色都成立，只有 tutor 的開場白
+     曾經承諾過相反的事（見 32-aal.js 的 frame）。 */
+  if (!text){ toast('先在框裡打一句話再送出。'); try { box.focus(); } catch (e) {} return; }
   const it = aalItem();
   /* 記下這一輪是在哪一題發起的。await 期間學生可能已經按了下一題，
      it 是舊題、DOM 是新題的節點，寫回去就會出現「一句話沒講就剩 1 次」。 */
@@ -10099,9 +10286,11 @@ async function aalSay(){
           {role:'system', content: composePrompt(ctx.cond, it.process || 'FR', qfnNow)},
           {role:'user', content:'【題目】' + it.stem + '\n【學生剛剛說】' + text}
         ], {max_tokens:200, temperature:0.7, signal: ac ? ac.signal : undefined});
-        const g = leakGuard(raw, it);
+        /* 條件要傳進去：攔截後的替換文依角色而異，三個角色共用一句
+           施教者口吻的話會把 tutee／peer 的社會框架直接否定。 */
+        const g = leakGuard(raw, it, ctx.cond);
         reply = {text:g.text, qfn:qfnNow,
-                 sub:null, engine:'llm', blocked:g.blocked, hits:g.hits};
+                 sub:null, engine:'llm', blocked:g.blocked, hits:g.hits, kinds:g.kinds};
       } catch (err) {
         /* 退回內建規則引擎。fallback 原本只賦值、沒有任何讀取端，於是
            「因為網路慢而由規則引擎頂上的那一輪」在匯出資料裡與「整場研究
@@ -10143,6 +10332,10 @@ async function aalSay(){
         aid:ctx.aid, iid:ctx.it.id, proc:ctx.it.process || 'FR', type:'AI', code:'A',
         text:reply.text, qfn:reply.qfn, sub:reply.sub, turn:ctx.turn,
         engine:reply.engine, blocked: !!reply.blocked,
+        /* 攔截原因分兩類：'verdict'（判斷對錯）與 'leak'（洩答或指路）。
+           忠實度報表要分得開——它們違反的是不同的不變量。 */
+        blockKinds: (reply.kinds && reply.kinds.length) ? reply.kinds.join('+') : null,
+        blockHits: (reply.hits && reply.hits.length) ? reply.hits.join(',') : null,
         /* 設定的引擎與這一輪實際跑的引擎不一定相同，事後要分得出來。 */
         engineWanted: useLlm ? 'llm' : 'builtin',
         fallback: reply.fallback || null});
@@ -10333,7 +10526,11 @@ function aalSubmitCommit(){
         cid:(classOfStudent(me.id) || {}).id, cond:AAL.cond, lang:'zh', aid:AAL.aid,
         iid:it.id, proc:it.process, type:'TELEMETRY',
         firstKeyLatency:t.firstKeyLatency, keystrokes:t.keystrokes,
-        deletions:t.deletions, longPauses:t.longPauses});
+        deletions:t.deletions, longPauses:t.longPauses,
+        /* 「這一題的 latency 是在第幾次造訪量到的」要在資料裡看得見：
+           重入會重設 enter，所以 latency 本身是乾淨的，但分析端仍需要
+           知道這一題被繞回來幾次才決定要不要另計。 */
+        revisits:t.revisits || 0});
     }
     const nC = (AAL.checks[it.id] || []).length;
     logEvent({t:Date.now(), rel:Date.now() - AAL.t0, sid:me.id,
@@ -10346,9 +10543,17 @@ function aalSubmitCommit(){
        欄位與 dialog 對齊，分析端要納入時自己 concat。 */
     if (AAL.cond === 'control' && (AAL.notes[it.id] || '').trim()){
       state.aalNotes = state.aalNotes || [];
+      /* 先濾掉同 aid|sid|iid 的舊列再 push，與正上方的 state.responses 同形。
+         純 push 的話，同一位學生同一題重交會留下兩筆，而 inspectNotePane
+         把命中的列直接串起來顯示——老師的唯讀重播裡會看到重複的段落。 */
+      state.aalNotes = state.aalNotes.filter(function(n){
+        return !(n.aid === AAL.aid && n.sid === me.id && n.iid === it.id); });
       state.aalNotes.push({t:Date.now(), rel:Date.now() - AAL.t0, sid:me.id,
         cid:(classOfStudent(me.id) || {}).id, cond:AAL.cond, lang:'zh',
         aid:AAL.aid, iid:it.id, proc:it.process, text:AAL.notes[it.id],
+        /* 上面的註解說「欄位與 dialog 對齊」，但 turn 與 speaker 一直沒補上，
+           分析端要 concat 進 dialog 時這兩欄會是 undefined。 */
+        turn:noteTurnOf(it.id), speaker:'student',
         ucode:codeUtteranceProcess(AAL.notes[it.id]),
         sent:sentimentOf(AAL.notes[it.id]).score});
     }
@@ -11189,12 +11394,23 @@ function rDesign(){
       '</div></div>' +
 
       '<div class="card"><div class="card-h"><h3>防洩答攔截</h3></div><div class="card-p">' +
-      '<p class="small">每一則夥伴發話送出前都會過一次篩檢：出現判定詞（' +
-      esc(VERDICT_WORDS.slice(0, 5).join('、')) + '…）、正解字串或正解代號一律攔下並改為固定語句。' +
+      '<p class="small">每一則夥伴發話送出前都會過一次篩檢，攔下的分兩類：' +
+      '<strong>判斷對錯</strong>（' + esc(VERDICT_WORDS.slice(0, 3).join('、')) + '、' +
+      esc(VERDICT_SOFT.slice(0, 4).join('、')) + '…，以及任何與判定語同句出現的裸露 A–D 代號）與' +
+      '<strong>洩答或指路</strong>（任一選項的原文、「第 N 段」「第 N 句」、' +
+      esc(POINTER_WORDS.slice(0, 3).join('、')) + '…）。兩者違反的是不同的不變量：' +
+      '前者是「AI 不可判斷對錯」，後者是「AI 不可給提示」。' +
       '規則引擎本來就不會產生這些內容，這一關是為外部語言模型準備的——' +
       '<strong>攔截次數本身就是一項可報告的忠實度指標</strong>。</p>' +
       '<div class="row" style="margin-top:8px">' +
-      statCard('已攔截', allLogs().filter(function(e){ return e.blocked; }).length, '本機累計') +
+      (function(){
+        const B = allLogs().filter(function(e){ return e.blocked; });
+        const kind = function(k){ return B.filter(function(e){
+          return String(e.blockKinds || '').indexOf(k) >= 0; }).length; };
+        return statCard('已攔截', B.length, '本機累計') +
+          statCard('判斷對錯', kind('verdict'), 'verdict') +
+          statCard('洩答／指路', kind('leak'), 'leak');
+      })() +
       '</div></div></div>' +
     '</div></div>';
 }
@@ -11669,6 +11885,35 @@ function rExport(){
   '每次載入結果一致，可重現，但<strong>不得當成實徵結果引用</strong>。' +
   '你自己在平台上操作產生的事件會存進 localStorage 並一起匯出。</p></div></div>' +
 
+  /* 合併其他平板的資料。沒有這一條，「四班共用同一次 Rasch 校準」在
+     一人一台平板的部署形態下永遠做不到——本機只有自己那一筆。 */
+  (function(){
+    const asg = getAssignment('a-post') || getAssignment('a-pre');
+    const d = asg ? diagnose(state, asg.id) : null;
+    const done = d ? d.done.length : 0;
+    const need = d ? d.minN : RASCH_MIN_N;
+    const ok = d ? d.ready : false;
+    return '<div class="card" style="margin-top:16px;border-left:3px solid ' +
+      (ok ? 'var(--ok)' : 'var(--warn)') + '">' +
+    '<div class="card-h"><h3>合併其他平板的資料</h3>' +
+    '<span class="pill ' + (ok ? 'q1' : 'q2') + '"><span class="dot"></span>' +
+      '本機已有 ' + done + ' / ' + need + ' 人</span></div>' +
+    '<div class="card-p">' +
+    '<p class="small" style="max-width:70ch">閱讀地圖與四象限要有一次<strong>四個班共用的 Rasch 校準</strong>才能比較，' +
+    '而每一台平板上只有坐在它前面那個孩子的作答。把每一台的「完整研究資料包（JSON）」都收回來，' +
+    '在其中一台依序匯入，校準才組得出來。</p>' +
+    '<p class="small muted" style="max-width:70ch">以鍵取聯集，不覆蓋既有列：同一個檔案匯入兩次不會產生重複，順序也不影響結果。' +
+    '不在本機名單裡的學生一律不收，示範問卷也不收。合併的是作答、交卷、歷程事件、對話、對照組筆記與問卷六類。</p>' +
+    '<div class="row" style="margin-top:10px">' +
+    '<label class="btn" for="mergeFile">選一份資料包（JSON）</label>' +
+    '<input id="mergeFile" type="file" accept="application/json,.json" data-act="merge-bundle" ' +
+      'style="position:absolute;width:1px;height:1px;opacity:0;pointer-events:none">' +
+    '<span class="muted small" id="mergeOut">' +
+      (ok ? '樣本數已達門檻，校準跑得起來。' : '還差 ' + Math.max(0, need - done) + ' 人才會開始估。') +
+    '</span></div>' +
+    '</div></div>';
+  })() +
+
   /* 施測前的清場。不做這一步，真的孩子登入會看到「已完成」與別人的模擬答案。 */
   '<div class="card" style="margin-top:16px;border-left:3px solid ' +
     (state.demoSeed === false ? 'var(--ok)' : 'var(--warn)') + '">' +
@@ -12047,6 +12292,18 @@ function researchBundle(){
     }),
     logs: allLogs(),
     dialogue: allDialog(),
+    /* 原樣的儲存形狀，供「合併其他平板的資料」使用。
+       上面的 surveys／logs／dialogue 是分析形狀（surveys 帶 scores 而不是
+       resp，logs／dialogue 含示範資料），照著併回去會污染校準；
+       這一區塊只有這台裝置上真的發生過的事，而且鍵可以對得起來。 */
+    raw: {
+      responses: state.responses,
+      submissions: state.submissions,
+      logs: state.logs || [],
+      dialog: state.dialog || [],
+      aalNotes: state.aalNotes || [],
+      surveys: (state.surveys || []).filter(function(s){ return !s.demo; })
+    },
     processAnalytics: {
       lsa: (function(){ const r = lsa(); return {codes:r.codes, F:r.F, Z:r.Z, sig:r.sig, N:r.N}; })(),
       lsaByCondition: CONDITIONS.reduce(function(o, c){
@@ -12614,6 +12871,9 @@ function bindEvents(){
       state.submissions = state.submissions.filter(function(s){ return !(s.aid === aid && s.sid === me.id); });
       state.responses   = state.responses.filter(function(r){ return !(r.aid === aid && r.sid === me.id); });
       state.dialog      = (state.dialog || []).filter(function(d){ return !(d.aid === aid && d.sid === me.id); });
+      /* 對照組的對應語料。漏掉它的話，示範帳號每按一次〈再走一次〉就多留
+         一份筆記，而畫面說的是「重新走一次流程」。 */
+      state.aalNotes    = (state.aalNotes || []).filter(function(n){ return !(n.aid === aid && n.sid === me.id); });
       /* 「再走一次」原本只清這三樣，於是重來的其實只有一半：
          · state.logs 留著——標記、選項、打字的歷程事件全都還在，
            而標記現在是從日誌重建的（見 aalInit），孩子會看到上一次的
@@ -12690,6 +12950,12 @@ function bindEvents(){
       state.views = [];
       state.notes = [];
       state.dialog = [];
+      /* state.aalNotes 是對照組整節課唯一的全文語料，地位等同三個 AI 條件的
+         state.dialog——上一行清了 dialog 卻漏了它，於是備課與試玩時在對照組
+         帳號上寫的筆記，會帶著真實 sid 與時間戳留到施測當天，跟孩子自己寫的
+         混在同一個陣列裡，沒有任何欄位分得開。污染只落在基準組，方向與條件
+         系統性相關，而 ucode 與 sent 兩個衍生欄位也一併被污染。 */
+      state.aalNotes = [];
       DEMO_LOGS = []; DEMO_DIALOG = [];
       /* DEMO_LOGS 是種出來的那一半，state.logs 是「真的有人在這台機器上操作」
          產生的那一半——備課、試玩、示範給同事看，全都寫在裡面。
@@ -12721,6 +12987,44 @@ function bindEvents(){
   /* change 事件 */
   document.addEventListener('change', function(e){
     const t = e.target.closest('[data-act]');
+    /* 合併其他平板的資料包。放在最前面：它自己處理完就回，
+       不必經過下面那一長串以 state 為前提的分支。 */
+    if (t && t.dataset.act === 'merge-bundle'){
+      const f = e.target.files && e.target.files[0];
+      const out = document.getElementById('mergeOut');
+      e.target.value = '';                       // 同一個檔案要能再選一次
+      if (!f) return;
+      if (out) out.textContent = '讀取中……';
+      const fr = new FileReader();
+      fr.onerror = function(){
+        if (out) out.textContent = '讀不到這個檔案。';
+        toast('讀不到這個檔案。');
+      };
+      fr.onload = function(){
+        let r;
+        try {
+          r = mergeResearchBundle(JSON.parse(String(fr.result)));
+        } catch (err) {
+          const m = String((err && err.message) || err);
+          if (out) out.textContent = '合併失敗：' + m;
+          alertModal({title:'合併失敗', body:m});
+          return;
+        }
+        const parts = Object.keys(r.added)
+          .filter(function(k){ return r.added[k]; })
+          .map(function(k){ return k + ' ' + r.added[k]; });
+        const msg = r.total
+          ? '已合併 ' + r.total + ' 列（' + parts.join('、') + '）'
+          : '這一份裡沒有本機還缺的列（可能已經匯過了）';
+        const extra = (r.foreign ? '；略過名單外的 ' + r.foreign + ' 列' : '') +
+                      (r.demo ? '；略過示範問卷 ' + r.demo + ' 列' : '');
+        if (out) out.textContent = msg + extra + '。';
+        toast(msg + '。');
+        render();
+      };
+      fr.readAsText(f);
+      return;
+    }
     if (e.target.id === 'who'){
       /* 用身分下拉離開代為檢視也要結束模式，否則 impersonate 旗標會留著，
          把整站對「已經回到自己身分」的老師鎖在唯讀狀態，而且沒有任何說明。 */
@@ -12800,7 +13104,7 @@ function bindEvents(){
         state.unitOverrides[it.id] = t.value; save(); toast('已重新歸類。'); }
       return; }
     if (act === 'set-thr'){ state.settings.misThreshold = Math.max(1, Math.min(60, +t.value || 15)); save(); toast('已儲存。'); return; }
-    if (act === 'set-minn'){ state.settings.minN = Math.max(3, Math.min(40, +t.value || 3)); save(); render(); return; }
+    if (act === 'set-minn'){ state.settings.minN = Math.max(RASCH_MIN_N, Math.min(200, +t.value || RASCH_MIN_N)); save(); render(); return; }
     if (act === 'set-kur'){
       const v = parseFloat(t.value);
       state.settings.keyUnlockRatio = isFinite(v) ? Math.max(0, Math.min(1, v)) : 0.5;

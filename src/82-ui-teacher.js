@@ -192,8 +192,16 @@ function viewAssign(aid, tab){
       '<a class="btn" href="#/teacher">回教師後台</a>') +
     /* 八個分頁裡七個是四班合計卻用班級語彙，老師會以為那是她班上的數字 */
     '<div class="card card-p" style="margin-bottom:12px;border-left:3px solid var(--accent)">' +
-    '<p class="small" style="margin:0">這一頁的統計範圍是<strong>四個班級共 ' + diag.roster.length +
-    ' 人</strong>——四班共用同一次 Rasch 校準，條件之間才可以比較。' +
+    /* roster.length 是「名單上有幾個人」，恆為 96；done.length 才是「這台
+       裝置上真的有幾筆作答」。原本無條件印 96 並宣告「四班共用同一次
+       Rasch 校準」，而一人一台平板時本機其實只有 1 筆——那句話會在校準
+       根本沒跑起來的時候，讓老師以為她看的是全體的數字。 */
+    '<p class="small" style="margin:0">這一頁的統計範圍是名單上的<strong>四個班級共 ' + diag.roster.length +
+    ' 人</strong>，其中<strong>' + diag.done.length + ' 人</strong>的作答在這台裝置上。' +
+    (diag.ready
+      ? '四班共用同一次 Rasch 校準，條件之間才可以比較。'
+      : '樣本數還不到 ' + diag.minN + ' 人，<strong>校準尚未執行</strong>——' +
+        'θ、δ 與四象限都還是空的。請到研究控制台的「資料匯出」合併其他平板的資料包。') +
     '只有「理解歷程」分頁另外把本班拆出來。</p></div>' +
     /* 答案卡釋出開關。它原本只在 #/settings，而那一頁在 RESEARCHER_ONLY 裡－－
        role==='teacher' 的老師根本進不去，而三條釋出路徑裡另外兩條
