@@ -462,7 +462,15 @@ function viewQuiz(aid){
             '<input type="radio" name="q-' + it.id + '" data-act="quiz-pick" data-id="' + it.id + '" data-k="' + k + '"' +
             (chosen === k ? ' checked' : '') + '>' +
             '<b>' + String.fromCharCode(65 + k) + '</b><span>' + esc(o) + '</span></label>';
-        }).join('') + '</div></div></div>';
+        }).join('') + '</div>' +
+        /* 三個 radiogroup 介面只修了兩個。後測作答頁與問卷頁都印了這一句，
+           理由寫在 92-ui-aal.js：原生 radiogroup 在一顆都沒選時，Tab 進來
+           會把焦點停在第一顆但不勾選它－－這個缺陷只吃掉 A 的作答，
+           是只打在鍵盤使用者身上的系統性失分。而前測 θ 是 ANCOVA 的共變數，
+           又沒有補交路徑。逐字用同一句，三處就一致了。 */
+        '<p class="muted small" style="margin-top:6px">直接點你要的答案就可以。' +
+        '用鍵盤的話，上下方向鍵移動、空白鍵選起來。</p>' +
+        '</div></div>';
   }
 }
 

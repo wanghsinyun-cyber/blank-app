@@ -421,6 +421,13 @@ td.n,th.n{text-align:right; font-family:var(--f-mono); font-variant-numeric:tabu
   position:absolute; width:13.2rem; background:var(--card); border:1px solid var(--rule);
   border-left:4px solid var(--ink-4); border-radius:var(--r-m); padding:9px 11px; cursor:grab;
   box-shadow:var(--shadow); user-select:none;
+  /* touch-action:none 不能省。.canvas 是兩軸可捲的容器，手指從貼文上
+     開始拖曳時瀏覽器會把手勢判給畫布捲動並送出 pointercancel，
+     endDrag() 立刻把位置寫回原點－－貼文彈回去。
+     而教室裡只有平板，.note 的 cursor:grab 在畫面上承諾了一個
+     觸控永遠做不到的動作，而貼文在畫布上的空間安排本身承載
+     「誰接著誰」的語意。畫布仍可從空白處平移。 */
+  touch-action:none;
 }
 .note:active{cursor:grabbing}
 /* 「已選取」不可以佔用 outline 語彙。原本是 outline:2px solid var(--focus)，
@@ -7989,7 +7996,15 @@ function viewQuiz(aid){
             '<input type="radio" name="q-' + it.id + '" data-act="quiz-pick" data-id="' + it.id + '" data-k="' + k + '"' +
             (chosen === k ? ' checked' : '') + '>' +
             '<b>' + String.fromCharCode(65 + k) + '</b><span>' + esc(o) + '</span></label>';
-        }).join('') + '</div></div></div>';
+        }).join('') + '</div>' +
+        /* 三個 radiogroup 介面只修了兩個。後測作答頁與問卷頁都印了這一句，
+           理由寫在 92-ui-aal.js：原生 radiogroup 在一顆都沒選時，Tab 進來
+           會把焦點停在第一顆但不勾選它－－這個缺陷只吃掉 A 的作答，
+           是只打在鍵盤使用者身上的系統性失分。而前測 θ 是 ANCOVA 的共變數，
+           又沒有補交路徑。逐字用同一句，三處就一致了。 */
+        '<p class="muted small" style="margin-top:6px">直接點你要的答案就可以。' +
+        '用鍵盤的話，上下方向鍵移動、空白鍵選起來。</p>' +
+        '</div></div>';
   }
 }
 
@@ -9365,9 +9380,14 @@ function viewAaL(aid){
       '<p class="muted small" id="passageHelp">' +
       (text.intro ? '<strong>' + esc(text.intro) + '</strong> ' : '') +
       '點一下任何一句，把它標記起來。' +
+      /* 全頁原本沒有一句鍵盤說法，而選項區有。用鍵盤的孩子會把焦點停在
+         某一顆句子鈕上往下讀，Space 在 button 上是啟用鍵——按一次就把他
+         正停著的那一句 toggle 掉（寫一筆 MARK、底色消失）。 */
+      '用鍵盤的話，Tab 停在句子上，按 Enter 或空白鍵就是標記；' +
+      '想單純往下讀，把焦點停在文章區塊本身再用方向鍵捲。' +
       '標記不會影響你的分數，換題也不會消失；每一篇文章的標記分開記。' +
       '老師之後可以看到你標了哪幾句，這是為了知道你怎麼讀。</p>' +
-      '<div class="passage" role="group" aria-labelledby="passageTitle" aria-describedby="passageHelp">' +
+      '<div class="passage" tabindex="0" role="group" aria-labelledby="passageTitle" aria-describedby="passageHelp">' +
         text.paras.map(function(_, pi){
           return '<p class="para">' + sents.filter(function(s){ return s.para === pi; }).map(function(s){
             const on = marks.indexOf(s.i) >= 0;
@@ -10178,6 +10198,13 @@ function surveyGate(phase){
      回答「我相信我可以在這次閱讀測驗拿到不錯的成績」時，
      量到的是處遇後的狀態。而誰會漏填、誰會回頭補與投入程度共變。 */
   if (phase === 'pre'){
+    /* 已經送出的人先放行。原本只看 submitted('a-post')，於是交完後測之後
+       任何人點側欄的「課前問卷」都會被告知「沒填到、跟老師說一聲」－－
+       包括課前就乖乖填完送出的人。很快做完的孩子會把側欄每一項都點一遍，
+       而那是施測現場最需要安靜的十分鐘；監考老師還得一個一個去查。
+       放行之後他會看到「這份問卷你已經送出了」的確認卡（那張卡原本在
+       課後永遠看不到，裡面那顆按鈕更是死碼）。 */
+    if (surveyOf(me.id, 'pre')) return '';
     if (!submitted('a-post', me.id)) return '';
     return '<div class="empty"><h3>這一份要在上課前填</h3>' +
       '<p style="max-width:62ch">課前問卷問的是你「還沒上這節課之前」的想法。' +
@@ -11603,6 +11630,7 @@ function initCanvasDrag(){
   inner.addEventListener('pointerdown', function(e){
     const el = e.target.closest('.note'); if (!el) return;
     const n = getNote(el.dataset.note); if (!n) return;
+    e.preventDefault();   // 不讓瀏覽器把這個手勢改判給畫布捲動
     /* 觸控的抖動比滑鼠大得多。曼哈頓距離 4px 會讓「右 3、下 2」的輕點
        就算成拖曳——實測輕點一下貼文位置就變了，而且詳頁沒有打開。 */
     drag = {el:el, n:n, sx:e.clientX, sy:e.clientY, ox:n.x, oy:n.y, moved:false,
@@ -11637,6 +11665,22 @@ function initCanvasDrag(){
   inner.addEventListener('keydown', function(e){
     const el = e.target.closest('.note');
     if (!el) return;
+    /* 方向鍵搬貼文：與指標對稱的鍵盤路徑。moveNote 全庫原本只有
+       pointerup 一條路叫得到，而那條路在平板上走不通。
+       Shift 加大步距；搬完把焦點放回那張貼文。 */
+    const AR = {ArrowLeft:[-1,0], ArrowRight:[1,0], ArrowUp:[0,-1], ArrowDown:[0,1]};
+    if (AR[e.key]){
+      const id0 = el.dataset.note; const nn = getNote(id0); if (!nn) return;
+      e.preventDefault();
+      const step = (e.shiftKey ? 100 : 20);
+      const d = AR[e.key];
+      if (!moveNote(id0, Math.max(0, nn.x + d[0] * step), Math.max(0, nn.y + d[1] * step))){
+        toast('代為檢視時不能替學生搬貼文。'); return; }
+      render();
+      const again = document.querySelector('.note[data-note="' + id0 + '"]');
+      if (again) again.focus({preventScroll:true});
+      return;
+    }
     if (e.key !== 'Enter' && e.key !== ' ' && e.key !== 'Spacebar') return;
     e.preventDefault();
     const id = el.dataset.note;
@@ -12147,8 +12191,14 @@ function bindEvents(){
       if (el){ el.focus(); el.scrollIntoView({block:'start'}); }
       return; }
     if (act === 'back-to-passage'){
-      const h = document.getElementById('passageTitle');
-      if (h){ h.focus(); h.scrollIntoView({block:'start'}); }
+      /* 焦點放文章容器，不是標題。#passageTitle 在 .card-h 裡、在捲動容器
+         外面：焦點停在那裡按方向鍵捲的是整頁（雙欄時 .aal-text 是 sticky，
+         畫面幾乎不動），要進文章只能再按一次 Tab，而 Tab 的下一站是第 0 句——
+         瀏覽器把 .card-p 捲回最頂端，他讀到第 8 段的位置就沒了。
+         .passage 現在有 tabindex="0"，是中性的落腳點：Space／PageDown
+         捲的是文章本身，也不會誤觸到任何一句的標記。 */
+      const p = document.querySelector('.aal-text .passage') || document.getElementById('passageTitle');
+      if (p){ p.focus({preventScroll:true}); p.scrollIntoView({block:'start'}); }
       return; }
     if (act === 'back-to-nav'){
       const nv = document.getElementById('aalNav');

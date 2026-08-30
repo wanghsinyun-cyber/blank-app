@@ -404,6 +404,13 @@ td.n,th.n{text-align:right; font-family:var(--f-mono); font-variant-numeric:tabu
   position:absolute; width:13.2rem; background:var(--card); border:1px solid var(--rule);
   border-left:4px solid var(--ink-4); border-radius:var(--r-m); padding:9px 11px; cursor:grab;
   box-shadow:var(--shadow); user-select:none;
+  /* touch-action:none 不能省。.canvas 是兩軸可捲的容器，手指從貼文上
+     開始拖曳時瀏覽器會把手勢判給畫布捲動並送出 pointercancel，
+     endDrag() 立刻把位置寫回原點－－貼文彈回去。
+     而教室裡只有平板，.note 的 cursor:grab 在畫面上承諾了一個
+     觸控永遠做不到的動作，而貼文在畫布上的空間安排本身承載
+     「誰接著誰」的語意。畫布仍可從空白處平移。 */
+  touch-action:none;
 }
 .note:active{cursor:grabbing}
 /* 「已選取」不可以佔用 outline 語彙。原本是 outline:2px solid var(--focus)，

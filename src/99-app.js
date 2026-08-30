@@ -212,6 +212,7 @@ function initCanvasDrag(){
   inner.addEventListener('pointerdown', function(e){
     const el = e.target.closest('.note'); if (!el) return;
     const n = getNote(el.dataset.note); if (!n) return;
+    e.preventDefault();   // 不讓瀏覽器把這個手勢改判給畫布捲動
     /* 觸控的抖動比滑鼠大得多。曼哈頓距離 4px 會讓「右 3、下 2」的輕點
        就算成拖曳——實測輕點一下貼文位置就變了，而且詳頁沒有打開。 */
     drag = {el:el, n:n, sx:e.clientX, sy:e.clientY, ox:n.x, oy:n.y, moved:false,
@@ -246,6 +247,22 @@ function initCanvasDrag(){
   inner.addEventListener('keydown', function(e){
     const el = e.target.closest('.note');
     if (!el) return;
+    /* 方向鍵搬貼文：與指標對稱的鍵盤路徑。moveNote 全庫原本只有
+       pointerup 一條路叫得到，而那條路在平板上走不通。
+       Shift 加大步距；搬完把焦點放回那張貼文。 */
+    const AR = {ArrowLeft:[-1,0], ArrowRight:[1,0], ArrowUp:[0,-1], ArrowDown:[0,1]};
+    if (AR[e.key]){
+      const id0 = el.dataset.note; const nn = getNote(id0); if (!nn) return;
+      e.preventDefault();
+      const step = (e.shiftKey ? 100 : 20);
+      const d = AR[e.key];
+      if (!moveNote(id0, Math.max(0, nn.x + d[0] * step), Math.max(0, nn.y + d[1] * step))){
+        toast('代為檢視時不能替學生搬貼文。'); return; }
+      render();
+      const again = document.querySelector('.note[data-note="' + id0 + '"]');
+      if (again) again.focus({preventScroll:true});
+      return;
+    }
     if (e.key !== 'Enter' && e.key !== ' ' && e.key !== 'Spacebar') return;
     e.preventDefault();
     const id = el.dataset.note;
@@ -756,8 +773,14 @@ function bindEvents(){
       if (el){ el.focus(); el.scrollIntoView({block:'start'}); }
       return; }
     if (act === 'back-to-passage'){
-      const h = document.getElementById('passageTitle');
-      if (h){ h.focus(); h.scrollIntoView({block:'start'}); }
+      /* 焦點放文章容器，不是標題。#passageTitle 在 .card-h 裡、在捲動容器
+         外面：焦點停在那裡按方向鍵捲的是整頁（雙欄時 .aal-text 是 sticky，
+         畫面幾乎不動），要進文章只能再按一次 Tab，而 Tab 的下一站是第 0 句——
+         瀏覽器把 .card-p 捲回最頂端，他讀到第 8 段的位置就沒了。
+         .passage 現在有 tabindex="0"，是中性的落腳點：Space／PageDown
+         捲的是文章本身，也不會誤觸到任何一句的標記。 */
+      const p = document.querySelector('.aal-text .passage') || document.getElementById('passageTitle');
+      if (p){ p.focus({preventScroll:true}); p.scrollIntoView({block:'start'}); }
       return; }
     if (act === 'back-to-nav'){
       const nv = document.getElementById('aalNav');

@@ -375,9 +375,14 @@ function viewAaL(aid){
       '<p class="muted small" id="passageHelp">' +
       (text.intro ? '<strong>' + esc(text.intro) + '</strong> ' : '') +
       '點一下任何一句，把它標記起來。' +
+      /* 全頁原本沒有一句鍵盤說法，而選項區有。用鍵盤的孩子會把焦點停在
+         某一顆句子鈕上往下讀，Space 在 button 上是啟用鍵——按一次就把他
+         正停著的那一句 toggle 掉（寫一筆 MARK、底色消失）。 */
+      '用鍵盤的話，Tab 停在句子上，按 Enter 或空白鍵就是標記；' +
+      '想單純往下讀，把焦點停在文章區塊本身再用方向鍵捲。' +
       '標記不會影響你的分數，換題也不會消失；每一篇文章的標記分開記。' +
       '老師之後可以看到你標了哪幾句，這是為了知道你怎麼讀。</p>' +
-      '<div class="passage" role="group" aria-labelledby="passageTitle" aria-describedby="passageHelp">' +
+      '<div class="passage" tabindex="0" role="group" aria-labelledby="passageTitle" aria-describedby="passageHelp">' +
         text.paras.map(function(_, pi){
           return '<p class="para">' + sents.filter(function(s){ return s.para === pi; }).map(function(s){
             const on = marks.indexOf(s.i) >= 0;
@@ -1188,6 +1193,13 @@ function surveyGate(phase){
      回答「我相信我可以在這次閱讀測驗拿到不錯的成績」時，
      量到的是處遇後的狀態。而誰會漏填、誰會回頭補與投入程度共變。 */
   if (phase === 'pre'){
+    /* 已經送出的人先放行。原本只看 submitted('a-post')，於是交完後測之後
+       任何人點側欄的「課前問卷」都會被告知「沒填到、跟老師說一聲」－－
+       包括課前就乖乖填完送出的人。很快做完的孩子會把側欄每一項都點一遍，
+       而那是施測現場最需要安靜的十分鐘；監考老師還得一個一個去查。
+       放行之後他會看到「這份問卷你已經送出了」的確認卡（那張卡原本在
+       課後永遠看不到，裡面那顆按鈕更是死碼）。 */
+    if (surveyOf(me.id, 'pre')) return '';
     if (!submitted('a-post', me.id)) return '';
     return '<div class="empty"><h3>這一份要在上課前填</h3>' +
       '<p style="max-width:62ch">課前問卷問的是你「還沒上這節課之前」的想法。' +
