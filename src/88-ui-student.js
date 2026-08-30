@@ -130,7 +130,22 @@ function viewQuiz(aid){
   const a = getAssignment(aid);
   const me = currentUser();
   if (!a) return '<div class="empty"><h3>找不到這份作業</h3><a class="btn" href="#/student">回我的作業</a></div>';
-  if (submitted(aid, me.id)) { go('#/result/' + aid); return ''; }
+  /* 交完卷再走回作答頁：用 go() 會把 #/quiz/aid 疊進歷史，成績頁按〈上一頁〉
+     回到這裡又被送回去，兩頁之間原地打轉，孩子出不去。
+     但也不能改叫 replaceHash()——它自己會 render 一次，等這個函式回傳 ''
+     之後外層的 render() 又把畫面清空，而 replaceState 不觸發 hashchange，
+     沒有任何東西會再把它補回來，結果是一片空白。
+     只換網址、順手把 ROUTE 對齊，然後在同一次 render 裡直接回傳成績頁。 */
+  if (submitted(aid, me.id)){
+    const want = '#/result/' + aid;
+    if (location.hash !== want && window.history && history.replaceState){
+      try {
+        history.replaceState(null, '', want);
+        if (typeof parseRoute === 'function') ROUTE = parseRoute();
+      } catch (e) {}
+    }
+    return viewResult(aid);
+  }
   if (!QUIZ || QUIZ.aid !== aid) QUIZ = {aid:aid, answers:{}, texts:{}, strokes:{}};
 
   const items = a.itemIds.map(getItem).filter(Boolean);
@@ -141,7 +156,40 @@ function viewQuiz(aid){
     '<div class="kb-toolbar"><span class="muted small">已作答 ' + answered + ' / ' + mcCount + ' 題</span>' +
     '<div class="bar" style="flex:1;max-width:280px"><i style="width:' + (100 * answered / Math.max(1, mcCount)) + '%"></i></div>' +
     '<div class="spacer"></div><button class="btn primary sm" data-act="quiz-submit" data-id="' + aid + '">交卷</button></div>' +
-    '<div class="col">' + items.map(function(it, idx){
+    /* 前測（以及任何非 AAL 的派題）走這一支，而這一支從來沒有渲染文章。
+       16 題全部是文本依賴題——「小昀第一次發現柚子樹位置不對，是在什麼時候？」
+       在沒有文章的畫面上只能用猜的。實測：畫面印得出全部題幹，
+       卻找不到兩篇文章的任何一段；後測的 AAL 版面則兩篇都在。
+       前測 θ 是 ANCOVA 的共變數——量到的若是猜測而不是理解，
+       整個組間比較的基線就不成立。
+       題目已經依文本分組（見 30-data.js 的 allIds），所以在每一組前面
+       放它自己的文章即可。這裡刻意不做逐句標記：那是 AAL 的操弄成分，
+       前測四個條件必須一致，不能把處遇帶進基線。 */
+    '<div class="col">' + (function(){
+      const out = [];
+      let curUnit = null;
+      items.forEach(function(it, idx){
+        if (it.unit !== curUnit){
+          curUnit = it.unit;
+          const tx = getText(curUnit);
+          if (tx){
+            out.push('<div class="card"><div class="card-h">' +
+              '<h3>' + esc(tx.title) + '</h3>' +
+              '<span class="pill">' + esc(tx.genre) + '</span></div>' +
+              '<div class="card-p">' +
+              (tx.intro ? '<p class="muted small">' + esc(tx.intro) + '</p>' : '') +
+              tx.paras.map(function(p){ return '<p>' + esc(p) + '</p>'; }).join('') +
+              '</div></div>');
+          }
+        }
+        out.push(renderQuizItem(it, idx));
+      });
+      return out.join('');
+    })() + '</div>' +
+    '<div class="row" style="margin-top:16px;justify-content:flex-end">' +
+    '<button class="btn primary" data-act="quiz-submit" data-id="' + aid + '">交卷</button></div>';
+
+  function renderQuizItem(it, idx){
       if (it.type === 'cr'){
         return '<div class="card"><div class="card-p">' +
           '<div class="row" style="justify-content:space-between;margin-bottom:6px">' +
@@ -172,9 +220,7 @@ function viewQuiz(aid){
             (chosen === k ? ' checked' : '') + '>' +
             '<b>' + String.fromCharCode(65 + k) + '</b><span>' + esc(o) + '</span></label>';
         }).join('') + '</div></div></div>';
-    }).join('') + '</div>' +
-    '<div class="row" style="margin-top:16px;justify-content:flex-end">' +
-    '<button class="btn primary" data-act="quiz-submit" data-id="' + aid + '">交卷</button></div>';
+  }
 }
 
 /* θ 是 logit，對十歲孩子沒有意義。轉成「和班上比起來」的五顆星，

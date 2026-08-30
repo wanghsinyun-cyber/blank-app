@@ -124,6 +124,19 @@ function closeModal(){
 /* --- 外殼 --- */
 function renderShell(){
   const sel = $('#who');
+  /* 身分下拉是研究者與教師的工具，學生不該碰得到。實測一位學生的下拉裡
+     有 98 個選項：本班 24 人、別班 72 人、導師、以及研究者。後果有三層——
+     ① 對照組的孩子切到 tutor 班就看得到 AI 夥伴，受試者間設計當場失效；
+     ② 可以變成同班同學，讀或改別人的作答；
+     ③ 可以變成研究者走進控制台。
+     上一輪把「條件名」對學生藏起來了（見下方 optgroup 的註解），
+     但整份名單一直都在。
+     示範模式保留（那是研究者探索平台的沙盒）；一旦按過〈準備施測〉
+     （demoSeed === false），學生端就整個收起來——正式施測時每個孩子
+     用自己的裝置，本來就不需要切換身分。 */
+  const liveRun = state.demoSeed === false;
+  const whoWrap = $('#whoWrap');
+  if (whoWrap) whoWrap.style.display = (liveRun && !isTeacher()) ? 'none' : '';
   const groups = [
     {label:'教師與管理', users: state.users.filter(function(u){ return u.role !== 'student'; })},
     {label:'學生', byClass: true}
@@ -148,6 +161,14 @@ function renderShell(){
         esc(u.name) + '（' + roleName(u.role) + '）</option>';
     }).join('') + '</optgroup>';
   }).join('');
+  /* 藏起來還不夠：把選項本身也收掉，控制項就算被翻出來也換不了人。 */
+  if (liveRun && !isTeacher()){
+    const meNow = currentUser();
+    sel.innerHTML = '<option value="' + meNow.id + '" selected>' + esc(meNow.name) + '</option>';
+    sel.disabled = true;
+  } else {
+    sel.disabled = false;
+  }
 
   /* 教師視角的班級選擇器（學生看不到） */
   const cw = $('#classWrap');

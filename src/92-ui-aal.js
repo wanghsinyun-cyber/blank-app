@@ -890,6 +890,33 @@ function viewSurvey(phase, page){
   const secs = surveySections(phase, cond);
   const done = surveyOf(me.id, phase);
 
+  /* 送出即定案。原本已送出的問卷還能整份重新進入、預填、再按一次送出，
+     而 surveySubmit 是「先濾掉舊的再 push 新的」——原紀錄連同時間戳
+     被靜默取代，沒有任何警告，也留不下發生過的痕跡。
+     前測那一份是 ANCOVA 的共變數基線：孩子上完課再回來改它，
+     基線就被處遇污染了。後測那一份帶著操弄檢核，是驗證三種角色操弄
+     是否成立的唯一工具。作答本來就說「交出去之後就不能再修改」，
+     問卷是同一種東西，不該是例外。
+     （反向映射 surveyRespToForm 留著——它現在用來「顯示」已送出的內容，
+       只是不再有寫回去的路徑。） */
+  if (done){
+    const keys = surveyKeys(phase, cond);
+    const filled = keys.filter(function(k){ return done.resp[k] != null; }).length;
+    return sectionHead(phase === 'pre' ? '課前問卷' : '課後問卷',
+        me.name + '　·　' + (classOfStudent(me.id) || {}).name,
+        '<a class="btn" href="#/student">← 回我的作業</a>') +
+      '<div class="card card-p" style="border-left:3px solid var(--good)">' +
+      '<h3 style="margin-bottom:6px">這份問卷你已經送出了</h3>' +
+      '<p class="small" style="max-width:62ch;margin:0">你在 ' + fmtDate(done.at) +
+      ' 送出，' + filled + ' 題有作答。送出之後就不能再改了——' +
+      '這樣老師和研究者看到的才會是你當時真正的想法。</p>' +
+      '<div class="row" style="margin-top:14px">' +
+      '<a class="btn primary" href="#/student">回我的作業</a>' +
+      (phase === 'pre' && !surveyOf(me.id, 'post') && submitted('a-post', me.id)
+        ? '<a class="btn" href="#/survey/post">去填課後問卷</a>' : '') +
+      '</div></div>';
+  }
+
   if (!SURVEY || SURVEY.phase !== phase || SURVEY.sid !== me.id){
     const d = surveyDraftLoad(me.id, phase);
     /* 讀回已交問卷時要做反向映射。少了它，第 11、12 段（操弄檢核與使用感受）
@@ -1039,6 +1066,15 @@ function surveySubmit(phase){
       }, 0);
       return;
     }
+  }
+
+  /* 第二道門：畫面那一層擋不到直接呼叫的路徑（例如舊分頁上的按鈕），
+     而這裡是唯一會覆寫紀錄的地方。 */
+  if (surveyOf(me.id, phase)){
+    toast('這份問卷已經送出了，不能再改。');
+    SURVEY = null;
+    replaceHash('#/student');
+    return;
   }
 
   // 操弄檢核與使用感受用固定鍵存回原本的 id。

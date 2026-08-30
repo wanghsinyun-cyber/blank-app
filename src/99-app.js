@@ -723,6 +723,16 @@ function bindEvents(){
       /* 用身分下拉離開代為檢視也要結束模式，否則 impersonate 旗標會留著，
          把整站對「已經回到自己身分」的老師鎖在唯讀狀態，而且沒有任何說明。 */
       /* 換身分等於離開作答頁，待處理的作答與打字要先結清 */
+      /* 事件層也要守。renderShell() 已經在施測狀態把學生的身分下拉藏起來
+         並改成單一選項，但那只是畫面——這裡是唯一真的會改寫 state.ui.role
+         的地方，留一條沒守門的路徑等於前面的遮蔽只是裝飾。
+         學生在施測狀態下不得換身分：換得掉就能變成別班的孩子（看到別的
+         條件的 AI 夥伴，受試者間設計失效）、變成同班同學（讀改別人的作答）、
+         或變成研究者。 */
+      if (state.demoSeed === false && !isTeacher()){
+        renderShell();
+        toast('施測期間不能切換身分。');
+        return; }
       if (AAL){ try { flushPendingPicks(); flushLogs(); } catch (e2) {} }
       state.ui.impersonate = null;
       state.ui.role = e.target.value; save(); renderShell();
@@ -1118,7 +1128,15 @@ function boot(){
      否則真的孩子進問卷會看到別人的模擬答案，按送出就變成他自己的作答。 */
   if (state.demoSeed !== false && (!state.surveys || !state.surveys.length))
     state.surveys = buildDemoSurveys();
-  buildDemoLogs();                      // 示範日誌由種子重算，不占 localStorage
+  /* 完全同一個理由，而這一行原本沒有守門：施測狀態下不可以把示範歷程事件
+     種回來。〈準備施測〉清掉的 DEMO_LOGS，下一次載入就被這一行補回
+     26306 筆（96 位模擬學生），而 allLogs() = DEMO_LOGS + state.logs
+     是延宕序列分析、ENA、情感軌跡、停留時間與教師端「他標記了 N 句」
+     的共同來源——真孩子的歷程資料裡會混進 96 個不存在的人。
+     標記更直接：aalInit 從 allLogs() 重建畫線，孩子一進作答頁
+     就會看到別人標好的句子。 */
+  if (state.demoSeed !== false) buildDemoLogs();   // 示範日誌由種子重算，不占 localStorage
+  else { DEMO_LOGS = []; DEMO_DIALOG = []; }
   if (state.unitOverrides){
     Object.keys(state.unitOverrides).forEach(function(k){
       const it = getItem(k); if (it) it.unit = state.unitOverrides[k];

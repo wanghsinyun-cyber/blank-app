@@ -645,8 +645,10 @@ pre.prompt{
         <label class="small muted" for="classSel">班級</label>
         <select id="classSel" data-act="class-sel" style="width:auto"></select>
       </span>
-      <label class="small muted" for="who">身分</label>
-      <select id="who" style="width:auto"></select>
+      <span class="row" id="whoWrap" style="gap:6px">
+        <label class="small muted" for="who">身分</label>
+        <select id="who" style="width:auto"></select>
+      </span>
       <label class="sr-only" for="fsSel">字級</label>
       <select id="fsSel" style="width:auto" title="字級">
         <option value="1">字級 100%</option>
@@ -4757,6 +4759,19 @@ function closeModal(){
 /* --- 外殼 --- */
 function renderShell(){
   const sel = $('#who');
+  /* 身分下拉是研究者與教師的工具，學生不該碰得到。實測一位學生的下拉裡
+     有 98 個選項：本班 24 人、別班 72 人、導師、以及研究者。後果有三層——
+     ① 對照組的孩子切到 tutor 班就看得到 AI 夥伴，受試者間設計當場失效；
+     ② 可以變成同班同學，讀或改別人的作答；
+     ③ 可以變成研究者走進控制台。
+     上一輪把「條件名」對學生藏起來了（見下方 optgroup 的註解），
+     但整份名單一直都在。
+     示範模式保留（那是研究者探索平台的沙盒）；一旦按過〈準備施測〉
+     （demoSeed === false），學生端就整個收起來——正式施測時每個孩子
+     用自己的裝置，本來就不需要切換身分。 */
+  const liveRun = state.demoSeed === false;
+  const whoWrap = $('#whoWrap');
+  if (whoWrap) whoWrap.style.display = (liveRun && !isTeacher()) ? 'none' : '';
   const groups = [
     {label:'教師與管理', users: state.users.filter(function(u){ return u.role !== 'student'; })},
     {label:'學生', byClass: true}
@@ -4781,6 +4796,14 @@ function renderShell(){
         esc(u.name) + '（' + roleName(u.role) + '）</option>';
     }).join('') + '</optgroup>';
   }).join('');
+  /* 藏起來還不夠：把選項本身也收掉，控制項就算被翻出來也換不了人。 */
+  if (liveRun && !isTeacher()){
+    const meNow = currentUser();
+    sel.innerHTML = '<option value="' + meNow.id + '" selected>' + esc(meNow.name) + '</option>';
+    sel.disabled = true;
+  } else {
+    sel.disabled = false;
+  }
 
   /* 教師視角的班級選擇器（學生看不到） */
   const cw = $('#classWrap');
@@ -6814,7 +6837,22 @@ function viewQuiz(aid){
   const a = getAssignment(aid);
   const me = currentUser();
   if (!a) return '<div class="empty"><h3>找不到這份作業</h3><a class="btn" href="#/student">回我的作業</a></div>';
-  if (submitted(aid, me.id)) { go('#/result/' + aid); return ''; }
+  /* 交完卷再走回作答頁：用 go() 會把 #/quiz/aid 疊進歷史，成績頁按〈上一頁〉
+     回到這裡又被送回去，兩頁之間原地打轉，孩子出不去。
+     但也不能改叫 replaceHash()——它自己會 render 一次，等這個函式回傳 ''
+     之後外層的 render() 又把畫面清空，而 replaceState 不觸發 hashchange，
+     沒有任何東西會再把它補回來，結果是一片空白。
+     只換網址、順手把 ROUTE 對齊，然後在同一次 render 裡直接回傳成績頁。 */
+  if (submitted(aid, me.id)){
+    const want = '#/result/' + aid;
+    if (location.hash !== want && window.history && history.replaceState){
+      try {
+        history.replaceState(null, '', want);
+        if (typeof parseRoute === 'function') ROUTE = parseRoute();
+      } catch (e) {}
+    }
+    return viewResult(aid);
+  }
   if (!QUIZ || QUIZ.aid !== aid) QUIZ = {aid:aid, answers:{}, texts:{}, strokes:{}};
 
   const items = a.itemIds.map(getItem).filter(Boolean);
@@ -6825,7 +6863,40 @@ function viewQuiz(aid){
     '<div class="kb-toolbar"><span class="muted small">已作答 ' + answered + ' / ' + mcCount + ' 題</span>' +
     '<div class="bar" style="flex:1;max-width:280px"><i style="width:' + (100 * answered / Math.max(1, mcCount)) + '%"></i></div>' +
     '<div class="spacer"></div><button class="btn primary sm" data-act="quiz-submit" data-id="' + aid + '">交卷</button></div>' +
-    '<div class="col">' + items.map(function(it, idx){
+    /* 前測（以及任何非 AAL 的派題）走這一支，而這一支從來沒有渲染文章。
+       16 題全部是文本依賴題——「小昀第一次發現柚子樹位置不對，是在什麼時候？」
+       在沒有文章的畫面上只能用猜的。實測：畫面印得出全部題幹，
+       卻找不到兩篇文章的任何一段；後測的 AAL 版面則兩篇都在。
+       前測 θ 是 ANCOVA 的共變數——量到的若是猜測而不是理解，
+       整個組間比較的基線就不成立。
+       題目已經依文本分組（見 30-data.js 的 allIds），所以在每一組前面
+       放它自己的文章即可。這裡刻意不做逐句標記：那是 AAL 的操弄成分，
+       前測四個條件必須一致，不能把處遇帶進基線。 */
+    '<div class="col">' + (function(){
+      const out = [];
+      let curUnit = null;
+      items.forEach(function(it, idx){
+        if (it.unit !== curUnit){
+          curUnit = it.unit;
+          const tx = getText(curUnit);
+          if (tx){
+            out.push('<div class="card"><div class="card-h">' +
+              '<h3>' + esc(tx.title) + '</h3>' +
+              '<span class="pill">' + esc(tx.genre) + '</span></div>' +
+              '<div class="card-p">' +
+              (tx.intro ? '<p class="muted small">' + esc(tx.intro) + '</p>' : '') +
+              tx.paras.map(function(p){ return '<p>' + esc(p) + '</p>'; }).join('') +
+              '</div></div>');
+          }
+        }
+        out.push(renderQuizItem(it, idx));
+      });
+      return out.join('');
+    })() + '</div>' +
+    '<div class="row" style="margin-top:16px;justify-content:flex-end">' +
+    '<button class="btn primary" data-act="quiz-submit" data-id="' + aid + '">交卷</button></div>';
+
+  function renderQuizItem(it, idx){
       if (it.type === 'cr'){
         return '<div class="card"><div class="card-p">' +
           '<div class="row" style="justify-content:space-between;margin-bottom:6px">' +
@@ -6856,9 +6927,7 @@ function viewQuiz(aid){
             (chosen === k ? ' checked' : '') + '>' +
             '<b>' + String.fromCharCode(65 + k) + '</b><span>' + esc(o) + '</span></label>';
         }).join('') + '</div></div></div>';
-    }).join('') + '</div>' +
-    '<div class="row" style="margin-top:16px;justify-content:flex-end">' +
-    '<button class="btn primary" data-act="quiz-submit" data-id="' + aid + '">交卷</button></div>';
+  }
 }
 
 /* θ 是 logit，對十歲孩子沒有意義。轉成「和班上比起來」的五顆星，
@@ -8416,6 +8485,33 @@ function viewSurvey(phase, page){
   const secs = surveySections(phase, cond);
   const done = surveyOf(me.id, phase);
 
+  /* 送出即定案。原本已送出的問卷還能整份重新進入、預填、再按一次送出，
+     而 surveySubmit 是「先濾掉舊的再 push 新的」——原紀錄連同時間戳
+     被靜默取代，沒有任何警告，也留不下發生過的痕跡。
+     前測那一份是 ANCOVA 的共變數基線：孩子上完課再回來改它，
+     基線就被處遇污染了。後測那一份帶著操弄檢核，是驗證三種角色操弄
+     是否成立的唯一工具。作答本來就說「交出去之後就不能再修改」，
+     問卷是同一種東西，不該是例外。
+     （反向映射 surveyRespToForm 留著——它現在用來「顯示」已送出的內容，
+       只是不再有寫回去的路徑。） */
+  if (done){
+    const keys = surveyKeys(phase, cond);
+    const filled = keys.filter(function(k){ return done.resp[k] != null; }).length;
+    return sectionHead(phase === 'pre' ? '課前問卷' : '課後問卷',
+        me.name + '　·　' + (classOfStudent(me.id) || {}).name,
+        '<a class="btn" href="#/student">← 回我的作業</a>') +
+      '<div class="card card-p" style="border-left:3px solid var(--good)">' +
+      '<h3 style="margin-bottom:6px">這份問卷你已經送出了</h3>' +
+      '<p class="small" style="max-width:62ch;margin:0">你在 ' + fmtDate(done.at) +
+      ' 送出，' + filled + ' 題有作答。送出之後就不能再改了——' +
+      '這樣老師和研究者看到的才會是你當時真正的想法。</p>' +
+      '<div class="row" style="margin-top:14px">' +
+      '<a class="btn primary" href="#/student">回我的作業</a>' +
+      (phase === 'pre' && !surveyOf(me.id, 'post') && submitted('a-post', me.id)
+        ? '<a class="btn" href="#/survey/post">去填課後問卷</a>' : '') +
+      '</div></div>';
+  }
+
   if (!SURVEY || SURVEY.phase !== phase || SURVEY.sid !== me.id){
     const d = surveyDraftLoad(me.id, phase);
     /* 讀回已交問卷時要做反向映射。少了它，第 11、12 段（操弄檢核與使用感受）
@@ -8565,6 +8661,15 @@ function surveySubmit(phase){
       }, 0);
       return;
     }
+  }
+
+  /* 第二道門：畫面那一層擋不到直接呼叫的路徑（例如舊分頁上的按鈕），
+     而這裡是唯一會覆寫紀錄的地方。 */
+  if (surveyOf(me.id, phase)){
+    toast('這份問卷已經送出了，不能再改。');
+    SURVEY = null;
+    replaceHash('#/student');
+    return;
   }
 
   // 操弄檢核與使用感受用固定鍵存回原本的 id。
@@ -10148,6 +10253,16 @@ function bindEvents(){
       /* 用身分下拉離開代為檢視也要結束模式，否則 impersonate 旗標會留著，
          把整站對「已經回到自己身分」的老師鎖在唯讀狀態，而且沒有任何說明。 */
       /* 換身分等於離開作答頁，待處理的作答與打字要先結清 */
+      /* 事件層也要守。renderShell() 已經在施測狀態把學生的身分下拉藏起來
+         並改成單一選項，但那只是畫面——這裡是唯一真的會改寫 state.ui.role
+         的地方，留一條沒守門的路徑等於前面的遮蔽只是裝飾。
+         學生在施測狀態下不得換身分：換得掉就能變成別班的孩子（看到別的
+         條件的 AI 夥伴，受試者間設計失效）、變成同班同學（讀改別人的作答）、
+         或變成研究者。 */
+      if (state.demoSeed === false && !isTeacher()){
+        renderShell();
+        toast('施測期間不能切換身分。');
+        return; }
       if (AAL){ try { flushPendingPicks(); flushLogs(); } catch (e2) {} }
       state.ui.impersonate = null;
       state.ui.role = e.target.value; save(); renderShell();
@@ -10543,7 +10658,15 @@ function boot(){
      否則真的孩子進問卷會看到別人的模擬答案，按送出就變成他自己的作答。 */
   if (state.demoSeed !== false && (!state.surveys || !state.surveys.length))
     state.surveys = buildDemoSurveys();
-  buildDemoLogs();                      // 示範日誌由種子重算，不占 localStorage
+  /* 完全同一個理由，而這一行原本沒有守門：施測狀態下不可以把示範歷程事件
+     種回來。〈準備施測〉清掉的 DEMO_LOGS，下一次載入就被這一行補回
+     26306 筆（96 位模擬學生），而 allLogs() = DEMO_LOGS + state.logs
+     是延宕序列分析、ENA、情感軌跡、停留時間與教師端「他標記了 N 句」
+     的共同來源——真孩子的歷程資料裡會混進 96 個不存在的人。
+     標記更直接：aalInit 從 allLogs() 重建畫線，孩子一進作答頁
+     就會看到別人標好的句子。 */
+  if (state.demoSeed !== false) buildDemoLogs();   // 示範日誌由種子重算，不占 localStorage
+  else { DEMO_LOGS = []; DEMO_DIALOG = []; }
   if (state.unitOverrides){
     Object.keys(state.unitOverrides).forEach(function(k){
       const it = getItem(k); if (it) it.unit = state.unitOverrides[k];
