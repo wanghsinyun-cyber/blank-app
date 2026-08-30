@@ -518,3 +518,80 @@ window.assertNarrowThreshold = function(){
   console.log('[assertNarrowThreshold]', r);
   return r;
 };
+
+/* ==========================================================================
+   跨分頁擱置不可以回捲
+   R7-P0 擋住了「施測中被另一個分頁換掉身分」，但擱置下來的那份快照若在
+   離開時無條件套用，會把整節課回捲到擱置的那一刻——而 flushLogs() 每兩秒
+   save() 一次，我們的版次幾乎一定比快照新。這一支把三件事一起驗：
+     1. 較舊的快照在離開時必須被丟掉，交卷紀錄與 responses 要原封不動
+     2. 沒在施測時，較新的外部更新仍要立刻套用
+     3. 施測中收到較新的外部更新要擱著，離開後才套用
+   console 一行：assertNoRollback()
+   ========================================================================== */
+window.assertNoRollback = function(){
+  const realRole = state.ui.role, realImp = state.ui.impersonate, realHash = location.hash;
+  const fails = [];
+  function reset(){
+    state = buildSeedState(); save();
+    AAL = null; SURVEY = null; QUIZ = null;
+  }
+
+  /* 1. 較舊的快照不可以蓋掉孩子剛交出去的答案 */
+  reset();
+  const A = state.classes[0].studentIds[0];
+  const B = state.classes[3].studentIds[0];
+  state.submissions = state.submissions.filter(function(s){ return !(s.aid === 'a-post' && s.sid === A); });
+  try {
+    const all = JSON.parse(localStorage.getItem(AAL_DRAFT_KEY) || '{}');
+    delete all['a-post|' + A]; localStorage.setItem(AAL_DRAFT_KEY, JSON.stringify(all));
+  } catch (e) {}
+  state.ui.role = A; state.ui.impersonate = null; renderShell();
+  location.hash = '#/aal/a-post'; render();
+  const stale = JSON.parse(JSON.stringify(state));
+  stale.ui.role = B; stale.rev = (STATE_REV || 0) + 1; stale.writer = 'tab-other';
+  window.dispatchEvent(new StorageEvent('storage', {key: STORE_KEY, newValue: JSON.stringify(stale)}));
+  if (!PENDING_FOREIGN) fails.push('施測中的外部更新沒有被擱置');
+  AAL.items.forEach(function(it, i){
+    if (it.type === 'cr') AAL.texts[it.id] = '答案' + i; else AAL.answers[it.id] = i % 4; });
+  aalSubmitCommit();
+  const nResp = state.responses.filter(function(r){ return r.aid === 'a-post' && r.sid === A; }).length;
+  SURVEY = null; AAL = null; QUIZ = null;
+  location.hash = '#/student'; render();
+  if (!submitted('a-post', A)) fails.push('回捲了：交卷紀錄不見了');
+  if (state.responses.filter(function(r){ return r.aid === 'a-post' && r.sid === A; }).length !== nResp)
+    fails.push('回捲了：responses 從 ' + nResp + ' 變成別的數字');
+  if (state.ui.role !== A) fails.push('較舊的快照仍然把身分換走了');
+  if (PENDING_FOREIGN) fails.push('離開之後擱置的快照沒有被處理掉');
+
+  /* 2. 沒在施測時，較新的外部更新要立刻套用 */
+  const fresh = JSON.parse(JSON.stringify(state));
+  fresh.ui.role = B; fresh.rev = (STATE_REV || 0) + 50; fresh.writer = 'tab-other';
+  window.dispatchEvent(new StorageEvent('storage', {key: STORE_KEY, newValue: JSON.stringify(fresh)}));
+  if (state.ui.role !== B) fails.push('沒在施測時，較新的外部更新沒有立刻套用');
+
+  /* 3. 施測中收到較新的外部更新，離開後才套用 */
+  reset();
+  const C = state.classes[0].studentIds[0];
+  state.submissions = state.submissions.filter(function(s){ return !(s.aid === 'a-post' && s.sid === C); });
+  try {
+    const all = JSON.parse(localStorage.getItem(AAL_DRAFT_KEY) || '{}');
+    delete all['a-post|' + C]; localStorage.setItem(AAL_DRAFT_KEY, JSON.stringify(all));
+  } catch (e) {}
+  state.ui.role = C; state.ui.impersonate = null; renderShell();
+  location.hash = '#/aal/a-post'; render();
+  const newer = JSON.parse(JSON.stringify(state));
+  newer.ui.role = B; newer.rev = (STATE_REV || 0) + 500; newer.writer = 'tab-other';
+  window.dispatchEvent(new StorageEvent('storage', {key: STORE_KEY, newValue: JSON.stringify(newer)}));
+  if (state.ui.role !== C) fails.push('施測中身分被換走了');
+  if (!PENDING_FOREIGN) fails.push('施測中較新的外部更新沒有被擱置');
+  AAL = null; location.hash = '#/student'; render();
+  if (state.ui.role !== B) fails.push('離開之後較新的外部更新沒有被套用');
+
+  reset();
+  state.ui.role = realRole; state.ui.impersonate = realImp; renderShell();
+  location.hash = realHash || '#/teacher'; render();
+  const r = {pass: fails.length === 0, fails: fails};
+  console.log('[assertNoRollback]', r);
+  return r;
+};

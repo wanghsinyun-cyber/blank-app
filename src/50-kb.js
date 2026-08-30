@@ -43,12 +43,26 @@ function measuringNow(){
   return null;
 }
 
-/* 施測中收到的外部更新先擱著，離開之後再套用。 */
+/* 施測中收到的外部更新先擱著，離開之後再看要不要套用。 */
 let PENDING_FOREIGN = null;
 function flushPendingForeign(){
   if (!PENDING_FOREIGN) return;
   if (measuringNow()) return;
   const next = PENDING_FOREIGN; PENDING_FOREIGN = null;
+  /* 擱置期間這一頁自己一直在寫：flushLogs() 每兩秒 save() 一次，交卷與
+     送出問卷也各寫一次，所以離開的時候我們的版次幾乎一定比那份快照新。
+     這時候套用等於把整節課回捲到擱置的那一刻——logs、dialog、responses、
+     submissions、surveys 一起消失，submitted() 變回 false，首頁又邀他重做，
+     而畫面上只會出現一句「另一個分頁更新了資料，這一頁已經同步。」
+     擋住施測中換身分是對的，但不能用「孩子交出去的答案」去換。
+     版次不比我們新就直接丟掉：那個分頁下一次寫入時會帶著更新的版次再來，
+     而它自己的 storage 監聽也會收到我們剛寫出去的這一份。 */
+  if ((next.rev || 0) <= STATE_REV){
+    if (typeof console !== 'undefined' && console.warn)
+      console.warn('[KAIROS] 擱置期間本頁已寫入較新版次（' + STATE_REV +
+                   ' ≥ ' + (next.rev || 0) + '），丟棄那份較舊的跨分頁快照。');
+    return;
+  }
   adoptForeignState(next);
 }
 
