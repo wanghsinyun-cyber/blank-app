@@ -638,7 +638,7 @@ pre.prompt{
 <div class="app">
   <header class="topbar">
     <div class="brand"><b>KAIROS</b><span>契機 · 評量即學習平台</span></div>
-    <span class="chip-demo">示範資料（模擬班級）</span>
+    <span class="chip-demo" id="chipDemo">示範資料（模擬班級）</span>
     <div class="spacer"></div>
     <div class="row" style="gap:8px">
       <span class="row" id="classWrap" style="gap:6px">
@@ -2052,9 +2052,15 @@ function buildDemoLogs(){
         : Math.max(1, Math.min(MAX_TURNS, Math.round(base * (0.55 + eng * 0.9) + (rnd() - 0.5))));
 
       if (cond === 'control'){
-        const nNote = 1 + Math.round(2 * eng + rnd());
+        /* NOTE 也要帶 turn，理由與 ASK 相同：sentimentTrajectory 依 turn 分桶，
+           沒有這個欄位的話 `e.turn || 1` 會把對照組整條軌跡塞進第 1 回合，
+           byTurn 的跨條件比較對 control 完全失效。
+           筆數也比照對話回合的量級（每題最多 MAX_TURNS），
+           不能讓對照組的分析單位密度高出一個數量級。 */
+        const nNote = Math.min(MAX_TURNS, 1 + Math.round(2 * eng + rnd()));
         for (let i = 0; i < nNote; i++){
-          push('NOTE', 'N', {text: DEMO_NOTE[Math.floor(rnd() * DEMO_NOTE.length)] + moodTail(cond, rnd)});
+          push('NOTE', 'N', {text: DEMO_NOTE[Math.floor(rnd() * DEMO_NOTE.length)] + moodTail(cond, rnd),
+                             turn: i + 1});
         }
       } else {
         for (let k = 0; k < nTurn; k++){
@@ -4837,6 +4843,11 @@ function renderShell(){
   const liveRun = state.demoSeed === false;
   const whoWrap = $('#whoWrap');
   if (whoWrap) whoWrap.style.display = (liveRun && !isTeacher()) ? 'none' : '';
+  /* 「示範資料（模擬班級）」是靜態節點，清場之後還掛在每一頁的頂列——
+     真的孩子在真的施測時，每一頁都被告知這是模擬班級，
+     與知情同意的文案互相矛盾。 */
+  const chip = $('#chipDemo');
+  if (chip) chip.style.display = liveRun ? 'none' : '';
   const groups = [
     {label:'教師與管理', users: state.users.filter(function(u){ return u.role !== 'student'; })},
     {label:'學生', byClass: true}
@@ -8205,7 +8216,8 @@ function flushPendingPicks(){
 }
 
 /* 打字的「遙測節流」與「草稿落地」是兩件事，節奏不該綁在一起。
-   TYPE／NOTE 事件刻意用 4 秒節流（那是歷程分析的取樣率，不能改），
+   TYPE 事件用 4 秒節流（那是歷程分析的取樣率）；NOTE 已經改成
+   「離開該題時整筆寫一次」，不再取樣（見 flushTypeTelemetry）。
    但草稿必須跟得上：原本節流視窗內打的字完全不落地，重整就靜默掉字，
    而那打在對照組整節課唯一的產出（筆記）與兩題建構反應題上。
    300ms 尾緣，只寫 localStorage、不寫日誌，不影響任何依變項的取樣。 */
@@ -8219,12 +8231,44 @@ function scheduleDraftSave(){
 
 /* 打字是 4 秒節流：節流視窗內的最後一段字沒有事件。換題或交卷時把它補上，
    並帶著當初那一題的 it——4 秒視窗跨過換題的話，aalItem() 會抓到新題。 */
+/* 對照組的筆記要與三個 AI 組的發話成為同一種計量單位。
+   原本每打字滿 4 秒就寫一筆 NOTE，內容是 value.slice(-80)——
+   一節課下來沒有上限，而三個 AI 條件每題最多 6 筆 ASK（MAX_TURNS）。
+   下游全部把 N 當成一次完整發話：enaLines 給它歷程碼與 POS／NEG 並計入共現、
+   lsa 依 sid|iid 切段後被 N→N 自轉移灌滿、sentimentTrajectory 因為 NOTE
+   沒有 turn 欄位而把對照組整條軌跡塞進 turn 1。
+   而 slice(-80) 是滑動尾巴：同一段互相重疊的文字被反覆編碼；
+   筆記一過 80 字，codeUtteranceProcess 的退路（長度 > 30 判 SI）
+   就讓每一筆恆定判成 SI。
+   延宕序列分析、ENA 與情感軌跡是這個研究的歷程層次主要分析，
+   而它們的分析單位密度在四個條件之間差了一到兩個數量級，
+   方向還與條件系統性相關（寫得越久的對照組灌得越兇）。
+   改成「每一題每一次書寫段落寫一筆」：離開該題或交卷時，
+   用全文寫一筆並帶上遞增的 turn。中途的打字量已經由 TELEMETRY 的
+   keystrokes／longPauses 承載，不需要再進 code:'N' 的行為序列。 */
+function noteTurnOf(iid){
+  const prev = (state.logs || []).filter(function(e){
+    return e.code === 'N' && e.sid === AAL.me && e.aid === AAL.aid && e.iid === iid;
+  }).length;
+  return prev + 1;
+}
+function flushNoteFor(it){
+  if (!AAL || !it) return false;
+  const txt = String(AAL.notes[it.id] || '').trim();
+  if (!txt) return false;
+  /* 同一題的內容沒變就不要再記一筆（換題來回切會重複寫入） */
+  if (AAL._noteWritten && AAL._noteWritten[it.id] === txt) return false;
+  AAL._noteWritten = AAL._noteWritten || {};
+  AAL._noteWritten[it.id] = txt;
+  aalLog('NOTE', 'N', {text: txt, turn: noteTurnOf(it.id)}, it);
+  return true;
+}
 function flushTypeTelemetry(){
   if (!AAL) return;
   const w = aalTypeTelemetry._pendingW;
   if (w){ aalTypeTelemetry._pendingW = null; aalLog('TYPE', 'W', {len:w.len, at:w.at}, w.it); }
-  const n = aalTypeTelemetry._pendingN;
-  if (n){ aalTypeTelemetry._pendingN = null; aalLog('NOTE', 'N', {text:n.text, at:n.at}, n.it); }
+  aalTypeTelemetry._pendingN = null;
+  const n = flushNoteFor(aalItem());
   if (w || n) aalSave();
 }
 
@@ -10395,16 +10439,23 @@ function bindEvents(){
       save(); go('#/aal/' + aid); return;
     }
 
-    /* 施測前的清場。前測與 Rasch 校準保留——那是四班共用的同一次校準，
-       也是教師端所有畫面的來源；清掉的是示範的後測作答與示範問卷。 */
+    /* 施測前的清場。
+       原本刻意保留前測「與 Rasch 校準」，理由是教師端所有畫面都由它而來。
+       但示範資料用的 sid 就是正式施測要用的那 96 個帳號——於是施測當天
+       孩子的第一個畫面上，「閱讀理解 前測」寫著「已完成 · 選擇題答對 9」，
+       點進去有星等、閱讀地圖與「可惜的題目」。那是一份他沒做過的測驗，
+       也是介入前的一次績效回饋，直接壓在課前問卷的自我效能與焦慮上
+       （而那兩個構念是 ANCOVA 的共變數）。
+       教師端因此會暫時是空狀態——那是對的：真正的前測還沒跑，
+       本來就不該有校準。寧可空著，也不要讓孩子看到別人的成績掛在自己名下。 */
     if (act === 'go-live'){
       if (!isResearcher()) return;
-      if (!confirm('這會清空示範的後測作答、示範問卷、歷程事件、作答草稿，以及知識建構空間裡所有示範的視圖與貼文，讓學生端回到「尚未作答」。\n\n前測資料與 Rasch 校準會保留。\n\n這一步不可復原（要回到示範資料需按「重設」）。確定嗎？')) return;
+      if (!confirm('這會清空**前測與後測**的示範作答、示範問卷、歷程事件、作答草稿，以及知識建構空間裡所有示範的視圖與貼文，讓學生端回到「尚未作答」。\n\n教師端的 KIDMAP 與 Rasch 校準會一併變成空狀態，直到真正的前測跑完為止。\n\n這一步不可復原（要回到示範資料需按「重設」）。確定嗎？')) return;
       if (!confirm('再確認一次：清空之後，這台瀏覽器上的平台就是準備施測的狀態。')) return;
       state.demoSeed  = false;
       state.surveys   = (state.surveys || []).filter(function(s){ return !s.demo; });
-      state.submissions = state.submissions.filter(function(s){ return s.aid !== 'a-post'; });
-      state.responses   = state.responses.filter(function(r){ return r.aid !== 'a-post'; });
+      state.submissions = [];
+      state.responses   = [];
       /* 白板也要清。不清的話，施測當天孩子一交卷就走進 21 則示範學童的
          貼文裡——那既是別人的內容，也會直接污染知識建構參與度這個依變項。 */
       state.views = [];
@@ -10424,7 +10475,7 @@ function bindEvents(){
       } catch (e) {}
       AAL = null; SURVEY = null; QUIZ = null;
       save(); renderShell(); render();
-      toast('已清空示範作答、示範問卷、歷程事件與作答草稿，可以施測了。');
+      toast('已清空前後測示範作答、示範問卷、歷程事件與作答草稿，可以施測了。');
       return;
     }
   });
@@ -10591,15 +10642,10 @@ function bindEvents(){
     if (act === 'aal-note'){
       const it = aalItem();
       AAL.notes[it.id] = t.value;
-      if (!aalTypeTelemetry._lastN || Date.now() - aalTypeTelemetry._lastN > 4000){
-        aalTypeTelemetry._lastN = Date.now();
-        aalTypeTelemetry._pendingN = null;
-        aalLog('NOTE', 'N', {text:t.value.slice(-80)}, it);
-        aalSave();
-      } else {
-        aalTypeTelemetry._pendingN = {it:it, text:t.value.slice(-80), at:Date.now()};
-        scheduleDraftSave();
-      }
+      /* 打字期間不再寫 code:'N' 的行為事件（見 flushTypeTelemetry 的說明）：
+         那會讓對照組的分析單位密度比三個 AI 組高一到兩個數量級。
+         筆記在離開這一題或交卷時整筆寫一次。這裡只負責存草稿。 */
+      scheduleDraftSave();
       /* 對照組的「已寫 N 字」照 turnLeft 的做法就地更新——
          每打一個字重繪整個面板，會讓對照組的互動延遲曲線與三個 AI 組不同。 */
       const nc = document.getElementById('noteCount');

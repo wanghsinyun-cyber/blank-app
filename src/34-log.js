@@ -195,9 +195,15 @@ function buildDemoLogs(){
         : Math.max(1, Math.min(MAX_TURNS, Math.round(base * (0.55 + eng * 0.9) + (rnd() - 0.5))));
 
       if (cond === 'control'){
-        const nNote = 1 + Math.round(2 * eng + rnd());
+        /* NOTE 也要帶 turn，理由與 ASK 相同：sentimentTrajectory 依 turn 分桶，
+           沒有這個欄位的話 `e.turn || 1` 會把對照組整條軌跡塞進第 1 回合，
+           byTurn 的跨條件比較對 control 完全失效。
+           筆數也比照對話回合的量級（每題最多 MAX_TURNS），
+           不能讓對照組的分析單位密度高出一個數量級。 */
+        const nNote = Math.min(MAX_TURNS, 1 + Math.round(2 * eng + rnd()));
         for (let i = 0; i < nNote; i++){
-          push('NOTE', 'N', {text: DEMO_NOTE[Math.floor(rnd() * DEMO_NOTE.length)] + moodTail(cond, rnd)});
+          push('NOTE', 'N', {text: DEMO_NOTE[Math.floor(rnd() * DEMO_NOTE.length)] + moodTail(cond, rnd),
+                             turn: i + 1});
         }
       } else {
         for (let k = 0; k < nTurn; k++){

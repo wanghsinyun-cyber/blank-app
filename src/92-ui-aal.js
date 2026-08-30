@@ -461,7 +461,8 @@ function flushPendingPicks(){
 }
 
 /* 打字的「遙測節流」與「草稿落地」是兩件事，節奏不該綁在一起。
-   TYPE／NOTE 事件刻意用 4 秒節流（那是歷程分析的取樣率，不能改），
+   TYPE 事件用 4 秒節流（那是歷程分析的取樣率）；NOTE 已經改成
+   「離開該題時整筆寫一次」，不再取樣（見 flushTypeTelemetry）。
    但草稿必須跟得上：原本節流視窗內打的字完全不落地，重整就靜默掉字，
    而那打在對照組整節課唯一的產出（筆記）與兩題建構反應題上。
    300ms 尾緣，只寫 localStorage、不寫日誌，不影響任何依變項的取樣。 */
@@ -475,12 +476,44 @@ function scheduleDraftSave(){
 
 /* 打字是 4 秒節流：節流視窗內的最後一段字沒有事件。換題或交卷時把它補上，
    並帶著當初那一題的 it——4 秒視窗跨過換題的話，aalItem() 會抓到新題。 */
+/* 對照組的筆記要與三個 AI 組的發話成為同一種計量單位。
+   原本每打字滿 4 秒就寫一筆 NOTE，內容是 value.slice(-80)——
+   一節課下來沒有上限，而三個 AI 條件每題最多 6 筆 ASK（MAX_TURNS）。
+   下游全部把 N 當成一次完整發話：enaLines 給它歷程碼與 POS／NEG 並計入共現、
+   lsa 依 sid|iid 切段後被 N→N 自轉移灌滿、sentimentTrajectory 因為 NOTE
+   沒有 turn 欄位而把對照組整條軌跡塞進 turn 1。
+   而 slice(-80) 是滑動尾巴：同一段互相重疊的文字被反覆編碼；
+   筆記一過 80 字，codeUtteranceProcess 的退路（長度 > 30 判 SI）
+   就讓每一筆恆定判成 SI。
+   延宕序列分析、ENA 與情感軌跡是這個研究的歷程層次主要分析，
+   而它們的分析單位密度在四個條件之間差了一到兩個數量級，
+   方向還與條件系統性相關（寫得越久的對照組灌得越兇）。
+   改成「每一題每一次書寫段落寫一筆」：離開該題或交卷時，
+   用全文寫一筆並帶上遞增的 turn。中途的打字量已經由 TELEMETRY 的
+   keystrokes／longPauses 承載，不需要再進 code:'N' 的行為序列。 */
+function noteTurnOf(iid){
+  const prev = (state.logs || []).filter(function(e){
+    return e.code === 'N' && e.sid === AAL.me && e.aid === AAL.aid && e.iid === iid;
+  }).length;
+  return prev + 1;
+}
+function flushNoteFor(it){
+  if (!AAL || !it) return false;
+  const txt = String(AAL.notes[it.id] || '').trim();
+  if (!txt) return false;
+  /* 同一題的內容沒變就不要再記一筆（換題來回切會重複寫入） */
+  if (AAL._noteWritten && AAL._noteWritten[it.id] === txt) return false;
+  AAL._noteWritten = AAL._noteWritten || {};
+  AAL._noteWritten[it.id] = txt;
+  aalLog('NOTE', 'N', {text: txt, turn: noteTurnOf(it.id)}, it);
+  return true;
+}
 function flushTypeTelemetry(){
   if (!AAL) return;
   const w = aalTypeTelemetry._pendingW;
   if (w){ aalTypeTelemetry._pendingW = null; aalLog('TYPE', 'W', {len:w.len, at:w.at}, w.it); }
-  const n = aalTypeTelemetry._pendingN;
-  if (n){ aalTypeTelemetry._pendingN = null; aalLog('NOTE', 'N', {text:n.text, at:n.at}, n.it); }
+  aalTypeTelemetry._pendingN = null;
+  const n = flushNoteFor(aalItem());
   if (w || n) aalSave();
 }
 

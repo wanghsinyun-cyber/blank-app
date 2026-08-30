@@ -137,6 +137,11 @@ function renderShell(){
   const liveRun = state.demoSeed === false;
   const whoWrap = $('#whoWrap');
   if (whoWrap) whoWrap.style.display = (liveRun && !isTeacher()) ? 'none' : '';
+  /* 「示範資料（模擬班級）」是靜態節點，清場之後還掛在每一頁的頂列——
+     真的孩子在真的施測時，每一頁都被告知這是模擬班級，
+     與知情同意的文案互相矛盾。 */
+  const chip = $('#chipDemo');
+  if (chip) chip.style.display = liveRun ? 'none' : '';
   const groups = [
     {label:'教師與管理', users: state.users.filter(function(u){ return u.role !== 'student'; })},
     {label:'學生', byClass: true}

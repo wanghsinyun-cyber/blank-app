@@ -682,16 +682,23 @@ function bindEvents(){
       save(); go('#/aal/' + aid); return;
     }
 
-    /* 施測前的清場。前測與 Rasch 校準保留——那是四班共用的同一次校準，
-       也是教師端所有畫面的來源；清掉的是示範的後測作答與示範問卷。 */
+    /* 施測前的清場。
+       原本刻意保留前測「與 Rasch 校準」，理由是教師端所有畫面都由它而來。
+       但示範資料用的 sid 就是正式施測要用的那 96 個帳號——於是施測當天
+       孩子的第一個畫面上，「閱讀理解 前測」寫著「已完成 · 選擇題答對 9」，
+       點進去有星等、閱讀地圖與「可惜的題目」。那是一份他沒做過的測驗，
+       也是介入前的一次績效回饋，直接壓在課前問卷的自我效能與焦慮上
+       （而那兩個構念是 ANCOVA 的共變數）。
+       教師端因此會暫時是空狀態——那是對的：真正的前測還沒跑，
+       本來就不該有校準。寧可空著，也不要讓孩子看到別人的成績掛在自己名下。 */
     if (act === 'go-live'){
       if (!isResearcher()) return;
-      if (!confirm('這會清空示範的後測作答、示範問卷、歷程事件、作答草稿，以及知識建構空間裡所有示範的視圖與貼文，讓學生端回到「尚未作答」。\n\n前測資料與 Rasch 校準會保留。\n\n這一步不可復原（要回到示範資料需按「重設」）。確定嗎？')) return;
+      if (!confirm('這會清空**前測與後測**的示範作答、示範問卷、歷程事件、作答草稿，以及知識建構空間裡所有示範的視圖與貼文，讓學生端回到「尚未作答」。\n\n教師端的 KIDMAP 與 Rasch 校準會一併變成空狀態，直到真正的前測跑完為止。\n\n這一步不可復原（要回到示範資料需按「重設」）。確定嗎？')) return;
       if (!confirm('再確認一次：清空之後，這台瀏覽器上的平台就是準備施測的狀態。')) return;
       state.demoSeed  = false;
       state.surveys   = (state.surveys || []).filter(function(s){ return !s.demo; });
-      state.submissions = state.submissions.filter(function(s){ return s.aid !== 'a-post'; });
-      state.responses   = state.responses.filter(function(r){ return r.aid !== 'a-post'; });
+      state.submissions = [];
+      state.responses   = [];
       /* 白板也要清。不清的話，施測當天孩子一交卷就走進 21 則示範學童的
          貼文裡——那既是別人的內容，也會直接污染知識建構參與度這個依變項。 */
       state.views = [];
@@ -711,7 +718,7 @@ function bindEvents(){
       } catch (e) {}
       AAL = null; SURVEY = null; QUIZ = null;
       save(); renderShell(); render();
-      toast('已清空示範作答、示範問卷、歷程事件與作答草稿，可以施測了。');
+      toast('已清空前後測示範作答、示範問卷、歷程事件與作答草稿，可以施測了。');
       return;
     }
   });
@@ -878,15 +885,10 @@ function bindEvents(){
     if (act === 'aal-note'){
       const it = aalItem();
       AAL.notes[it.id] = t.value;
-      if (!aalTypeTelemetry._lastN || Date.now() - aalTypeTelemetry._lastN > 4000){
-        aalTypeTelemetry._lastN = Date.now();
-        aalTypeTelemetry._pendingN = null;
-        aalLog('NOTE', 'N', {text:t.value.slice(-80)}, it);
-        aalSave();
-      } else {
-        aalTypeTelemetry._pendingN = {it:it, text:t.value.slice(-80), at:Date.now()};
-        scheduleDraftSave();
-      }
+      /* 打字期間不再寫 code:'N' 的行為事件（見 flushTypeTelemetry 的說明）：
+         那會讓對照組的分析單位密度比三個 AI 組高一到兩個數量級。
+         筆記在離開這一題或交卷時整筆寫一次。這裡只負責存草稿。 */
+      scheduleDraftSave();
       /* 對照組的「已寫 N 字」照 turnLeft 的做法就地更新——
          每打一個字重繪整個面板，會讓對照組的互動延遲曲線與三個 AI 組不同。 */
       const nc = document.getElementById('noteCount');
