@@ -206,8 +206,29 @@ function aalDialogOf(iid){
     return d.sid === AAL.me && d.aid === AAL.aid && d.iid === iid;
   }).sort(function(a, b){ return (a.t || 0) - (b.t || 0); });
 }
+/* 額度要以「磁碟上實際有幾輪」為準，不能只看這一頁記憶體裡的 state.dialog。
+   同一台平板開了兩個分頁（或兩人共用一台各開一個）而且都停在作答頁時，
+   施測中的分頁一律不同步外部更新（見 50-kb.js 的 measuringNow），
+   於是兩邊各持一份 dialog：A 分頁把第 1 題的 6 次講完之後，B 分頁的
+   剩餘次數仍是 6、輸入框沒有被鎖、送出前核的 used 也還是 0——同一題可以
+   講到 12 次。每題 6 次是三個 AI 條件唯一的劑量控制，操弄強度在單一受試者
+   身上被加倍，而兩邊的 save() 互相覆蓋之後落地的語料只剩一半：
+   劑量與語料兩邊都與真實情形對不上，事後無法重建。
+   讀磁碟的成本是每次發話解析一次 state（每題至多 6 次），可以接受；
+   取記憶體與磁碟的最大值，所以離線或解析失敗時退回原本的行為。 */
+function aalTurnsOnDisk(iid){
+  try {
+    const raw = localStorage.getItem(STORE_KEY);
+    if (!raw) return 0;
+    const disk = JSON.parse(raw);
+    return (disk.dialog || []).filter(function(d){
+      return d.sid === AAL.me && d.aid === AAL.aid && d.iid === iid && d.speaker === 'student';
+    }).length;
+  } catch (e) { return 0; }
+}
 function aalStudentTurns(iid){
-  return aalDialogOf(iid).filter(function(d){ return d.speaker === 'student'; }).length;
+  const mem = aalDialogOf(iid).filter(function(d){ return d.speaker === 'student'; }).length;
+  return Math.max(mem, aalTurnsOnDisk(iid));
 }
 function aalTele(iid){
   return AAL.tele[iid] = AAL.tele[iid] || {firstKeyLatency:null, keystrokes:0, deletions:0,

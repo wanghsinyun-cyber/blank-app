@@ -66,6 +66,21 @@ function flushPendingForeign(){
   adoptForeignState(next);
 }
 
+/* 只搬外觀，不碰資料。施測中擱置外部更新時用它，讓字級與高對比仍然
+   跨分頁同步——這兩個欄位是純呈現，不影響任何測量。 */
+function adoptForeignA11y(next){
+  if (!next || !next.settings) return;
+  const a = next.settings.a11y;
+  if (a && state.settings){
+    state.settings.a11y = state.settings.a11y || {};
+    state.settings.a11y.fontScale   = a.fontScale;
+    state.settings.a11y.highContrast = a.highContrast;
+  }
+  if (next.ui && state.ui) state.ui.theme = next.ui.theme;
+  if (typeof applyTheme === 'function') applyTheme();
+  if (typeof applyA11y === 'function') applyA11y();
+}
+
 function adoptForeignState(next){
   if (!next || typeof next !== 'object') return;
   STATE_REV = next.rev || 0;
@@ -112,6 +127,12 @@ if (typeof window !== 'undefined' && window.addEventListener){
     const busy = measuringNow();
     if (busy){
       PENDING_FOREIGN = next;
+      /* 外觀設定可以立刻跟上，而且只有它可以。字級與高對比是純呈現，
+         不碰任何測量資料；擱著不動的話，孩子在另一個分頁把字級調到 175%
+         之後，這一頁兩秒內就被自己的 save() 覆蓋回去、再調再跳，
+         而最需要放大字級的正是本來就看不清楚的那個孩子，
+         他只會覺得「這台平板調不動」而且看不出原因。 */
+      try { adoptForeignA11y(next); } catch (e) {}
       if (typeof console !== 'undefined' && console.warn)
         console.warn('[KAIROS] 施測中（' + busy + '）收到另一個分頁的更新，先擱著，離開後再同步。');
       return;
