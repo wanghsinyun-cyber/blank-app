@@ -186,8 +186,17 @@ const PROMPT_ROLE = {
      那個常數上方（軟位置線索，而且只有 peer 拿得到）；提示詞這一側漏了。
      只有 peer 組每一輪都可能收到一個方位線索，RQ1 比的就不再是三種社會框架。
      改成同層級、不涉位置的對等描述，字數與另兩個角色相當。 */
-  peer:  '【社會框架】你是跟學生同時在讀這一篇的同學。先用一句話說你自己讀這一篇的感覺' +
-         '（不可以是答案，也不可以提到位置），再把同一個問題拋回去問他，語氣是對等的討論。'
+  /* 「先用一句話說你自己讀這一篇的感覺」也要拿掉。**文章全文從來沒有進過
+     提示詞**（送出去的只有 composePrompt ＋「【題目】stem／【學生剛剛說】text」），
+     等於要求模型對一篇它讀不到的文章講出第一人稱的閱讀內容——它只能編。
+     而 leakGuard 攔的是判定語、選項字串、位置與指路語，攔不到
+     「我覺得這篇好像在講一個人後悔的事」這種憑空生成的主旨陳述：
+     對 II／EE 那幾題（主旨、作者立場）那實質就是提示或誤導，blocked 恆為 false，
+     忠實度報表也看不見。而三個角色裡只有 peer 被要求產生內容。
+     內建引擎那一側上一輪已經把 PEER_SHARE 收斂成「只講閱讀動作、不碰文本」，
+     提示詞這一側現在跟上：只描述對等關係，不要求任何內容。 */
+  peer:  '【社會框架】你是跟學生同時在讀這一篇的同學。語氣是對等的討論，' +
+         '用「我們對一下」這種說法，把同一個問題拋回去問他，不要替他整理答案。'
 };
 
 /* --- 歷程提示模組（模組 4–7）：提問功能與子歷程提問庫 --- */
@@ -283,8 +292,17 @@ const ROLE_OPENER = {
      就是它：對只看得到一篇文章和一道題的四年級孩子，「這一段」既是一個
      找不到指涉的指示詞（他會往上捲去找哪一段），也是「答案落在某一段裡」
      的收窄暗示。RQ1 比較的必須是純粹的三種社會框架。 */
+  /* later[0] 原本是「我剛剛好像讀錯了，想再想一次。」——它含子字串「錯了」，
+     而第 8 輪新增的 VERDICT_SOFT 正好收了「錯了」。agentTurn 會把自己組好的
+     回覆再送一次 leakGuard，於是這一句每被抽中就整則被換成固定的攔截替換文：
+     那一輪排定的提問功能（F2–F6，含該題標定的 PIRLS 子歷程問句）完全沒送到
+     孩子面前，而日誌照排程記著 qfn 與 sub，blocked 還記成 false。
+     tutor 六句、peer 六句、tutee 的 first 兩句都不命中，只有這一句撞上——
+     等於只有 tutee 這一個條件被系統性砍掉約四分之一輪次的話量與鷹架，
+     而被砍的頻率由孩子講幾次決定，與投入、閱讀速度共變。
+     改成不含判定語的說法，長度 15 字不變（規格是 12–18 字）。 */
   tutee: {first: ['這一題我也在讀，可是我卡住了。', '這一題我讀了，可是我不太懂。'],
-          later: ['我剛剛好像讀錯了，想再想一次。', '我還在想這一題，想再聽你說一次。',
+          later: ['我剛剛好像沒讀懂，想再想一次。', '我還在想這一題，想再聽你說一次。',
                   '所以你的意思是……我想確認一下。', '等一下，我想再確認一次。']},
   peer:  {first: PEER_SHARE_FIRST, later: PEER_SHARE_LATER}
 };
@@ -364,11 +382,27 @@ function agentTurn(conditionId, item, turn, rnd){
   const text = (opener ? opener + ' ' : '') +
     (ROLE_STEM[conditionId] || function(q){ return q; })(body);
 
+  /* 自己的輸出也過一次守門，但**不可以無聲吞掉**。原本只取 .text：
+     內建引擎一旦踩到詞表（第 9 輪就發生過一次，tutee 的一句開場含「錯了」），
+     孩子收到的是固定的攔截替換文，而日誌照排程寫著 qfn 與 sub、blocked 記成
+     false——RQ4 的子歷程覆蓋率與忠實度指標同時說了謊，事後也分不出來。
+     被攔的時候：qfn／sub 一律清成 null（那一輪根本沒問出來），
+     blocked／hits／kinds 照實回傳，並且在 console 吼一聲——
+     規則引擎自攔是程式的缺陷，不是研究現場的事件。 */
+  const g = leakGuard(text, item, conditionId);
+  if (g.blocked && typeof console !== 'undefined' && console.error){
+    console.error('[KAIROS] 內建引擎被自己的 leakGuard 攔下：' + conditionId +
+      '／turn ' + turn + '／' + (item && item.id) + '　hits=' + g.hits.join(',') +
+      '　原句：' + text);
+  }
   return {
-    text: leakGuard(text, item, conditionId).text,
-    qfn: qfnId,
-    sub: sub ? sub.id : null,
+    text: g.text,
+    qfn: g.blocked ? null : qfnId,
+    sub: (g.blocked || !sub) ? null : sub.id,
     process: sub ? sub.p : pid,
+    blocked: g.blocked,
+    hits: g.hits,
+    kinds: g.kinds,
     engine: 'builtin'
   };
 }

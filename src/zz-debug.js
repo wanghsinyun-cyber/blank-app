@@ -572,6 +572,10 @@ window.assertNoRollback = function(){
   const A = state.classes[0].studentIds[0];
   const B = state.classes[3].studentIds[0];
   state.submissions = state.submissions.filter(function(s){ return !(s.aid === 'a-post' && s.sid === A); });
+  /* 磁碟也要一起清。只清記憶體的話，這一位在磁碟上仍然是「已交卷」，
+     而 aalSubmitCommit 的第二道門正是問磁碟——本來要驗「舊快照不可以
+     蓋掉剛交出去的答案」，實際上驗成了「重複交卷會被擋下」。 */
+  save();
   try {
     const all = JSON.parse(localStorage.getItem(AAL_DRAFT_KEY) || '{}');
     delete all['a-post|' + A]; localStorage.setItem(AAL_DRAFT_KEY, JSON.stringify(all));
@@ -604,6 +608,10 @@ window.assertNoRollback = function(){
   reset();
   const C = state.classes[0].studentIds[0];
   state.submissions = state.submissions.filter(function(s){ return !(s.aid === 'a-post' && s.sid === C); });
+  /* 磁碟也要一起清。只清記憶體的話，這一位在磁碟上仍然是「已交卷」，
+     而 aalSubmitCommit 的第二道門正是問磁碟——本來要驗「舊快照不可以
+     蓋掉剛交出去的答案」，實際上驗成了「重複交卷會被擋下」。 */
+  save();
   try {
     const all = JSON.parse(localStorage.getItem(AAL_DRAFT_KEY) || '{}');
     delete all['a-post|' + C]; localStorage.setItem(AAL_DRAFT_KEY, JSON.stringify(all));
@@ -707,15 +715,51 @@ window.assertLeakGuard = function(){
   const fails = [];
   const roles = ['tutor', 'tutee', 'peer'];
 
-  /* (1) 內建引擎不可自攔 */
+  /* (1) 內建引擎不可自攔。
+     這一段原本用固定的 rnd = () => 0.5 抽開場句，而 Math.floor(0.5 * 4) 恆為 2——
+     四句的池子永遠只抽得到第 3 句，索引 0、1、3 從來沒被測過。
+     第 9 輪就是這樣漏掉 tutee.later[0]（含「錯了」，命中 VERDICT_SOFT）：
+     斷言恆綠，而每四個 tutee 回合就有一個被自己的守門換成罐頭替換文。
+     固定亂數不是「涵蓋」，只是「可重現地只走同一條路」。
+     改成兩層：先逐句把每一個 opener 單獨送進守門（池子有幾句就測幾句），
+     再掃 agentTurn 的完整輸出，而且把每一句 opener 都輪過一次。 */
   let selfBlocked = 0, firstSelf = null;
+  function note(where, text, hits){
+    selfBlocked++;
+    if (!firstSelf) firstSelf = where + '：' + text + ' → ' + hits.join(',');
+  }
+  /* 1a：每一句 opener 逐句過守門 */
   roles.forEach(function(c){
-    for (let turn = 0; turn < MAX_TURNS; turn++){
-      ITEMS.forEach(function(it){
-        const a = agentTurn(c, it, turn, function(){ return 0.5; });
-        const g = leakGuard(a.text, it, c);
-        if (g.blocked){ selfBlocked++; if (!firstSelf) firstSelf = c + '/' + it.id + '/t' + turn + '：' + a.text + ' → ' + g.hits.join(','); }
+    const pool = ROLE_OPENER[c] || {first: [], later: []};
+    ['first', 'later'].forEach(function(which){
+      (pool[which] || []).forEach(function(s, i){
+        const g = leakGuard(s, ITEMS[0], c);
+        if (g.blocked) note(c + '/' + which + '[' + i + ']', s, g.hits);
       });
+    });
+  });
+  /* 1b：完整輸出（opener + stem + body），把每一句 opener 都輪過 */
+  roles.forEach(function(c){
+    const pool = ROLE_OPENER[c] || {first: [''], later: ['']};
+    const most = Math.max((pool.first || []).length, (pool.later || []).length, 1);
+    for (let pick = 0; pick < most; pick++){
+      for (let turn = 0; turn < MAX_TURNS; turn++){
+        ITEMS.forEach(function(it){
+          const poolNow = turn === 0 ? (pool.first || []) : (pool.later || []);
+          const n = poolNow.length || 1;
+          const frac = Math.min(0.999999, (pick % n) / n + 0.0001);
+          const a = agentTurn(c, it, turn, function(){ return frac; });
+          /* 要讀 a.blocked，不能再把 a.text 送進守門一次——agentTurn 回傳的
+             已經是替換後的文字，再測一次當然永遠不會攔，這一段就成了裝飾。 */
+          if (a.blocked) note(c + '/' + it.id + '/t' + turn + '/pick' + (pick % n), a.text, a.hits || []);
+          /* 被攔的時候，qfn／sub 一定要一起清掉——日誌不可以宣稱問了
+             一個其實沒問出來的子歷程。 */
+          if (a.blocked && (a.qfn || a.sub))
+            fails.push(c + '/' + it.id + '/t' + turn + '：被攔了卻還帶著 qfn=' + a.qfn + ' sub=' + a.sub);
+          if (!a.blocked && a.qfn == null)
+            fails.push(c + '/' + it.id + '/t' + turn + '：沒被攔卻沒有 qfn');
+        });
+      }
     }
   });
   if (selfBlocked) fails.push('內建引擎被自己的守門攔下 ' + selfBlocked + ' 次（' + firstSelf + '）');
@@ -946,6 +990,7 @@ window.assertPadAspect = function(){
   /* 畫一筆明確不是正方形的折線（外接框 3:1） */
   PADS[id].strokes = [{color:'ink', width:2, pts:[[20,20],[140,20],[140,60],[20,60]]}];
   PADS[id].w = cv.clientWidth; PADS[id].h = cv.clientHeight;
+  PADS[id].w0 = cv.clientWidth; PADS[id].h0 = cv.clientHeight;
   function aspect(){
     const pts = PADS[id].strokes[0].pts;
     const xs = pts.map(function(p){ return p[0]; }), ys = pts.map(function(p){ return p[1]; });
@@ -959,26 +1004,70 @@ window.assertPadAspect = function(){
     });
   }
   const base = aspect();
-  const rows = [{step:'起始', aspect:+base.toFixed(3), 在畫布內:inside()}];
+  const snap0 = JSON.stringify(PADS[id].strokes);
+  const w0 = PADS[id].w0, h0 = PADS[id].h0;
+  const rows = [{step:'起始', aspect:+base.toFixed(3), 在畫布內:inside(), k:+padScale(id).toFixed(3)}];
 
-  /* 字級掃描：畫布高度跟著 11rem 走，寬度不動 */
+  /* 這一支現在驗的是三件事，而不只是「有沒有被拉伸」：
+     (a) 座標永遠不動——縮放只發生在畫的那一刻；
+     (b) 任何一連串縮放之後回到原尺寸，比例精確回到 1（可逆、不累積）；
+     (c) 長寬比與「有沒有掉出畫布」照舊。
+     第 8 輪的 min() 修法只滿足 (c)：它是就地改資料的變換，橫轉直縮 0.733、
+     直轉橫不還原，來回三次筆跡只剩 39%——而那正是平板上最常發生的動作。 */
+  /* alsoW0：只有「不該有人動 w0」的步驟才檢查它。轉向模擬本來就是靠改
+     w0 來假裝板子變窄，那一段只驗座標有沒有被就地改掉。 */
+  function checkFrozen(step, alsoW0){
+    if (JSON.stringify(PADS[id].strokes) !== snap0)
+      fails.push(step + '：座標被就地改掉了（縮放應該只發生在畫的那一刻）');
+    if (alsoW0 && (PADS[id].w0 !== w0 || PADS[id].h0 !== h0))
+      fails.push(step + '：書寫座標系被改掉了');
+  }
+
+  /* 字級掃描：畫布寬高都跟著 --fs 走 */
   ['1.25', '1.5', '1.75', '1'].forEach(function(fs){
     document.documentElement.style.setProperty('--fs', fs);
     if (typeof syncPads === 'function') syncPads();
     const a = aspect();
-    rows.push({step:'字級 ' + fs, aspect:+a.toFixed(3), 在畫布內:inside()});
+    rows.push({step:'字級 ' + fs, aspect:+a.toFixed(3), 在畫布內:inside(), k:+padScale(id).toFixed(3)});
     if (Math.abs(a - base) > 0.02) fails.push('字級 ' + fs + '：長寬比 ' + a.toFixed(3) + '，起始是 ' + base.toFixed(3));
     if (!inside()) fails.push('字級 ' + fs + '：筆畫跑到畫布外');
+    checkFrozen('字級 ' + fs, true);
   });
   document.documentElement.style.setProperty('--fs', realFs || '1');
-
-  /* 只改寬度（模擬平板轉向）：直接改 PADS 的基準寬再走一次 size() */
-  PADS[id].w = cv.clientWidth * 1.4;             // 假裝原本比較寬
   if (typeof syncPads === 'function') syncPads();
-  const a2 = aspect();
-  rows.push({step:'寬度變窄', aspect:+a2.toFixed(3), 在畫布內:inside()});
-  if (Math.abs(a2 - base) > 0.02) fails.push('寬度變窄：長寬比 ' + a2.toFixed(3) + '，起始是 ' + base.toFixed(3));
-  if (!inside()) fails.push('寬度變窄：筆畫跑到畫布外');
+  if (Math.abs(padScale(id) - 1) > 0.001)
+    fails.push('字級掃一圈回到 100% 之後，縮放因子是 ' + padScale(id).toFixed(3) + '（應該精確回到 1）');
+
+  /* 模擬平板轉向來回三次：假裝這些字是在一塊比較寬的板子上寫的，
+     再改回來。舊的做法（就地乘 k）在這裡會累積到只剩 39%。 */
+  for (let i = 0; i < 3; i++){
+    PADS[id].w0 = w0 * 1.4;                       // 橫 → 直
+    if (typeof syncPads === 'function') syncPads();
+    checkFrozen('轉向第 ' + (i + 1) + ' 次（變窄）');
+    PADS[id].w0 = w0;                             // 直 → 橫
+    if (typeof syncPads === 'function') syncPads();
+    checkFrozen('轉向第 ' + (i + 1) + ' 次（還原）');
+  }
+  rows.push({step:'轉向來回三次', aspect:+aspect().toFixed(3), 在畫布內:inside(), k:+padScale(id).toFixed(3)});
+  if (Math.abs(padScale(id) - 1) > 0.001)
+    fails.push('轉向來回三次之後，縮放因子是 ' + padScale(id).toFixed(3) + '（應該精確回到 1）');
+  if (Math.abs(aspect() - base) > 0.001)
+    fails.push('轉向來回三次之後長寬比變成 ' + aspect().toFixed(3) + '，起始是 ' + base.toFixed(3));
+
+  /* 交出去的那一份要帶書寫座標系，不是當下的畫布尺寸 */
+  document.documentElement.style.setProperty('--fs', '1.75');
+  if (typeof syncPads === 'function') syncPads();
+  const pay = padPayload(id);
+  document.documentElement.style.setProperty('--fs', realFs || '1');
+  if (typeof syncPads === 'function') syncPads();
+  if (!pay) fails.push('padPayload 在有筆畫時回傳 null');
+  else {
+    if (pay.w !== w0 || pay.h !== h0)
+      fails.push('padPayload 記的是當下畫布尺寸 ' + pay.w + '×' + pay.h + '，不是書寫座標系 ' + w0 + '×' + h0);
+    const flat = JSON.stringify(pay.lines[0].pts);
+    if (flat !== JSON.stringify(PADS[id].strokes[0].pts))
+      fails.push('padPayload 的座標與 PADS 裡的不一致');
+  }
 
   if (typeof clearPads === 'function') clearPads();
   if (had) state.submissions.push({aid:'a-post', sid:sid, at:Date.now()});
@@ -1059,5 +1148,112 @@ window.assertA11yCopy = function(){
   location.hash = realHash || '#/teacher'; render();
   const r = {pass: fails.length === 0, fails: fails, 標籤比例: ratios, 標題: titles};
   console.log('[assertA11yCopy]', r);
+  return r;
+};
+
+/* ==========================================================================
+   兩個分頁交同一份卷
+   作答中的分頁因 measuringNow()==='aal' 永遠不同步外部更新，所以它的
+   state.submissions 對「另一個分頁剛剛交了卷」是瞎的——而 aalSubmitCommit
+   的 filter+push 是唯一會覆寫紀錄的地方。孩子開兩個分頁做同一份後測、
+   或做完之後回頭把另一個還開著的分頁「順手交掉」，先交的完整作答就會被
+   停在第 3 題的那個分頁覆蓋成 13 題 null，而畫面兩次都說「已交卷」。
+   同一支檔案的 surveySubmitCommit 早就寫了「第二道門」的註解，但它讀的是
+   記憶體裡的 surveyOf()——舊分頁正好沒有那筆紀錄，對它宣稱要擋的情境恆為
+   不成立。兩道門現在都改問磁碟。
+   順帶驗第三件事：施測中的分頁不可以把自己的 ui 寫回磁碟（老師換人之後，
+   舊分頁一落地就會把身分寫回上一位）。
+   console 一行：assertDoubleSubmit()
+   ========================================================================== */
+window.assertDoubleSubmit = function(){
+  const realRole = state.ui.role, realHash = location.hash;
+  const fails = [];
+  state = buildSeedState(); save();
+  AAL = null; SURVEY = null; QUIZ = null;
+
+  const sid = state.classes[0].studentIds[0];
+  const other = state.classes[3].studentIds[0];
+
+  /* 分頁 B：先讓這一頁在「還沒交」的乾淨狀態下開起來、寫個半份、存草稿。
+     不要靠「記憶體與磁碟不一致」當前置條件——save() 走不走合併分支要看
+     STATE_REV，前面跑過什麼會改變它，那樣寫出來的斷言跟執行順序綁在一起。 */
+  const a = getAssignment('a-post');
+  const items = a.itemIds.map(getItem).filter(Boolean);
+  state.responses = state.responses.filter(function(r){ return !(r.aid === 'a-post' && r.sid === sid); });
+  state.submissions = state.submissions.filter(function(s){ return !(s.aid === 'a-post' && s.sid === sid); });
+  save();
+  state.ui.role = sid; state.ui.impersonate = null; renderShell();
+  location.hash = '#/aal/a-post'; render();
+  if (!AAL){ const r = {pass:false, fails:['開不到作答頁']}; console.log('[assertDoubleSubmit]', r); return r; }
+  AAL.items.forEach(function(it, i){
+    if (i < 3){ if (it.type === 'cr') AAL.texts[it.id] = '分頁B的半份'; else AAL.answers[it.id] = 1; }
+  });
+  aalSave();                 // 真的用過的分頁一定有草稿——救援材料要從這裡來
+
+  /* 分頁 A：在這一頁開著的時候，另一個分頁交出了一份完整的後測。
+     直接寫磁碟才是真的——作答中的分頁本來就不會同步這個更新。 */
+  let beforeN = 0, beforeTxt = '';
+  try {
+    const d = JSON.parse(localStorage.getItem(STORE_KEY) || '{}');
+    d.responses = (d.responses || []).filter(function(r){ return !(r.aid === 'a-post' && r.sid === sid); });
+    items.forEach(function(it, i){
+      d.responses.push(it.type === 'cr'
+        ? {aid:'a-post', sid:sid, iid:it.id, text:'分頁A的完整作答' + i, strokes:null, score:null, comment:'', correct:null}
+        : {aid:'a-post', sid:sid, iid:it.id, choice:0, correct:0 === it.answer});
+    });
+    d.submissions = (d.submissions || []).filter(function(s){ return !(s.aid === 'a-post' && s.sid === sid); });
+    d.submissions.push({aid:'a-post', sid:sid, at:Date.now()});
+    d.rev = (d.rev || 0) + 1; d.writer = 'tab-other';
+    localStorage.setItem(STORE_KEY, JSON.stringify(d));
+    beforeN = d.responses.filter(function(r){ return r.aid === 'a-post' && r.sid === sid; }).length;
+    beforeTxt = (d.responses.find(function(r){ return r.aid === 'a-post' && r.sid === sid && r.iid === 'C01'; }) || {}).text;
+  } catch (e) { fails.push('前置條件寫不進 localStorage：' + (e && e.message)); }
+
+  aalSubmitCommit();
+  closeModal();
+
+  /* 磁碟上那一份必須原封不動 */
+  let disk = {};
+  try { disk = JSON.parse(localStorage.getItem(STORE_KEY) || '{}'); } catch (e) {}
+  const afterN = (disk.responses || []).filter(function(r){ return r.aid === 'a-post' && r.sid === sid; }).length;
+  const afterTxt = ((disk.responses || []).find(function(r){ return r.aid === 'a-post' && r.sid === sid && r.iid === 'C01'; }) || {}).text;
+  if (afterN !== beforeN) fails.push('磁碟上的作答從 ' + beforeN + ' 筆變成 ' + afterN + ' 筆');
+  if (afterTxt !== beforeTxt) fails.push('磁碟上的非選作答被舊分頁蓋掉了（現在是「' + afterTxt + '」）');
+  if (!(disk.submissions || []).some(function(s){ return s.aid === 'a-post' && s.sid === sid; }))
+    fails.push('磁碟上的交卷紀錄不見了');
+  if (AAL) fails.push('被擋下之後 AAL 沒有被釋放');
+  /* 草稿要留著——那是唯一的救援材料 */
+  let drafts = {};
+  try { drafts = JSON.parse(localStorage.getItem(AAL_DRAFT_KEY) || '{}'); } catch (e) {}
+  if (!drafts['a-post|' + sid]) fails.push('被擋下之後草稿被丟掉了（那是唯一還留著的救援材料）');
+
+  /* 施測中的分頁不可以把自己的 ui 寫回磁碟 */
+  state = buildSeedState(); save();
+  AAL = null;
+  state.ui.role = sid; renderShell();
+  state.submissions = state.submissions.filter(function(s){ return !(s.aid === 'a-post' && s.sid === sid); });
+  save();
+  location.hash = '#/aal/a-post'; render();
+  /* 老師在另一個分頁換成下一位（直接寫磁碟） */
+  try {
+    const d = JSON.parse(localStorage.getItem(STORE_KEY) || '{}');
+    d.ui = Object.assign({}, d.ui, {role: other});
+    d.rev = (d.rev || 0) + 1; d.writer = 'tab-teacher';
+    localStorage.setItem(STORE_KEY, JSON.stringify(d));
+  } catch (e) {}
+  /* 舊的作答分頁再落地一次（關掉分頁時必然發生） */
+  save();
+  try {
+    const d2 = JSON.parse(localStorage.getItem(STORE_KEY) || '{}');
+    if (d2.ui && d2.ui.role !== other)
+      fails.push('施測中的分頁把身分寫回磁碟了（現在是 ' + d2.ui.role + '，應該還是 ' + other + '）');
+  } catch (e) {}
+
+  state = buildSeedState(); save();
+  AAL = null; SURVEY = null; QUIZ = null;
+  state.ui.role = realRole; renderShell();
+  location.hash = realHash || '#/teacher'; render();
+  const r = {pass: fails.length === 0, fails: fails};
+  console.log('[assertDoubleSubmit]', r);
   return r;
 };

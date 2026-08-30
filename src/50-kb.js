@@ -203,9 +203,45 @@ function mergeOntoDisk(disk){
     if (added && typeof console !== 'undefined' && console.info)
       console.info('[KAIROS] 合併：' + kind + ' 補回 ' + added + ' 列');
   });
-  out.ui = state.ui;
+  /* ui 是「這台裝置現在是誰在用」，不是分頁自己的事。
+     施測中的分頁依設計拒絕同步外部更新（見 measuringNow），那它也必須
+     拒絕把自己的 ui 寫出去——否則老師在另一個分頁用 #/unlock 換成下一位
+     同學之後，那個還停在作答頁、沒關掉的舊分頁只要再落地一次
+     （關掉它就會：beforeunload 無條件 flushLogs → save），磁碟上的 ui.role
+     與 deviceUnlock 就被寫回上一位；活著的那個分頁不在施測狀態，
+     收到 storage 事件立刻 adoptForeignState，身分整個倒退，
+     而施測中頂列的身分下拉是隱藏的，孩子看不到自己變成誰。
+     下一位同學整節課的作答會記在上一位的 sid 與條件底下，兩個人的資料
+     同時作廢——這條路徑還完全繞過 #/unlock 的教師代碼、退避鎖與 UNLOCK 日誌。 */
+  const measuring = typeof measuringNow === 'function' ? measuringNow() : null;
+  if (!measuring || !out.ui) out.ui = state.ui;
   if (out.settings && state.settings) out.settings.a11y = state.settings.a11y;
   return out;
+}
+
+/* 磁碟上到底交了沒有。
+   施測中的分頁永遠不同步外部更新，所以 state.submissions 這個記憶體副本
+   對「另一個分頁剛剛交了卷」是瞎的——而覆寫紀錄的那一步就在這裡發生。
+   問卷那一支的「第二道門」讀的也是記憶體，對它自己宣稱要擋的
+   「舊分頁上的按鈕」恆為不成立。這一支直接問磁碟。 */
+function submittedOnDisk(aid, sid){
+  try {
+    const raw = localStorage.getItem(STORE_KEY);
+    if (!raw) return false;
+    const d = JSON.parse(raw);
+    return !!(d && Array.isArray(d.submissions) &&
+      d.submissions.some(function(s){ return s.aid === aid && s.sid === sid; }));
+  } catch (e) { return false; }
+}
+/* 問卷同理：磁碟上有沒有這一份。 */
+function surveyOnDisk(sid, phase){
+  try {
+    const raw = localStorage.getItem(STORE_KEY);
+    if (!raw) return false;
+    const d = JSON.parse(raw);
+    return !!(d && Array.isArray(d.surveys) &&
+      d.surveys.some(function(s){ return s.sid === sid && s.phase === phase && !s.demo; }));
+  } catch (e) { return false; }
 }
 
 /* ==========================================================================

@@ -372,8 +372,9 @@ function viewQuiz(aid){
         if (!lines || !lines.length) return;
         PADS[iid] = PADS[iid] || {strokes:[], color:'ink', width:2};
         PADS[iid].strokes = lines;
-        PADS[iid].w = (Array.isArray(sp) ? 0 : sp.w) || PADS[iid].w;
-        PADS[iid].h = (Array.isArray(sp) ? 240 : sp.h) || 240;
+        /* 同 aalPadsRestore：還原的是書寫座標系，座標本身不動。 */
+        PADS[iid].w0 = (Array.isArray(sp) ? 600 : sp.w) || PADS[iid].w0 || 600;
+        PADS[iid].h0 = (Array.isArray(sp) ? 240 : sp.h) || PADS[iid].h0 || 240;
         QUIZ.strokes[iid] = lines;
         if (PADS[iid].cv) redraw(iid);
       });
@@ -679,13 +680,23 @@ function viewResult(aid){
       return '<div class="item"><div class="row" style="justify-content:space-between">' +
         '<b>' + itemLabel(aid, it.id) + '</b>' +
         /* 三態，不是兩態：沒作答不等於答錯。把缺答畫成紅色的「答錯」，
-           孩子會以為自己寫了而且寫壞了。 */
+           孩子會以為自己寫了而且寫壞了。
+           而 keyLocked 的時候，這一格也要跟著閉嘴——它原本只擋下面那段
+           <div class="opts">，這顆 pill 完全不受控。孩子記得自己每一題選了
+           什麼，「第 8 題 答對」＝正解、「答錯」＝刪掉一個選項，效果與看到
+           答案卡同類；KIDMAP 的象限標籤（「你穩穩答對」「可惜，你其實讀得懂」）
+           更直接。而同教室還有二十幾人正在同一份題本上作答，螢幕朝著旁邊——
+           classKeyReleased、kbLocked 第三道門、a-pre 診斷門三道班級層級的鎖
+           都是為了這個情境寫的，逐題狀態從三道鎖中間漏出去。
+           「沒有作答」不是揭露（那是他自己的動作），照舊顯示。 */
         (!r || r.choice == null
            ? '<span class="pill"><span class="dot"></span>這一題你沒有作答</span>'
-           : (c ? '<span class="pill ' + QUAD[c.q].key + '"><span class="dot"></span>' +
-                  esc(QUAD_STUDENT[c.q]) + '</span>'
-                : (r.correct ? '<span class="pill q1"><span class="dot"></span>答對</span>'
-                             : '<span class="pill q2"><span class="dot"></span>答錯</span>'))) + '</div>' +
+           : keyLocked
+             ? '<span class="pill"><span class="dot"></span>已作答</span>'
+             : (c ? '<span class="pill ' + QUAD[c.q].key + '"><span class="dot"></span>' +
+                    esc(QUAD_STUDENT[c.q]) + '</span>'
+                  : (r.correct ? '<span class="pill q1"><span class="dot"></span>答對</span>'
+                               : '<span class="pill q2"><span class="dot"></span>答錯</span>'))) + '</div>' +
         '<div class="stem">' + esc(it.stem) + '</div>' +
         /* 前測的正解在後測交卷之前不打開：兩次測量用的是同一份題本，
            在中間逐題發答案卡，Δθ 就混入記憶效應，而記憶量與「有沒有來看
@@ -837,7 +848,12 @@ function padPayload(padId){
      而它自己記的 w 是個數字、不會跟著動。評閱端於是用舊的 viewBox 去畫
      被放大過的座標，筆跡被裁掉，接著任何一次 save() 就寫死進匯出檔。
      只留有效筆畫，順便把點一下留下的單點清掉。 */
-  return {w: p.w || (p.cv && p.cv.clientWidth) || 600, h: p.h || padBaseHeight(),
+  /* w／h 要記書寫座標系（w0／h0），不是當下的畫布尺寸——座標本來就存在
+     那個座標系裡，strokesSvg 的 viewBox 用它才對得起來。記成當下尺寸的話，
+     孩子在 100% 寫、交卷前把字級調到 175%，viewBox 就會比座標大一圈，
+     評閱端看到的字擠在左上角。 */
+  return {w: p.w0 || p.w || (p.cv && p.cv.clientWidth) || 600,
+    h: p.h0 || p.h || padBaseHeight(),
     lines: p.strokes.filter(function(s){ return s.pts && s.pts.length > 1; })
       .map(function(s){
         return {color:s.color, width:s.width, pts:s.pts.map(function(pt){ return pt.slice(); })};
@@ -977,35 +993,26 @@ function initPads(){
       const w = cv.clientWidth;
       const h = cv.clientHeight;   // 由 CSS 的 11rem 決定，跟著字級走
       const p = PADS[id];
+      /* 書寫座標系。筆畫的座標一旦寫下來就不再改動，縮放只發生在畫的那一刻
+         （見 padScale／redraw）。
+         第 8 輪把兩軸各自換算改成單一等比因子 min(w/p.w, h/p.h)，修掉了
+         非等比拉伸，但那個變換仍然是「就地改資料」而且不可逆：
+         橫轉直 k=min(704/960,1)=0.733 會縮，直轉橫 k=min(960/704,1)=1 不還原，
+         轉一個來回剩 73%、兩個來回 54%、三個來回 39%，筆畫還愈來愈細；
+         字級 100%→175%→100% 同樣剩 57%。而平板轉向是四到六年級孩子的
+         常態動作，手寫又是不會注音打字的孩子在兩題建構反應題上唯一的通道，
+         縮小後的座標會由 padPayload 烘進 state.responses——評閱者看到的
+         就是愈來愈小、愈來愈細的字，而他無從復原。
+         改成：w0/h0 記下「這些座標是在多大的板子上寫的」，之後永遠不動。 */
+      if (p && !p.w0){ p.w0 = w; p.h0 = h; }
       /* 筆畫是 CSS px 絕對座標。原本 resize 只重設畫布尺寸就直接重畫舊座標，
          平板由橫轉直（約 1024→768）之後，寫在右半邊的字整片落在畫布外——
          資料還在、畫面沒了，而孩子最可能的反應是按〈清空〉整題重寫。
          這裡依新舊寬度比例換算，字跟著縮，不會掉出去。 */
-      if (p && p.w && p.h && w && h && (Math.abs(p.w - w) > 0.5 || Math.abs(p.h - h) > 0.5)){
-        /* 單一等比因子，取兩軸中較嚴的那一個。
-           兩軸各自換算（kx、ky 分開）在第 7 輪把畫布高度從固定像素改成
-           CSS 的 11rem 之後就變成非等比拉伸：孩子在作答途中把字級從 100%
-           調到 175%，高度 220→385 而寬度不動（教室平板 1024px 在兩個字級
-           都落在 data-narrow，欄寬鏈全是 px 與 %），kx=1、ky≈1.75，
-           寫好的字被縱向拉長 75%；平板由橫轉直則是 kx≈0.75、ky=1，
-           字被橫向壓成 75%，筆畫還同時變細（舊碼的筆寬只乘 kx）。
-           草稿還原走同一條，所以「在 100% 寫、回來時是 175%」一樣會歪。
-           手寫是不會注音打字的孩子在兩題建構反應題上唯一的作答通道，
-           而變形會被 padPayload 烘進交出去的那一份——評閱者看到的就是
-           被拉長或壓扁的中文字。
-           取 min：只有高度變大時 k=1（筆跡完全不動，多出來的空間留在下方，
-           正是放大字級該有的效果）；只有寬度變小時等比縮小；兩軸同時變時
-           取較嚴的那一個，永遠不會把筆畫推出畫布。 */
-        const k = Math.min(w / p.w, h / p.h);
-        p.strokes.forEach(function(s){
-          s.pts.forEach(function(pt){ pt[0] *= k; pt[1] *= k; });
-          s.width = (s.width || 2) * k;
-        });
-      }
       if (p){ p.w = w; p.h = h; }
       cv.width = w * dpr; cv.height = h * dpr;
-      const ctx = cv.getContext('2d');
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      /* 變換交給 redraw 每次自己算——它要跟著當下的 w0→w 比例走，
+         而那個比例會隨字級與轉向改變。 */
       redraw(id);
     }
     PADS[id] = PADS[id] || {strokes:[], color:'ink', width:2, cv:cv};
@@ -1030,19 +1037,23 @@ function initPads(){
       if (e.pointerType === 'mouse') return true;      // 桌機沒有捲動衝突
       return !!PADS[id].touchDraw;                     // 手指與觸控筆都要先開手寫模式
     }
+    /* 指標座標要換算回書寫座標系（除以當下的縮放因子），
+       筆寬也一樣——不然在放大的板子上寫出來的字，存進去會偏大。 */
+    function at(e){
+      const r = cv.getBoundingClientRect();
+      const k = padScale(id) || 1;
+      return [(e.clientX - r.left) / k, (e.clientY - r.top) / k];
+    }
     cv.addEventListener('pointerdown', function(e){
       if (!drawableFrom(e)) return;
       e.preventDefault();
       cv.setPointerCapture(e.pointerId);
-      const r = cv.getBoundingClientRect();
-      cur = {color:PADS[id].color, width:PADS[id].width,
-             pts:[[e.clientX - r.left, e.clientY - r.top]]};
+      cur = {color:PADS[id].color, width:PADS[id].width, pts:[at(e)]};
       PADS[id].strokes.push(cur);
     });
     cv.addEventListener('pointermove', function(e){
       if (!cur) return;
-      const r = cv.getBoundingClientRect();
-      cur.pts.push([e.clientX - r.left, e.clientY - r.top]);
+      cur.pts.push(at(e));
       redraw(id);
     });
     /* 沒有移動過的「筆畫」要丟掉。pointerdown 在還沒有任何 pointermove
@@ -1099,10 +1110,31 @@ function padChanged(id){
   }
 }
 
+/* 書寫座標系 →目前畫布的等比縮放因子。
+   取兩軸較小的那一個：板子變窄就整體縮進去（不會有字掉到框外），
+   板子變大（例如把字級開到 175%）就整體放大——低視力的孩子把整頁放大時，
+   他自己的筆跡也應該跟著大。
+   關鍵是這個因子每次都從 w0／h0 重算，不會累積：
+   橫→直→橫、100%→175%→100% 都會精確回到原來的樣子。 */
+function padScale(id){
+  const p = PADS[id];
+  if (!p || !p.cv) return 1;
+  const w0 = p.w0 || p.cv.clientWidth || 1;
+  const h0 = p.h0 || p.cv.clientHeight || 1;
+  const w = p.cv.clientWidth || w0;
+  const h = p.cv.clientHeight || h0;
+  const k = Math.min(w / w0, h / h0);
+  return (isFinite(k) && k > 0) ? k : 1;
+}
 function redraw(id){
   const p = PADS[id]; if (!p || !p.cv) return;
   const ctx = p.cv.getContext('2d');
-  ctx.clearRect(0, 0, p.cv.width, p.cv.height);
+  const dpr = window.devicePixelRatio || 1;
+  const k = padScale(id);
+  /* setTransform 每次重設，不要靠 size() 設一次就算了——k 會變。
+     dpr 與 k 一起乘進去：座標與線寬同時等比，筆畫不會變細。 */
+  ctx.setTransform(dpr * k, 0, 0, dpr * k, 0, 0);
+  ctx.clearRect(0, 0, p.cv.width / (dpr * k), p.cv.height / (dpr * k));
   ctx.lineCap = 'round'; ctx.lineJoin = 'round';
   p.strokes.forEach(function(s){
     ctx.strokeStyle = padResolveColor(s.color); ctx.lineWidth = s.width;

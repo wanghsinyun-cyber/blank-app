@@ -71,10 +71,13 @@ function aalPadsRestore(saved){
     const key = 'aal-' + iid;
     PADS[key] = PADS[key] || {strokes:[], color:'ink', width:2};
     PADS[key].strokes = lines;
-    PADS[key].w = (Array.isArray(sp) ? 0 : sp.w) || PADS[key].w;
-    PADS[key].h = (Array.isArray(sp) ? 240 : sp.h) || 240;
+    /* 還原的是「書寫座標系」，不是當下的畫布尺寸。存檔裡的 w／h 就是
+       這些座標所屬的那個座標系（padPayload 存的是 w0／h0）。
+       舊格式（純陣列）沒有這個資訊，退回 600×240 —— 與它當初的假設一致。 */
+    PADS[key].w0 = (Array.isArray(sp) ? 600 : sp.w) || PADS[key].w0 || 600;
+    PADS[key].h0 = (Array.isArray(sp) ? 240 : sp.h) || PADS[key].h0 || 240;
     /* 畫布還沒建出來也沒關係：initPads 會沿用既有的 PADS[key]，
-       它的 size() 會依當時寬度換算座標再重畫。 */
+       redraw() 會依當時的 w0→畫布比例縮放，座標本身不動。 */
     if (PADS[key].cv) redraw(key);
   });
 }
@@ -1167,6 +1170,27 @@ function aalSubmit(){
 function aalSubmitCommit(){
   if (!AAL) return;
   const me = currentUser();
+  /* 第二道門，與 surveySubmitCommit 同一個形狀——但要問磁碟，不是記憶體。
+     作答中的分頁因 measuringNow()==='aal' 永遠不同步外部更新，所以它的
+     state.submissions 對「另一個分頁剛剛交了卷」是瞎的；而下面那圈
+     filter+push 就是唯一會覆寫紀錄的地方。
+     孩子開兩個分頁做同一份後測、或做完之後回頭把另一個還開著的分頁
+     「順手交掉」——兩個分頁長得一模一樣，十歲的孩子分不出來——
+     先交的那份完整作答就會被停在第 3 題的那個分頁覆蓋成 13 題 null，
+     而畫面兩次都說「已交卷」、草稿也被刪掉。後測 θ 是 RQ1 的主要依變項，
+     缺答不進 Rasch，全站沒有補交路徑。
+     擋下來的時候**不要丟草稿**：那一份還沒落地的作答是唯一的救援材料。 */
+  if (submittedOnDisk(AAL.aid, me.id)){
+    AAL = null;
+    alertModal({
+      title: '這一份已經交出去了',
+      body: '另一個分頁（或另一次開啟）已經把這一份交出去了，所以這裡不會再存一次——' +
+            '再存一次會把先交的那一份蓋掉。',
+      strong: '你剛剛在這一頁寫的東西沒有被存進去。',
+      note: '請舉手告訴老師，不要自己關掉分頁。'
+    });
+    return;
+  }
   AAL.items.forEach(function(it){
     state.responses = state.responses.filter(function(r){
       return !(r.aid === AAL.aid && r.sid === me.id && r.iid === it.id); });
@@ -1724,8 +1748,10 @@ function surveySubmitCommit(phase){
   const cond = conditionOfStudent(me.id);
 
   /* 第二道門：畫面那一層擋不到直接呼叫的路徑（例如舊分頁上的按鈕），
-     而這裡是唯一會覆寫紀錄的地方。 */
-  if (surveyOf(me.id, phase)){
+     而這裡是唯一會覆寫紀錄的地方。
+     要同時問記憶體與磁碟：舊分頁記憶體裡正好沒有那一筆，只讀 surveyOf()
+     的話，這道門對它自己宣稱要擋的情境恆為不成立。 */
+  if (surveyOf(me.id, phase) || surveyOnDisk(me.id, phase)){
     toast('這份問卷已經送出了，不能再改。');
     SURVEY = null;
     replaceHash('#/student');

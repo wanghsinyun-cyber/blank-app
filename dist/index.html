@@ -1914,8 +1914,17 @@ const PROMPT_ROLE = {
      那個常數上方（軟位置線索，而且只有 peer 拿得到）；提示詞這一側漏了。
      只有 peer 組每一輪都可能收到一個方位線索，RQ1 比的就不再是三種社會框架。
      改成同層級、不涉位置的對等描述，字數與另兩個角色相當。 */
-  peer:  '【社會框架】你是跟學生同時在讀這一篇的同學。先用一句話說你自己讀這一篇的感覺' +
-         '（不可以是答案，也不可以提到位置），再把同一個問題拋回去問他，語氣是對等的討論。'
+  /* 「先用一句話說你自己讀這一篇的感覺」也要拿掉。**文章全文從來沒有進過
+     提示詞**（送出去的只有 composePrompt ＋「【題目】stem／【學生剛剛說】text」），
+     等於要求模型對一篇它讀不到的文章講出第一人稱的閱讀內容——它只能編。
+     而 leakGuard 攔的是判定語、選項字串、位置與指路語，攔不到
+     「我覺得這篇好像在講一個人後悔的事」這種憑空生成的主旨陳述：
+     對 II／EE 那幾題（主旨、作者立場）那實質就是提示或誤導，blocked 恆為 false，
+     忠實度報表也看不見。而三個角色裡只有 peer 被要求產生內容。
+     內建引擎那一側上一輪已經把 PEER_SHARE 收斂成「只講閱讀動作、不碰文本」，
+     提示詞這一側現在跟上：只描述對等關係，不要求任何內容。 */
+  peer:  '【社會框架】你是跟學生同時在讀這一篇的同學。語氣是對等的討論，' +
+         '用「我們對一下」這種說法，把同一個問題拋回去問他，不要替他整理答案。'
 };
 
 /* --- 歷程提示模組（模組 4–7）：提問功能與子歷程提問庫 --- */
@@ -2011,8 +2020,17 @@ const ROLE_OPENER = {
      就是它：對只看得到一篇文章和一道題的四年級孩子，「這一段」既是一個
      找不到指涉的指示詞（他會往上捲去找哪一段），也是「答案落在某一段裡」
      的收窄暗示。RQ1 比較的必須是純粹的三種社會框架。 */
+  /* later[0] 原本是「我剛剛好像讀錯了，想再想一次。」——它含子字串「錯了」，
+     而第 8 輪新增的 VERDICT_SOFT 正好收了「錯了」。agentTurn 會把自己組好的
+     回覆再送一次 leakGuard，於是這一句每被抽中就整則被換成固定的攔截替換文：
+     那一輪排定的提問功能（F2–F6，含該題標定的 PIRLS 子歷程問句）完全沒送到
+     孩子面前，而日誌照排程記著 qfn 與 sub，blocked 還記成 false。
+     tutor 六句、peer 六句、tutee 的 first 兩句都不命中，只有這一句撞上——
+     等於只有 tutee 這一個條件被系統性砍掉約四分之一輪次的話量與鷹架，
+     而被砍的頻率由孩子講幾次決定，與投入、閱讀速度共變。
+     改成不含判定語的說法，長度 15 字不變（規格是 12–18 字）。 */
   tutee: {first: ['這一題我也在讀，可是我卡住了。', '這一題我讀了，可是我不太懂。'],
-          later: ['我剛剛好像讀錯了，想再想一次。', '我還在想這一題，想再聽你說一次。',
+          later: ['我剛剛好像沒讀懂，想再想一次。', '我還在想這一題，想再聽你說一次。',
                   '所以你的意思是……我想確認一下。', '等一下，我想再確認一次。']},
   peer:  {first: PEER_SHARE_FIRST, later: PEER_SHARE_LATER}
 };
@@ -2092,11 +2110,27 @@ function agentTurn(conditionId, item, turn, rnd){
   const text = (opener ? opener + ' ' : '') +
     (ROLE_STEM[conditionId] || function(q){ return q; })(body);
 
+  /* 自己的輸出也過一次守門，但**不可以無聲吞掉**。原本只取 .text：
+     內建引擎一旦踩到詞表（第 9 輪就發生過一次，tutee 的一句開場含「錯了」），
+     孩子收到的是固定的攔截替換文，而日誌照排程寫著 qfn 與 sub、blocked 記成
+     false——RQ4 的子歷程覆蓋率與忠實度指標同時說了謊，事後也分不出來。
+     被攔的時候：qfn／sub 一律清成 null（那一輪根本沒問出來），
+     blocked／hits／kinds 照實回傳，並且在 console 吼一聲——
+     規則引擎自攔是程式的缺陷，不是研究現場的事件。 */
+  const g = leakGuard(text, item, conditionId);
+  if (g.blocked && typeof console !== 'undefined' && console.error){
+    console.error('[KAIROS] 內建引擎被自己的 leakGuard 攔下：' + conditionId +
+      '／turn ' + turn + '／' + (item && item.id) + '　hits=' + g.hits.join(',') +
+      '　原句：' + text);
+  }
   return {
-    text: leakGuard(text, item, conditionId).text,
-    qfn: qfnId,
-    sub: sub ? sub.id : null,
+    text: g.text,
+    qfn: g.blocked ? null : qfnId,
+    sub: (g.blocked || !sub) ? null : sub.id,
     process: sub ? sub.p : pid,
+    blocked: g.blocked,
+    hits: g.hits,
+    kinds: g.kinds,
     engine: 'builtin'
   };
 }
@@ -3438,9 +3472,45 @@ function mergeOntoDisk(disk){
     if (added && typeof console !== 'undefined' && console.info)
       console.info('[KAIROS] 合併：' + kind + ' 補回 ' + added + ' 列');
   });
-  out.ui = state.ui;
+  /* ui 是「這台裝置現在是誰在用」，不是分頁自己的事。
+     施測中的分頁依設計拒絕同步外部更新（見 measuringNow），那它也必須
+     拒絕把自己的 ui 寫出去——否則老師在另一個分頁用 #/unlock 換成下一位
+     同學之後，那個還停在作答頁、沒關掉的舊分頁只要再落地一次
+     （關掉它就會：beforeunload 無條件 flushLogs → save），磁碟上的 ui.role
+     與 deviceUnlock 就被寫回上一位；活著的那個分頁不在施測狀態，
+     收到 storage 事件立刻 adoptForeignState，身分整個倒退，
+     而施測中頂列的身分下拉是隱藏的，孩子看不到自己變成誰。
+     下一位同學整節課的作答會記在上一位的 sid 與條件底下，兩個人的資料
+     同時作廢——這條路徑還完全繞過 #/unlock 的教師代碼、退避鎖與 UNLOCK 日誌。 */
+  const measuring = typeof measuringNow === 'function' ? measuringNow() : null;
+  if (!measuring || !out.ui) out.ui = state.ui;
   if (out.settings && state.settings) out.settings.a11y = state.settings.a11y;
   return out;
+}
+
+/* 磁碟上到底交了沒有。
+   施測中的分頁永遠不同步外部更新，所以 state.submissions 這個記憶體副本
+   對「另一個分頁剛剛交了卷」是瞎的——而覆寫紀錄的那一步就在這裡發生。
+   問卷那一支的「第二道門」讀的也是記憶體，對它自己宣稱要擋的
+   「舊分頁上的按鈕」恆為不成立。這一支直接問磁碟。 */
+function submittedOnDisk(aid, sid){
+  try {
+    const raw = localStorage.getItem(STORE_KEY);
+    if (!raw) return false;
+    const d = JSON.parse(raw);
+    return !!(d && Array.isArray(d.submissions) &&
+      d.submissions.some(function(s){ return s.aid === aid && s.sid === sid; }));
+  } catch (e) { return false; }
+}
+/* 問卷同理：磁碟上有沒有這一份。 */
+function surveyOnDisk(sid, phase){
+  try {
+    const raw = localStorage.getItem(STORE_KEY);
+    if (!raw) return false;
+    const d = JSON.parse(raw);
+    return !!(d && Array.isArray(d.surveys) &&
+      d.surveys.some(function(s){ return s.sid === sid && s.phase === phase && !s.demo; }));
+  } catch (e) { return false; }
 }
 
 /* ==========================================================================
@@ -8361,8 +8431,9 @@ function viewQuiz(aid){
         if (!lines || !lines.length) return;
         PADS[iid] = PADS[iid] || {strokes:[], color:'ink', width:2};
         PADS[iid].strokes = lines;
-        PADS[iid].w = (Array.isArray(sp) ? 0 : sp.w) || PADS[iid].w;
-        PADS[iid].h = (Array.isArray(sp) ? 240 : sp.h) || 240;
+        /* 同 aalPadsRestore：還原的是書寫座標系，座標本身不動。 */
+        PADS[iid].w0 = (Array.isArray(sp) ? 600 : sp.w) || PADS[iid].w0 || 600;
+        PADS[iid].h0 = (Array.isArray(sp) ? 240 : sp.h) || PADS[iid].h0 || 240;
         QUIZ.strokes[iid] = lines;
         if (PADS[iid].cv) redraw(iid);
       });
@@ -8668,13 +8739,23 @@ function viewResult(aid){
       return '<div class="item"><div class="row" style="justify-content:space-between">' +
         '<b>' + itemLabel(aid, it.id) + '</b>' +
         /* 三態，不是兩態：沒作答不等於答錯。把缺答畫成紅色的「答錯」，
-           孩子會以為自己寫了而且寫壞了。 */
+           孩子會以為自己寫了而且寫壞了。
+           而 keyLocked 的時候，這一格也要跟著閉嘴——它原本只擋下面那段
+           <div class="opts">，這顆 pill 完全不受控。孩子記得自己每一題選了
+           什麼，「第 8 題 答對」＝正解、「答錯」＝刪掉一個選項，效果與看到
+           答案卡同類；KIDMAP 的象限標籤（「你穩穩答對」「可惜，你其實讀得懂」）
+           更直接。而同教室還有二十幾人正在同一份題本上作答，螢幕朝著旁邊——
+           classKeyReleased、kbLocked 第三道門、a-pre 診斷門三道班級層級的鎖
+           都是為了這個情境寫的，逐題狀態從三道鎖中間漏出去。
+           「沒有作答」不是揭露（那是他自己的動作），照舊顯示。 */
         (!r || r.choice == null
            ? '<span class="pill"><span class="dot"></span>這一題你沒有作答</span>'
-           : (c ? '<span class="pill ' + QUAD[c.q].key + '"><span class="dot"></span>' +
-                  esc(QUAD_STUDENT[c.q]) + '</span>'
-                : (r.correct ? '<span class="pill q1"><span class="dot"></span>答對</span>'
-                             : '<span class="pill q2"><span class="dot"></span>答錯</span>'))) + '</div>' +
+           : keyLocked
+             ? '<span class="pill"><span class="dot"></span>已作答</span>'
+             : (c ? '<span class="pill ' + QUAD[c.q].key + '"><span class="dot"></span>' +
+                    esc(QUAD_STUDENT[c.q]) + '</span>'
+                  : (r.correct ? '<span class="pill q1"><span class="dot"></span>答對</span>'
+                               : '<span class="pill q2"><span class="dot"></span>答錯</span>'))) + '</div>' +
         '<div class="stem">' + esc(it.stem) + '</div>' +
         /* 前測的正解在後測交卷之前不打開：兩次測量用的是同一份題本，
            在中間逐題發答案卡，Δθ 就混入記憶效應，而記憶量與「有沒有來看
@@ -8826,7 +8907,12 @@ function padPayload(padId){
      而它自己記的 w 是個數字、不會跟著動。評閱端於是用舊的 viewBox 去畫
      被放大過的座標，筆跡被裁掉，接著任何一次 save() 就寫死進匯出檔。
      只留有效筆畫，順便把點一下留下的單點清掉。 */
-  return {w: p.w || (p.cv && p.cv.clientWidth) || 600, h: p.h || padBaseHeight(),
+  /* w／h 要記書寫座標系（w0／h0），不是當下的畫布尺寸——座標本來就存在
+     那個座標系裡，strokesSvg 的 viewBox 用它才對得起來。記成當下尺寸的話，
+     孩子在 100% 寫、交卷前把字級調到 175%，viewBox 就會比座標大一圈，
+     評閱端看到的字擠在左上角。 */
+  return {w: p.w0 || p.w || (p.cv && p.cv.clientWidth) || 600,
+    h: p.h0 || p.h || padBaseHeight(),
     lines: p.strokes.filter(function(s){ return s.pts && s.pts.length > 1; })
       .map(function(s){
         return {color:s.color, width:s.width, pts:s.pts.map(function(pt){ return pt.slice(); })};
@@ -8966,35 +9052,26 @@ function initPads(){
       const w = cv.clientWidth;
       const h = cv.clientHeight;   // 由 CSS 的 11rem 決定，跟著字級走
       const p = PADS[id];
+      /* 書寫座標系。筆畫的座標一旦寫下來就不再改動，縮放只發生在畫的那一刻
+         （見 padScale／redraw）。
+         第 8 輪把兩軸各自換算改成單一等比因子 min(w/p.w, h/p.h)，修掉了
+         非等比拉伸，但那個變換仍然是「就地改資料」而且不可逆：
+         橫轉直 k=min(704/960,1)=0.733 會縮，直轉橫 k=min(960/704,1)=1 不還原，
+         轉一個來回剩 73%、兩個來回 54%、三個來回 39%，筆畫還愈來愈細；
+         字級 100%→175%→100% 同樣剩 57%。而平板轉向是四到六年級孩子的
+         常態動作，手寫又是不會注音打字的孩子在兩題建構反應題上唯一的通道，
+         縮小後的座標會由 padPayload 烘進 state.responses——評閱者看到的
+         就是愈來愈小、愈來愈細的字，而他無從復原。
+         改成：w0/h0 記下「這些座標是在多大的板子上寫的」，之後永遠不動。 */
+      if (p && !p.w0){ p.w0 = w; p.h0 = h; }
       /* 筆畫是 CSS px 絕對座標。原本 resize 只重設畫布尺寸就直接重畫舊座標，
          平板由橫轉直（約 1024→768）之後，寫在右半邊的字整片落在畫布外——
          資料還在、畫面沒了，而孩子最可能的反應是按〈清空〉整題重寫。
          這裡依新舊寬度比例換算，字跟著縮，不會掉出去。 */
-      if (p && p.w && p.h && w && h && (Math.abs(p.w - w) > 0.5 || Math.abs(p.h - h) > 0.5)){
-        /* 單一等比因子，取兩軸中較嚴的那一個。
-           兩軸各自換算（kx、ky 分開）在第 7 輪把畫布高度從固定像素改成
-           CSS 的 11rem 之後就變成非等比拉伸：孩子在作答途中把字級從 100%
-           調到 175%，高度 220→385 而寬度不動（教室平板 1024px 在兩個字級
-           都落在 data-narrow，欄寬鏈全是 px 與 %），kx=1、ky≈1.75，
-           寫好的字被縱向拉長 75%；平板由橫轉直則是 kx≈0.75、ky=1，
-           字被橫向壓成 75%，筆畫還同時變細（舊碼的筆寬只乘 kx）。
-           草稿還原走同一條，所以「在 100% 寫、回來時是 175%」一樣會歪。
-           手寫是不會注音打字的孩子在兩題建構反應題上唯一的作答通道，
-           而變形會被 padPayload 烘進交出去的那一份——評閱者看到的就是
-           被拉長或壓扁的中文字。
-           取 min：只有高度變大時 k=1（筆跡完全不動，多出來的空間留在下方，
-           正是放大字級該有的效果）；只有寬度變小時等比縮小；兩軸同時變時
-           取較嚴的那一個，永遠不會把筆畫推出畫布。 */
-        const k = Math.min(w / p.w, h / p.h);
-        p.strokes.forEach(function(s){
-          s.pts.forEach(function(pt){ pt[0] *= k; pt[1] *= k; });
-          s.width = (s.width || 2) * k;
-        });
-      }
       if (p){ p.w = w; p.h = h; }
       cv.width = w * dpr; cv.height = h * dpr;
-      const ctx = cv.getContext('2d');
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      /* 變換交給 redraw 每次自己算——它要跟著當下的 w0→w 比例走，
+         而那個比例會隨字級與轉向改變。 */
       redraw(id);
     }
     PADS[id] = PADS[id] || {strokes:[], color:'ink', width:2, cv:cv};
@@ -9019,19 +9096,23 @@ function initPads(){
       if (e.pointerType === 'mouse') return true;      // 桌機沒有捲動衝突
       return !!PADS[id].touchDraw;                     // 手指與觸控筆都要先開手寫模式
     }
+    /* 指標座標要換算回書寫座標系（除以當下的縮放因子），
+       筆寬也一樣——不然在放大的板子上寫出來的字，存進去會偏大。 */
+    function at(e){
+      const r = cv.getBoundingClientRect();
+      const k = padScale(id) || 1;
+      return [(e.clientX - r.left) / k, (e.clientY - r.top) / k];
+    }
     cv.addEventListener('pointerdown', function(e){
       if (!drawableFrom(e)) return;
       e.preventDefault();
       cv.setPointerCapture(e.pointerId);
-      const r = cv.getBoundingClientRect();
-      cur = {color:PADS[id].color, width:PADS[id].width,
-             pts:[[e.clientX - r.left, e.clientY - r.top]]};
+      cur = {color:PADS[id].color, width:PADS[id].width, pts:[at(e)]};
       PADS[id].strokes.push(cur);
     });
     cv.addEventListener('pointermove', function(e){
       if (!cur) return;
-      const r = cv.getBoundingClientRect();
-      cur.pts.push([e.clientX - r.left, e.clientY - r.top]);
+      cur.pts.push(at(e));
       redraw(id);
     });
     /* 沒有移動過的「筆畫」要丟掉。pointerdown 在還沒有任何 pointermove
@@ -9088,10 +9169,31 @@ function padChanged(id){
   }
 }
 
+/* 書寫座標系 →目前畫布的等比縮放因子。
+   取兩軸較小的那一個：板子變窄就整體縮進去（不會有字掉到框外），
+   板子變大（例如把字級開到 175%）就整體放大——低視力的孩子把整頁放大時，
+   他自己的筆跡也應該跟著大。
+   關鍵是這個因子每次都從 w0／h0 重算，不會累積：
+   橫→直→橫、100%→175%→100% 都會精確回到原來的樣子。 */
+function padScale(id){
+  const p = PADS[id];
+  if (!p || !p.cv) return 1;
+  const w0 = p.w0 || p.cv.clientWidth || 1;
+  const h0 = p.h0 || p.cv.clientHeight || 1;
+  const w = p.cv.clientWidth || w0;
+  const h = p.cv.clientHeight || h0;
+  const k = Math.min(w / w0, h / h0);
+  return (isFinite(k) && k > 0) ? k : 1;
+}
 function redraw(id){
   const p = PADS[id]; if (!p || !p.cv) return;
   const ctx = p.cv.getContext('2d');
-  ctx.clearRect(0, 0, p.cv.width, p.cv.height);
+  const dpr = window.devicePixelRatio || 1;
+  const k = padScale(id);
+  /* setTransform 每次重設，不要靠 size() 設一次就算了——k 會變。
+     dpr 與 k 一起乘進去：座標與線寬同時等比，筆畫不會變細。 */
+  ctx.setTransform(dpr * k, 0, 0, dpr * k, 0, 0);
+  ctx.clearRect(0, 0, p.cv.width / (dpr * k), p.cv.height / (dpr * k));
   ctx.lineCap = 'round'; ctx.lineJoin = 'round';
   p.strokes.forEach(function(s){
     ctx.strokeStyle = padResolveColor(s.color); ctx.lineWidth = s.width;
@@ -9682,10 +9784,13 @@ function aalPadsRestore(saved){
     const key = 'aal-' + iid;
     PADS[key] = PADS[key] || {strokes:[], color:'ink', width:2};
     PADS[key].strokes = lines;
-    PADS[key].w = (Array.isArray(sp) ? 0 : sp.w) || PADS[key].w;
-    PADS[key].h = (Array.isArray(sp) ? 240 : sp.h) || 240;
+    /* 還原的是「書寫座標系」，不是當下的畫布尺寸。存檔裡的 w／h 就是
+       這些座標所屬的那個座標系（padPayload 存的是 w0／h0）。
+       舊格式（純陣列）沒有這個資訊，退回 600×240 —— 與它當初的假設一致。 */
+    PADS[key].w0 = (Array.isArray(sp) ? 600 : sp.w) || PADS[key].w0 || 600;
+    PADS[key].h0 = (Array.isArray(sp) ? 240 : sp.h) || PADS[key].h0 || 240;
     /* 畫布還沒建出來也沒關係：initPads 會沿用既有的 PADS[key]，
-       它的 size() 會依當時寬度換算座標再重畫。 */
+       redraw() 會依當時的 w0→畫布比例縮放，座標本身不動。 */
     if (PADS[key].cv) redraw(key);
   });
 }
@@ -10778,6 +10883,27 @@ function aalSubmit(){
 function aalSubmitCommit(){
   if (!AAL) return;
   const me = currentUser();
+  /* 第二道門，與 surveySubmitCommit 同一個形狀——但要問磁碟，不是記憶體。
+     作答中的分頁因 measuringNow()==='aal' 永遠不同步外部更新，所以它的
+     state.submissions 對「另一個分頁剛剛交了卷」是瞎的；而下面那圈
+     filter+push 就是唯一會覆寫紀錄的地方。
+     孩子開兩個分頁做同一份後測、或做完之後回頭把另一個還開著的分頁
+     「順手交掉」——兩個分頁長得一模一樣，十歲的孩子分不出來——
+     先交的那份完整作答就會被停在第 3 題的那個分頁覆蓋成 13 題 null，
+     而畫面兩次都說「已交卷」、草稿也被刪掉。後測 θ 是 RQ1 的主要依變項，
+     缺答不進 Rasch，全站沒有補交路徑。
+     擋下來的時候**不要丟草稿**：那一份還沒落地的作答是唯一的救援材料。 */
+  if (submittedOnDisk(AAL.aid, me.id)){
+    AAL = null;
+    alertModal({
+      title: '這一份已經交出去了',
+      body: '另一個分頁（或另一次開啟）已經把這一份交出去了，所以這裡不會再存一次——' +
+            '再存一次會把先交的那一份蓋掉。',
+      strong: '你剛剛在這一頁寫的東西沒有被存進去。',
+      note: '請舉手告訴老師，不要自己關掉分頁。'
+    });
+    return;
+  }
   AAL.items.forEach(function(it){
     state.responses = state.responses.filter(function(r){
       return !(r.aid === AAL.aid && r.sid === me.id && r.iid === it.id); });
@@ -11335,8 +11461,10 @@ function surveySubmitCommit(phase){
   const cond = conditionOfStudent(me.id);
 
   /* 第二道門：畫面那一層擋不到直接呼叫的路徑（例如舊分頁上的按鈕），
-     而這裡是唯一會覆寫紀錄的地方。 */
-  if (surveyOf(me.id, phase)){
+     而這裡是唯一會覆寫紀錄的地方。
+     要同時問記憶體與磁碟：舊分頁記憶體裡正好沒有那一筆，只讀 surveyOf()
+     的話，這道門對它自己宣稱要擋的情境恆為不成立。 */
+  if (surveyOf(me.id, phase) || surveyOnDisk(me.id, phase)){
     toast('這份問卷已經送出了，不能再改。');
     SURVEY = null;
     replaceHash('#/student');
