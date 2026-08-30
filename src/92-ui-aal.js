@@ -399,24 +399,33 @@ function viewAaL(aid){
          AAL.cond 與日誌的 cond 欄位照舊寫入，拿掉的只是畫面上的字。 */
       '<div class="muted small">' + esc(me.name) + '　·　' +
       esc((classOfStudent(me.id) || {}).name || '') + '</div></div>' +
-      /* tabindex="-1"：〈回到題目導覽〉的焦點落在這個容器上，
-         而不是落在某一顆按鈕。落在容器上，下一次 Tab 才依序碰到
-         〈上一題〉〈下一題〉〈交卷〉——不會讓鍵盤使用者一按 Enter 就交卷。
-         這句話原本是錯的：DOM 上的第一顆按鈕是〈← 先離開〉，所以下一個
-         Tab 站其實是「離開這一節課」，而它長得跟旁邊兩顆換題鈕一模一樣、
-         也沒有確認框。現在 DOM 順序改成導覽優先、離開排到最後，
-         視覺位置用 order 維持原樣（Tab 序跟 DOM 走，不跟 order 走），
-         並把〈先離開〉降一個視覺層級（.ghost）。 */
+      /* 焦點順序＝視覺順序。上一版是「DOM 順序改成導覽優先、離開排到最後，
+         視覺位置用 order 維持原樣」——那解掉了「第一個 Tab 站是離開這一節課」，
+         卻換來焦點順序與視覺順序相反（WCAG 2.4.3／1.3.2）：焦點框走到視覺
+         最右邊的〈交卷〉之後往回跳到最左端的〈先離開〉，而從〈上一題〉
+         Shift+Tab 會整個離開這一列，視覺上就貼在它左邊的〈先離開〉在反向
+         操作下永遠碰不到。.row 又有 flex-wrap，175% 或窄版換行後兩者還可能
+         落在不同列。報讀器上更明顯：向右滑動走 DOM 順序、觸控探索走視覺位置，
+         這一列給出相反的結果。而這是 16 題後測唯一的導覽列。
+         改成拆兩列、不用 order：DOM 就是視覺順序，而〈回到題目導覽〉仍然落在
+         #aalNav 上（tabindex="-1"），它的下一個 Tab 站仍然是〈上一題〉——
+         原本想達成的「不要一按 Enter 就交卷、不要第一站就是先離開」照舊成立。 */
       /* 存檔失敗的常駐警示。aalSave 早就會在連續兩次失敗時去掀開
          id="aalSaveWarn"，但全站從來沒有這個節點——整條安全網是死碼。
          role="alert" 讓報讀器也聽得到；平常 hidden。 */
+      /* 兩列包在同一個容器裡，外層那條 justify-content:space-between 的
+         .row 才維持「左邊標題、右邊工具」兩個子元素，版面不變。 */
+      '<div class="row" style="gap:6px;flex-wrap:wrap;justify-content:flex-end">' +
+      '<div class="row" style="gap:6px">' +
+      '<button class="btn sm ghost" data-act="aal-leave">← 先離開（進度會保留）</button>' +
+      '<span class="pill">第 ' + (AAL.idx + 1) + ' / ' + AAL.items.length + ' 題</span>' +
+      '<span class="pill">' + esc(text.title) + '</span>' +
+      '</div>' +
       '<div class="row" id="aalNav" tabindex="-1">' +
-      '<button class="btn sm" data-act="aal-prev" style="order:4"' + (AAL.idx ? '' : ' disabled') + '>← 上一題</button>' +
-      '<button class="btn sm" data-act="aal-next" style="order:5"' + (AAL.idx < AAL.items.length - 1 ? '' : ' disabled') + '>下一題 →</button>' +
-      '<button class="btn primary sm" data-act="aal-submit" style="order:6">交卷</button>' +
-      '<span class="pill" style="order:2">第 ' + (AAL.idx + 1) + ' / ' + AAL.items.length + ' 題</span>' +
-      '<span class="pill" style="order:3">' + esc(text.title) + '</span>' +
-      '<button class="btn sm ghost" data-act="aal-leave" style="order:1">← 先離開（進度會保留）</button></div>' +
+      '<button class="btn sm" data-act="aal-prev"' + (AAL.idx ? '' : ' disabled') + '>← 上一題</button>' +
+      '<button class="btn sm" data-act="aal-next"' + (AAL.idx < AAL.items.length - 1 ? '' : ' disabled') + '>下一題 →</button>' +
+      '<button class="btn primary sm" data-act="aal-submit">交卷</button></div>' +
+      '</div>' +
     '</div>' +
 
     '<div class="card card-p" id="aalSaveWarn" role="alert"' +
@@ -466,30 +475,15 @@ function viewAaL(aid){
          正停著的那一句 toggle 掉（寫一筆 MARK、底色消失）。 */
       '用鍵盤的話，Tab 停在句子上，按 Enter 或空白鍵就是標記；' +
       '想單純往下讀，把焦點停在文章區塊本身再用方向鍵捲。' +
-      '用報讀器的話，這一篇在下面還有一份不含按鈕的「連續閱讀版」，' +
-      /* 原本是「和前測那一份一樣是整段的文章。」。這一句印在孩子正在作答的
-         後測頁面上，主動告訴他這兩份是同一件事的第一次與第二次——
-         與 30-data.js 把題本改成中性名稱是同一個理由，改在那裡卻沒改在這裡
-         等於白改。說明「連續閱讀版」是什麼，不必提另一份。 */
-      '是整段沒有按鈕的文章。' +
+      /* 原本這裡寫「這一篇在下面還有一份不含按鈕的『連續閱讀版』」，
+         而那一份是無條件輸出的——見下面的說明。現在改成要自己打開。
+         「和前測那一份一樣是整段的文章」也已經拿掉：那一句印在孩子正在
+         作答的後測頁面上，主動告訴他這兩份是同一件事的第一次與第二次
+         （與 30-data.js 把題本改成中性名稱是同一個理由）。 */
+      '用報讀器的話，文章下面有一顆〈連續閱讀版〉，打開就會多一份沒有按鈕的整段文章；' +
+      '它後面還有一顆〈跳到題目〉。' +
       '標記不會影響你的分數，換題也不會消失；每一篇文章的標記分開記。' +
       '老師之後可以看到你標了哪幾句，這是為了知道你怎麼讀。</p>' +
-      /* 連續閱讀版。前測 viewQuiz 把同樣這兩篇直接輸出成 <p>，報讀器讀到的是
-         散文；後測把它拆成 30–40 顆 <button aria-pressed>，瀏覽模式會在每一句
-         前後插入「切換按鈕／未按下」，而空白鍵（NVDA／JAWS 瀏覽模式的翻頁鍵）
-         會把游標所在那一句 toggle 成已標記並寫一筆 MARK。
-         同樣兩篇文章、同一批受試者，前後測的刺激通道卻不一樣——那是 Δθ 的
-         系統性污染，而且只落在用報讀器的孩子身上。
-         保留句子鈕（標記是這個平台的核心行為資料），另外補一份純散文複本：
-         視覺上隱藏、報讀器讀得到，help 文字裡講明它的存在。 */
-      /* 外面這層 position:relative 是必要的，理由與 .msg／.tablewrap 相同：
-         .sr-only 是絕對定位，而雙欄時 .aal-text > .card-p 是捲動容器卻不是
-         已定位元素——沒有這層包裝，這一大段散文的 1px 盒子會跳過捲動容器、
-         改以 .stage 為基準，把文件撐長。 */
-      '<div style="position:relative">' +
-      '<div class="sr-only" role="region" aria-label="連續閱讀版：' + esc(text.title) + '">' +
-        text.paras.map(function(p){ return '<p>' + esc(p) + '</p>'; }).join('') +
-      '</div></div>' +
       '<div class="passage" tabindex="0" role="group" aria-labelledby="passageTitle" aria-describedby="passageHelp">' +
         text.paras.map(function(_, pi){
           return '<p class="para">' + sents.filter(function(s){ return s.para === pi; }).map(function(s){
@@ -500,6 +494,27 @@ function viewAaL(aid){
           }).join('') + '</p>';
         }).join('') +
       '</div>' +
+      /* 連續閱讀版，改成自己打開。
+         前測 viewQuiz 把同樣這兩篇直接輸出成 <p>，報讀器讀到的是散文；
+         後測把它拆成 30–40 顆 <button aria-pressed>，瀏覽模式會在每一句前後
+         插入「切換按鈕／未按下」，而空白鍵（NVDA／JAWS 瀏覽模式的翻頁鍵）
+         會把游標所在那一句 toggle 成已標記並寫一筆 MARK——所以這份複本要留。
+         但它原本是**無條件**輸出的，而且排在句子鈕版之前：用報讀器的孩子在
+         一節課裡要把同一篇 30–40 句的文章聽兩遍，第二遍每句還多帶
+         「切換按鈕／未按下」。那直接吃掉作答時間、推高 cl_ex 自陳，
+         也污染 firstKeyLatency 與停留時間，而且只落在視障受試者身上——
+         補這份複本的理由是讓前後測的報讀器通道一致，實際卻變成後測單方面加倍。
+         改成 opt-in：預設的可及性樹裡文章只出現一次，與前測一致；
+         真的需要的人自己打開，而打開之後後面還有一顆前進出口
+         （原有的〈跳到題目 ↓〉在整張卡最上面，讀完散文之後碰不到）。 */
+      '<button class="skip quiet" type="button" data-act="prose-toggle"' +
+      ' aria-expanded="false" aria-controls="proseBox">連續閱讀版（沒有按鈕的整段文章）</button>' +
+      /* position:relative 是必要的，理由與 .msg／.tablewrap 相同：.sr-only 是
+         絕對定位，而雙欄時 .aal-text > .card-p 是捲動容器卻不是已定位元素——
+         沒有這層包裝，這一大段散文的 1px 盒子會跳過捲動容器、改以 .stage
+         為基準，把文件撐長。 */
+      '<div style="position:relative"><div id="proseBox"></div></div>' +
+      '<button class="skip quiet" type="button" data-act="skip-passage">跳到題目 ↓</button>' +
     '</div></div>' +
 
     /* ---- 右欄：題目與作答 ＋ 對話／筆記 ---- */

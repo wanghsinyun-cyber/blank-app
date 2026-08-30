@@ -413,14 +413,32 @@ td.n,th.n{text-align:right; font-family:var(--f-mono); font-variant-numeric:tabu
 .kidmap .qlabel{font-size:13px; letter-spacing:.06em; font-weight:600}
 .legend{display:flex; gap:14px; flex-wrap:wrap; font-size:0.8rem; color:var(--ink-3)}
 .legend span{display:inline-flex; align-items:center; gap:6px}
-.swatch{width:10px; height:10px; border-radius:2px; display:inline-block}
+/* 原本寫死 10×10px，是版面規則裡少數完全不吃 --fs 的一組：175% 時旁邊的
+   說明文字是 28px，色塊仍然 10px。而它是成績頁「圓點顏色 → 象限意義」的
+   唯一對照表，KIDMAP 的圓點本身沒有形狀或紋理線索；高對比下四個象限色
+   （#125c3c／#8f1d10／#3d4756／#123a70）都是深色低彩度，在 10px 見方裡
+   幾乎分不開。孩子把字級開到 175% 正是因為 10px 的東西看不清楚。
+   跟著 .legend 的 0.8rem 走，並補一圈邊界讓高對比下也分得出來。 */
+.swatch{width:.85em; height:.85em; border-radius:2px; display:inline-block;
+        border:1px solid var(--rule)}
 
 /* ---------- 知識建構 ---------- */
 .kb-toolbar{display:flex; gap:9px; align-items:center; flex-wrap:wrap; padding:10px 14px; background:var(--card); border:1px solid var(--rule); border-radius:var(--r-l); margin-bottom:14px; box-shadow:var(--shadow)}
 /* 畫布與貼文座標都用 rem。貼文寬度本來就隨字級長（264→462px），
    而畫布與座標寫死 px，於是 175% 時貼文重疊對數從 2 暴增到 22。 */
+/* 高度要隨視窗夾住，不能寫死 33rem。根字級是 calc(1.25rem * var(--fs))：
+   100% 時 33rem ＝ 660px、175% 時 1155px。教室平板 1024×768 橫放，扣掉頂列、
+   窄版轉成橫排的側欄與 kb-toolbar 之後可用高度只剩約 450–570px——100% 就已經
+   比可視高度高，175% 是它的兩倍以上。加上 overflow:auto 與 touch-action，
+   手指落在白板上的滑動會先餵給白板自己捲。孩子因此被關進一個看不到上下
+   邊界的框裡，而 discourseStats 的 notes／buildMade／buildGot／reads／kbi
+   是知識建構那一軌的全部依變項，只能從這塊白板產生：放大字級的孩子在這一軌
+   的產出可能接近 0，那不是他的參與度，是版面在窄／大字級下的產物。
+   --sticky-top 由 syncTopbarHeight 依實際頂列高度即時寫入，字級一變就跟著走。
+   SCROLL_KEEP 已經含 '.canvas'，重繪後的捲動位置不受影響。 */
 .canvas{
-  position:relative; height:33rem; border:1px solid var(--rule); border-radius:var(--r-l);
+  position:relative; border:1px solid var(--rule); border-radius:var(--r-l);
+  height:clamp(18rem, calc(100dvh - var(--sticky-top, 64px) - 13rem), 33rem);
   background:var(--card); background-image:radial-gradient(var(--grid) 1.1px,transparent 1.1px); background-size:19px 19px;
   overflow:auto; touch-action:pan-x pan-y;
 }
@@ -627,9 +645,33 @@ input[type=checkbox],input[type=radio]{ width:1.15em; height:1.15em; accent-colo
 .passage{ max-width:62ch }
 .passage .para{ margin:0 0 1.1em; line-height:2.05; font-size:1.05em }
 /* 每一句都是真正的 button：原生可鍵盤聚焦與操作（2.1.1），但看起來像行內文字 */
+/* padding 維持 0：行距不是死區。
+   第 9 輪有一條車道主張「命中區只有字型內容盒（約 24px），而行盒是 43px，
+   每一行上下各留約 9–10px 完全不可點的死區」，並要求補 padding:.42em。
+   實測不成立：沿著段落中央每 2px 取樣 103 個點，全部落在句子鈕上——
+   瀏覽器對行內元素的命中測試用的是**行盒**，不是內容盒。
+   規格本身仍然值得釘住（zz-debug 的 assertPassagePane 會做這個命中測試），
+   但不需要為此改盒模型。
+
+   底線改用 background-image 畫，而不是 border-bottom。
+   這一條才是真的：原本 .sent 是 border-bottom:1px dashed、.on 是 3px solid，
+   而同一份檔案上面那段註解自己寫著「標記態不可以改變盒模型」——
+   實測標一句話，整段的高度就從 174 變成 176px（正好是 3−1），
+   而 aalMark 刻意不呼叫 render() 就是為了不讓孩子被彈回文章開頭，
+   結果他標一句，底下的句子自己位移了兩個像素。
+   背景不進盒模型，1px 換 3px 完全不影響版面。
+   box-decoration-break:clone：行內盒預設是 slice（背景以跨行的聯集為基準
+   畫一次），一句話跨兩行時只有最後一行看得到底線，而底線正是
+   「這一句可以點」的唯一視覺線索。 */
 .passage .sent{
   display:inline; font:inherit; color:inherit; text-align:left;
-  background:none; border:0; border-bottom:1px dashed var(--rule-strong);
+  background-color:transparent; border:0;
+  -webkit-box-decoration-break:clone; box-decoration-break:clone;
+  background-image:repeating-linear-gradient(to right,
+    var(--rule-strong) 0 4px, transparent 4px 7px);
+  background-repeat:no-repeat;
+  background-size:100% 1px;
+  background-position:left 100%;
   padding:0 1px; margin:0; cursor:pointer; border-radius:2px;
 }
 .passage .sent:hover{ background:var(--shade) }
@@ -641,7 +683,11 @@ input[type=checkbox],input[type=radio]{ width:1.15em; height:1.15em; accent-colo
    顏色以外的線索改由邊框粗細（1px dashed → 3px solid）承載，
    仍然滿足 1.4.1；記號改成每一句都預留同寬，只切換可見與否。 */
 .passage .sent.on{
-  background:var(--q4-bg); border-bottom:3px solid var(--q4); color:var(--ink);
+  background-color:var(--q4-bg); color:var(--ink);
+  background-image:linear-gradient(var(--q4),var(--q4));
+  background-repeat:no-repeat;
+  background-size:100% 3px;
+  background-position:left 100%;
 }
 /* 佔位記號用「空白的替代文字」語法。CSS 生成內容會進入可及名稱計算，
    而 color:transparent 不會把它移出無障礙樹——一篇文章 30–40 句，
@@ -649,13 +695,21 @@ input[type=checkbox],input[type=radio]{ width:1.15em; height:1.15em; accent-colo
    亂碼，逐字檢視也會唸到它。這是閱讀理解測驗的刺激材料，雜訊直接落在
    被測量的東西上；而標記狀態早就由 aria-pressed 正確傳達，這個記號對報讀器
    的資訊量是零。content 的 " / \"\"" 是替代文字，讓它只留視覺佔位。 */
-.passage .sent::after{ content:"▍" / ""; color:transparent; font-weight:700 }
-.passage .sent.on::after{ color:var(--q4) }
-/* 舊瀏覽器不認識替代文字語法時，上面那條會整條失效、佔位寬度消失，
-   標記時整段會重新斷行。用 @supports 補一條沒有替代文字的版本當退路。 */
-@supports not (content: "x" / "") {
-  .passage .sent::after{ content:"▍"; color:transparent; font-weight:700 }
+/* 改成不用生成內容承載那個方塊。上面那段註解說對了問題，解法卻只擋住
+   支援替代文字語法的瀏覽器：下面原本還有一段 @supports 退路，
+   把沒有替代文字的 content:"▍" 原封不動放回去給所有不支援的瀏覽器——
+   而替代文字是 Chrome 77+／Safari 17.4+／Firefox 133+ 才有，學校平板停在
+   iPadOS 16 或 17.0–17.3 的 Safari、或內嵌 WebView，全都落進那條退路。
+   於是這條修正正好在最可能需要它的裝置上被自己撤銷：報讀器使用者在後測
+   兩篇文章的每一句（約 30–40 句 × 2）名稱後面都多掛一個 U+258D，
+   點字列每句多一格亂碼——雜訊直接落在被測量的刺激材料上，且只落在
+   視障孩子身上。
+   空字串在每一個瀏覽器都不會進入可及名稱，佔位寬度也不再依賴任何新語法。 */
+.passage .sent::after{
+  content:""; display:inline-block; width:.28em; height:1.05em;
+  vertical-align:-.18em; margin-left:.32em; background:transparent;
 }
+.passage .sent.on::after{ background:var(--q4) }
 
 /* ---------- 評量即學習事件 ----------
    四條件共用同一份版面幾何：對照組只是把對話卡換成同尺寸的筆記卡，
@@ -804,7 +858,13 @@ pre.prompt{
   .stage{min-height:0}
   .rail-group{display:inline-flex; align-items:center; padding:0 8px; font-size:0.8rem; color:var(--ink-3)}
   .rail a{white-space:nowrap}
-  .rail .badge{display:none}
+  /* 原本是 display:none。syncNarrow 用 innerWidth / fontScale < 1160 判定，
+     而教室用的 1024px 平板橫放恆為窄版——也就是說這四個狀態徽章
+     （課前問卷／課後問卷／知識建構空間／我的學習軌跡）對全部 96 位受試者
+     從來沒有被畫出來過，而加它們的理由是「鎖著就要說出來，不然點下去
+     換來一張整頁擋板」。第 7 輪已經把窄版 .rail 從橫向捲動改成 row wrap，
+     徽章不再有擠爆一列的風險。橫排時不要用 margin-left:auto 把它推到列尾。 */
+  .rail .badge{margin-left:6px}
   .wrap{padding:16px 14px 60px}
   .brand span{display:none}
   .aal{grid-template-columns:1fr}
@@ -812,6 +872,7 @@ pre.prompt{
   .grid.split{grid-template-columns:1fr}
   .pill{white-space:normal}
   .stat .v{white-space:normal; overflow-wrap:anywhere}
+  .canvas{height:calc(100dvh - var(--sticky-top, 64px) - 11rem); min-height:16rem}
 }
 :root[data-narrow] .main{flex-direction:column; align-items:stretch}
 :root[data-narrow] .rail{position:static; width:100%; flex:0 0 auto; align-self:stretch; min-width:0;
@@ -821,7 +882,7 @@ pre.prompt{
 :root[data-narrow] .stage{min-height:0}
 :root[data-narrow] .rail-group{display:inline-flex; align-items:center; padding:0 8px; font-size:0.8rem; color:var(--ink-3)}
 :root[data-narrow] .rail a{white-space:nowrap}
-:root[data-narrow] .rail .badge{display:none}
+:root[data-narrow] .rail .badge{margin-left:6px}
 :root[data-narrow] .wrap{padding:16px 14px 60px}
 :root[data-narrow] .brand span{display:none}
 :root[data-narrow] .aal{grid-template-columns:1fr}
@@ -829,6 +890,7 @@ pre.prompt{
 :root[data-narrow] .grid.split{grid-template-columns:1fr}
 :root[data-narrow] .pill{white-space:normal}
 :root[data-narrow] .stat .v{white-space:normal; overflow-wrap:anywhere}
+:root[data-narrow] .canvas{height:calc(100dvh - var(--sticky-top, 64px) - 11rem); min-height:16rem}
 @media (prefers-reduced-motion:reduce){*{animation:none!important; transition:none!important}}
 @media print{.rail,.topbar,.kb-toolbar{display:none} .app,.main{display:block} .stage{min-height:0}}
 
@@ -6400,8 +6462,13 @@ function renderRail(){
     const same = base === parts[0] &&
       (parts.length < 2 || base !== ROUTE.name || parts[0] === 'assign' || ROUTE.args[0] === parts[1]);
     const cur = same ? ' aria-current="page"' : '';
-    /* 徽章在窄版會被 CSS 隱藏，所以另外給一份只有報讀器聽得到的文字，
-       否則「待填」「測驗後開放」這些狀態在手機上等於消失。 */
+    /* 徽章本身 aria-hidden（它是視覺記號，直接併進連結名稱會念成
+       「課前問卷待填」），另外給一份加了括號的 .sr-only 副本。
+       第 9 輪之前這裡還有另一個理由：窄版的 .rail .badge 是 display:none，
+       而 syncNarrow 判定 1024px 平板橫放恆為窄版——也就是說這些徽章
+       對全部 96 位受試者從來沒有被畫出來過，補償只有這份 sr-only，
+       對「看得見但看不到徽章」的所有人等於不存在。CSS 那一側已經改掉，
+       這份副本仍然要留：兩者不會重複播報（上面那個是 aria-hidden）。 */
     const badge = n.b
       ? '<span class="badge" aria-hidden="true">' + esc(String(n.b)) + '</span>' +
         '<span class="sr-only">（' + esc(String(n.b)) + '）</span>'
@@ -6490,7 +6557,13 @@ function kidmapSVG(diag, ps, student){
   const parts = [];
   /* role="img" + aria-label 會讓整個子樹變 presentational，
      裡面的象限標籤、刻度與所有資料點文字全部從可及性樹消失。
-     改用 title + desc，並在 desc 裡寫出老師真正要的摘要（迷思題號）。 */
+     改用 title + desc，並在 desc 裡寫出老師真正要的摘要（迷思題號）。
+     ——但 role="img" 原本還留在標籤上（只是把 aria-label 換成
+     aria-labelledby），而換成 aria-labelledby 並不解除 presentational：
+     註解描述的修法從來沒有落到程式碼上，每一顆圓點的 <title>（那是
+     「這一點是第幾題」的唯一可及路徑）照樣被擋在可及性樹外。
+     SVG 原生的 title/desc 本來就會被曝露，拿掉 role 即可。
+     其餘幾張圖是純裝飾的整體摘要，role="img" + aria-label 是對的。 */
   const q2list = ps.cells.filter(function(c){ return c.q === 2; })
     .map(function(c){ return itemLabel(diag.assignment.id, c.iid); });
   const qn = [1,2,3,4].map(function(k){ return ps.cells.filter(function(c){ return c.q === k; }).length; });
@@ -6499,7 +6572,7 @@ function kidmapSVG(diag, ps, student){
        ' 題、合理答對 ' + qn[3] + ' 題。')
     + (q2list.length ? (student ? '可惜的題目：' : '落在迷思象限的是：') + q2list.join('、') + '。'
                      : (student ? '這次沒有可惜的題目。' : '沒有題目落在迷思象限。'));
-  parts.push('<svg class="kidmap" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-labelledby="kmTitle kmDesc">');
+  parts.push('<svg class="kidmap" viewBox="0 0 ' + W + ' ' + H + '" aria-labelledby="kmTitle kmDesc">');
   parts.push('<title id="kmTitle">' + esc(student ? '你這次的閱讀地圖' : 'KIDMAP 四象限圖') + '</title>');
   parts.push('<desc id="kmDesc">' + esc(desc) + '</desc>');
   // 四個象限底色
@@ -10497,24 +10570,33 @@ function viewAaL(aid){
          AAL.cond 與日誌的 cond 欄位照舊寫入，拿掉的只是畫面上的字。 */
       '<div class="muted small">' + esc(me.name) + '　·　' +
       esc((classOfStudent(me.id) || {}).name || '') + '</div></div>' +
-      /* tabindex="-1"：〈回到題目導覽〉的焦點落在這個容器上，
-         而不是落在某一顆按鈕。落在容器上，下一次 Tab 才依序碰到
-         〈上一題〉〈下一題〉〈交卷〉——不會讓鍵盤使用者一按 Enter 就交卷。
-         這句話原本是錯的：DOM 上的第一顆按鈕是〈← 先離開〉，所以下一個
-         Tab 站其實是「離開這一節課」，而它長得跟旁邊兩顆換題鈕一模一樣、
-         也沒有確認框。現在 DOM 順序改成導覽優先、離開排到最後，
-         視覺位置用 order 維持原樣（Tab 序跟 DOM 走，不跟 order 走），
-         並把〈先離開〉降一個視覺層級（.ghost）。 */
+      /* 焦點順序＝視覺順序。上一版是「DOM 順序改成導覽優先、離開排到最後，
+         視覺位置用 order 維持原樣」——那解掉了「第一個 Tab 站是離開這一節課」，
+         卻換來焦點順序與視覺順序相反（WCAG 2.4.3／1.3.2）：焦點框走到視覺
+         最右邊的〈交卷〉之後往回跳到最左端的〈先離開〉，而從〈上一題〉
+         Shift+Tab 會整個離開這一列，視覺上就貼在它左邊的〈先離開〉在反向
+         操作下永遠碰不到。.row 又有 flex-wrap，175% 或窄版換行後兩者還可能
+         落在不同列。報讀器上更明顯：向右滑動走 DOM 順序、觸控探索走視覺位置，
+         這一列給出相反的結果。而這是 16 題後測唯一的導覽列。
+         改成拆兩列、不用 order：DOM 就是視覺順序，而〈回到題目導覽〉仍然落在
+         #aalNav 上（tabindex="-1"），它的下一個 Tab 站仍然是〈上一題〉——
+         原本想達成的「不要一按 Enter 就交卷、不要第一站就是先離開」照舊成立。 */
       /* 存檔失敗的常駐警示。aalSave 早就會在連續兩次失敗時去掀開
          id="aalSaveWarn"，但全站從來沒有這個節點——整條安全網是死碼。
          role="alert" 讓報讀器也聽得到；平常 hidden。 */
+      /* 兩列包在同一個容器裡，外層那條 justify-content:space-between 的
+         .row 才維持「左邊標題、右邊工具」兩個子元素，版面不變。 */
+      '<div class="row" style="gap:6px;flex-wrap:wrap;justify-content:flex-end">' +
+      '<div class="row" style="gap:6px">' +
+      '<button class="btn sm ghost" data-act="aal-leave">← 先離開（進度會保留）</button>' +
+      '<span class="pill">第 ' + (AAL.idx + 1) + ' / ' + AAL.items.length + ' 題</span>' +
+      '<span class="pill">' + esc(text.title) + '</span>' +
+      '</div>' +
       '<div class="row" id="aalNav" tabindex="-1">' +
-      '<button class="btn sm" data-act="aal-prev" style="order:4"' + (AAL.idx ? '' : ' disabled') + '>← 上一題</button>' +
-      '<button class="btn sm" data-act="aal-next" style="order:5"' + (AAL.idx < AAL.items.length - 1 ? '' : ' disabled') + '>下一題 →</button>' +
-      '<button class="btn primary sm" data-act="aal-submit" style="order:6">交卷</button>' +
-      '<span class="pill" style="order:2">第 ' + (AAL.idx + 1) + ' / ' + AAL.items.length + ' 題</span>' +
-      '<span class="pill" style="order:3">' + esc(text.title) + '</span>' +
-      '<button class="btn sm ghost" data-act="aal-leave" style="order:1">← 先離開（進度會保留）</button></div>' +
+      '<button class="btn sm" data-act="aal-prev"' + (AAL.idx ? '' : ' disabled') + '>← 上一題</button>' +
+      '<button class="btn sm" data-act="aal-next"' + (AAL.idx < AAL.items.length - 1 ? '' : ' disabled') + '>下一題 →</button>' +
+      '<button class="btn primary sm" data-act="aal-submit">交卷</button></div>' +
+      '</div>' +
     '</div>' +
 
     '<div class="card card-p" id="aalSaveWarn" role="alert"' +
@@ -10564,30 +10646,15 @@ function viewAaL(aid){
          正停著的那一句 toggle 掉（寫一筆 MARK、底色消失）。 */
       '用鍵盤的話，Tab 停在句子上，按 Enter 或空白鍵就是標記；' +
       '想單純往下讀，把焦點停在文章區塊本身再用方向鍵捲。' +
-      '用報讀器的話，這一篇在下面還有一份不含按鈕的「連續閱讀版」，' +
-      /* 原本是「和前測那一份一樣是整段的文章。」。這一句印在孩子正在作答的
-         後測頁面上，主動告訴他這兩份是同一件事的第一次與第二次——
-         與 30-data.js 把題本改成中性名稱是同一個理由，改在那裡卻沒改在這裡
-         等於白改。說明「連續閱讀版」是什麼，不必提另一份。 */
-      '是整段沒有按鈕的文章。' +
+      /* 原本這裡寫「這一篇在下面還有一份不含按鈕的『連續閱讀版』」，
+         而那一份是無條件輸出的——見下面的說明。現在改成要自己打開。
+         「和前測那一份一樣是整段的文章」也已經拿掉：那一句印在孩子正在
+         作答的後測頁面上，主動告訴他這兩份是同一件事的第一次與第二次
+         （與 30-data.js 把題本改成中性名稱是同一個理由）。 */
+      '用報讀器的話，文章下面有一顆〈連續閱讀版〉，打開就會多一份沒有按鈕的整段文章；' +
+      '它後面還有一顆〈跳到題目〉。' +
       '標記不會影響你的分數，換題也不會消失；每一篇文章的標記分開記。' +
       '老師之後可以看到你標了哪幾句，這是為了知道你怎麼讀。</p>' +
-      /* 連續閱讀版。前測 viewQuiz 把同樣這兩篇直接輸出成 <p>，報讀器讀到的是
-         散文；後測把它拆成 30–40 顆 <button aria-pressed>，瀏覽模式會在每一句
-         前後插入「切換按鈕／未按下」，而空白鍵（NVDA／JAWS 瀏覽模式的翻頁鍵）
-         會把游標所在那一句 toggle 成已標記並寫一筆 MARK。
-         同樣兩篇文章、同一批受試者，前後測的刺激通道卻不一樣——那是 Δθ 的
-         系統性污染，而且只落在用報讀器的孩子身上。
-         保留句子鈕（標記是這個平台的核心行為資料），另外補一份純散文複本：
-         視覺上隱藏、報讀器讀得到，help 文字裡講明它的存在。 */
-      /* 外面這層 position:relative 是必要的，理由與 .msg／.tablewrap 相同：
-         .sr-only 是絕對定位，而雙欄時 .aal-text > .card-p 是捲動容器卻不是
-         已定位元素——沒有這層包裝，這一大段散文的 1px 盒子會跳過捲動容器、
-         改以 .stage 為基準，把文件撐長。 */
-      '<div style="position:relative">' +
-      '<div class="sr-only" role="region" aria-label="連續閱讀版：' + esc(text.title) + '">' +
-        text.paras.map(function(p){ return '<p>' + esc(p) + '</p>'; }).join('') +
-      '</div></div>' +
       '<div class="passage" tabindex="0" role="group" aria-labelledby="passageTitle" aria-describedby="passageHelp">' +
         text.paras.map(function(_, pi){
           return '<p class="para">' + sents.filter(function(s){ return s.para === pi; }).map(function(s){
@@ -10598,6 +10665,27 @@ function viewAaL(aid){
           }).join('') + '</p>';
         }).join('') +
       '</div>' +
+      /* 連續閱讀版，改成自己打開。
+         前測 viewQuiz 把同樣這兩篇直接輸出成 <p>，報讀器讀到的是散文；
+         後測把它拆成 30–40 顆 <button aria-pressed>，瀏覽模式會在每一句前後
+         插入「切換按鈕／未按下」，而空白鍵（NVDA／JAWS 瀏覽模式的翻頁鍵）
+         會把游標所在那一句 toggle 成已標記並寫一筆 MARK——所以這份複本要留。
+         但它原本是**無條件**輸出的，而且排在句子鈕版之前：用報讀器的孩子在
+         一節課裡要把同一篇 30–40 句的文章聽兩遍，第二遍每句還多帶
+         「切換按鈕／未按下」。那直接吃掉作答時間、推高 cl_ex 自陳，
+         也污染 firstKeyLatency 與停留時間，而且只落在視障受試者身上——
+         補這份複本的理由是讓前後測的報讀器通道一致，實際卻變成後測單方面加倍。
+         改成 opt-in：預設的可及性樹裡文章只出現一次，與前測一致；
+         真的需要的人自己打開，而打開之後後面還有一顆前進出口
+         （原有的〈跳到題目 ↓〉在整張卡最上面，讀完散文之後碰不到）。 */
+      '<button class="skip quiet" type="button" data-act="prose-toggle"' +
+      ' aria-expanded="false" aria-controls="proseBox">連續閱讀版（沒有按鈕的整段文章）</button>' +
+      /* position:relative 是必要的，理由與 .msg／.tablewrap 相同：.sr-only 是
+         絕對定位，而雙欄時 .aal-text > .card-p 是捲動容器卻不是已定位元素——
+         沒有這層包裝，這一大段散文的 1px 盒子會跳過捲動容器、改以 .stage
+         為基準，把文件撐長。 */
+      '<div style="position:relative"><div id="proseBox"></div></div>' +
+      '<button class="skip quiet" type="button" data-act="skip-passage">跳到題目 ↓</button>' +
     '</div></div>' +
 
     /* ---- 右欄：題目與作答 ＋ 對話／筆記 ---- */
@@ -13977,6 +14065,30 @@ function bindEvents(){
       go('#/student'); render();
       return; }
 
+    /* 〈連續閱讀版〉。插進 DOM 才存在，關掉就整段移除——預設的可及性樹裡
+       文章只出現一次，與前測一致（見 92-ui-aal.js 那一段說明）。
+       打開之後把焦點移進去，否則報讀器使用者不知道多了什麼、在哪裡。 */
+    if (act === 'prose-toggle'){
+      const box = document.getElementById('proseBox');
+      if (!box || !AAL) return;
+      const open = t.getAttribute('aria-expanded') === 'true';
+      if (open){
+        box.innerHTML = '';
+        t.setAttribute('aria-expanded', 'false');
+        t.textContent = '連續閱讀版（沒有按鈕的整段文章）';
+        try { t.focus({preventScroll:true}); } catch (e) {}
+      } else {
+        const tx = getText(aalItem().unit);
+        box.innerHTML = '<div class="sr-only" role="region" tabindex="-1" id="proseRegion"' +
+          ' aria-label="連續閱讀版：' + esc(tx.title) + '">' +
+          (tx.paras || []).map(function(x){ return '<p>' + esc(x) + '</p>'; }).join('') +
+          '</div>';
+        t.setAttribute('aria-expanded', 'true');
+        t.textContent = '收起連續閱讀版';
+        const reg = document.getElementById('proseRegion');
+        if (reg) try { reg.focus({preventScroll:true}); } catch (e) {}
+      }
+      return; }
     if (act === 'skip-passage'){
       const el = document.getElementById('aalAnswer');
       if (el){ el.focus(); el.scrollIntoView({block:'start'}); }

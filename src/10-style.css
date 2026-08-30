@@ -396,14 +396,32 @@ td.n,th.n{text-align:right; font-family:var(--f-mono); font-variant-numeric:tabu
 .kidmap .qlabel{font-size:13px; letter-spacing:.06em; font-weight:600}
 .legend{display:flex; gap:14px; flex-wrap:wrap; font-size:0.8rem; color:var(--ink-3)}
 .legend span{display:inline-flex; align-items:center; gap:6px}
-.swatch{width:10px; height:10px; border-radius:2px; display:inline-block}
+/* 原本寫死 10×10px，是版面規則裡少數完全不吃 --fs 的一組：175% 時旁邊的
+   說明文字是 28px，色塊仍然 10px。而它是成績頁「圓點顏色 → 象限意義」的
+   唯一對照表，KIDMAP 的圓點本身沒有形狀或紋理線索；高對比下四個象限色
+   （#125c3c／#8f1d10／#3d4756／#123a70）都是深色低彩度，在 10px 見方裡
+   幾乎分不開。孩子把字級開到 175% 正是因為 10px 的東西看不清楚。
+   跟著 .legend 的 0.8rem 走，並補一圈邊界讓高對比下也分得出來。 */
+.swatch{width:.85em; height:.85em; border-radius:2px; display:inline-block;
+        border:1px solid var(--rule)}
 
 /* ---------- 知識建構 ---------- */
 .kb-toolbar{display:flex; gap:9px; align-items:center; flex-wrap:wrap; padding:10px 14px; background:var(--card); border:1px solid var(--rule); border-radius:var(--r-l); margin-bottom:14px; box-shadow:var(--shadow)}
 /* 畫布與貼文座標都用 rem。貼文寬度本來就隨字級長（264→462px），
    而畫布與座標寫死 px，於是 175% 時貼文重疊對數從 2 暴增到 22。 */
+/* 高度要隨視窗夾住，不能寫死 33rem。根字級是 calc(1.25rem * var(--fs))：
+   100% 時 33rem ＝ 660px、175% 時 1155px。教室平板 1024×768 橫放，扣掉頂列、
+   窄版轉成橫排的側欄與 kb-toolbar 之後可用高度只剩約 450–570px——100% 就已經
+   比可視高度高，175% 是它的兩倍以上。加上 overflow:auto 與 touch-action，
+   手指落在白板上的滑動會先餵給白板自己捲。孩子因此被關進一個看不到上下
+   邊界的框裡，而 discourseStats 的 notes／buildMade／buildGot／reads／kbi
+   是知識建構那一軌的全部依變項，只能從這塊白板產生：放大字級的孩子在這一軌
+   的產出可能接近 0，那不是他的參與度，是版面在窄／大字級下的產物。
+   --sticky-top 由 syncTopbarHeight 依實際頂列高度即時寫入，字級一變就跟著走。
+   SCROLL_KEEP 已經含 '.canvas'，重繪後的捲動位置不受影響。 */
 .canvas{
-  position:relative; height:33rem; border:1px solid var(--rule); border-radius:var(--r-l);
+  position:relative; border:1px solid var(--rule); border-radius:var(--r-l);
+  height:clamp(18rem, calc(100dvh - var(--sticky-top, 64px) - 13rem), 33rem);
   background:var(--card); background-image:radial-gradient(var(--grid) 1.1px,transparent 1.1px); background-size:19px 19px;
   overflow:auto; touch-action:pan-x pan-y;
 }
@@ -610,9 +628,33 @@ input[type=checkbox],input[type=radio]{ width:1.15em; height:1.15em; accent-colo
 .passage{ max-width:62ch }
 .passage .para{ margin:0 0 1.1em; line-height:2.05; font-size:1.05em }
 /* 每一句都是真正的 button：原生可鍵盤聚焦與操作（2.1.1），但看起來像行內文字 */
+/* padding 維持 0：行距不是死區。
+   第 9 輪有一條車道主張「命中區只有字型內容盒（約 24px），而行盒是 43px，
+   每一行上下各留約 9–10px 完全不可點的死區」，並要求補 padding:.42em。
+   實測不成立：沿著段落中央每 2px 取樣 103 個點，全部落在句子鈕上——
+   瀏覽器對行內元素的命中測試用的是**行盒**，不是內容盒。
+   規格本身仍然值得釘住（zz-debug 的 assertPassagePane 會做這個命中測試），
+   但不需要為此改盒模型。
+
+   底線改用 background-image 畫，而不是 border-bottom。
+   這一條才是真的：原本 .sent 是 border-bottom:1px dashed、.on 是 3px solid，
+   而同一份檔案上面那段註解自己寫著「標記態不可以改變盒模型」——
+   實測標一句話，整段的高度就從 174 變成 176px（正好是 3−1），
+   而 aalMark 刻意不呼叫 render() 就是為了不讓孩子被彈回文章開頭，
+   結果他標一句，底下的句子自己位移了兩個像素。
+   背景不進盒模型，1px 換 3px 完全不影響版面。
+   box-decoration-break:clone：行內盒預設是 slice（背景以跨行的聯集為基準
+   畫一次），一句話跨兩行時只有最後一行看得到底線，而底線正是
+   「這一句可以點」的唯一視覺線索。 */
 .passage .sent{
   display:inline; font:inherit; color:inherit; text-align:left;
-  background:none; border:0; border-bottom:1px dashed var(--rule-strong);
+  background-color:transparent; border:0;
+  -webkit-box-decoration-break:clone; box-decoration-break:clone;
+  background-image:repeating-linear-gradient(to right,
+    var(--rule-strong) 0 4px, transparent 4px 7px);
+  background-repeat:no-repeat;
+  background-size:100% 1px;
+  background-position:left 100%;
   padding:0 1px; margin:0; cursor:pointer; border-radius:2px;
 }
 .passage .sent:hover{ background:var(--shade) }
@@ -624,7 +666,11 @@ input[type=checkbox],input[type=radio]{ width:1.15em; height:1.15em; accent-colo
    顏色以外的線索改由邊框粗細（1px dashed → 3px solid）承載，
    仍然滿足 1.4.1；記號改成每一句都預留同寬，只切換可見與否。 */
 .passage .sent.on{
-  background:var(--q4-bg); border-bottom:3px solid var(--q4); color:var(--ink);
+  background-color:var(--q4-bg); color:var(--ink);
+  background-image:linear-gradient(var(--q4),var(--q4));
+  background-repeat:no-repeat;
+  background-size:100% 3px;
+  background-position:left 100%;
 }
 /* 佔位記號用「空白的替代文字」語法。CSS 生成內容會進入可及名稱計算，
    而 color:transparent 不會把它移出無障礙樹——一篇文章 30–40 句，
@@ -632,13 +678,21 @@ input[type=checkbox],input[type=radio]{ width:1.15em; height:1.15em; accent-colo
    亂碼，逐字檢視也會唸到它。這是閱讀理解測驗的刺激材料，雜訊直接落在
    被測量的東西上；而標記狀態早就由 aria-pressed 正確傳達，這個記號對報讀器
    的資訊量是零。content 的 " / \"\"" 是替代文字，讓它只留視覺佔位。 */
-.passage .sent::after{ content:"▍" / ""; color:transparent; font-weight:700 }
-.passage .sent.on::after{ color:var(--q4) }
-/* 舊瀏覽器不認識替代文字語法時，上面那條會整條失效、佔位寬度消失，
-   標記時整段會重新斷行。用 @supports 補一條沒有替代文字的版本當退路。 */
-@supports not (content: "x" / "") {
-  .passage .sent::after{ content:"▍"; color:transparent; font-weight:700 }
+/* 改成不用生成內容承載那個方塊。上面那段註解說對了問題，解法卻只擋住
+   支援替代文字語法的瀏覽器：下面原本還有一段 @supports 退路，
+   把沒有替代文字的 content:"▍" 原封不動放回去給所有不支援的瀏覽器——
+   而替代文字是 Chrome 77+／Safari 17.4+／Firefox 133+ 才有，學校平板停在
+   iPadOS 16 或 17.0–17.3 的 Safari、或內嵌 WebView，全都落進那條退路。
+   於是這條修正正好在最可能需要它的裝置上被自己撤銷：報讀器使用者在後測
+   兩篇文章的每一句（約 30–40 句 × 2）名稱後面都多掛一個 U+258D，
+   點字列每句多一格亂碼——雜訊直接落在被測量的刺激材料上，且只落在
+   視障孩子身上。
+   空字串在每一個瀏覽器都不會進入可及名稱，佔位寬度也不再依賴任何新語法。 */
+.passage .sent::after{
+  content:""; display:inline-block; width:.28em; height:1.05em;
+  vertical-align:-.18em; margin-left:.32em; background:transparent;
 }
+.passage .sent.on::after{ background:var(--q4) }
 
 /* ---------- 評量即學習事件 ----------
    四條件共用同一份版面幾何：對照組只是把對話卡換成同尺寸的筆記卡，
@@ -787,7 +841,13 @@ pre.prompt{
   .stage{min-height:0}
   .rail-group{display:inline-flex; align-items:center; padding:0 8px; font-size:0.8rem; color:var(--ink-3)}
   .rail a{white-space:nowrap}
-  .rail .badge{display:none}
+  /* 原本是 display:none。syncNarrow 用 innerWidth / fontScale < 1160 判定，
+     而教室用的 1024px 平板橫放恆為窄版——也就是說這四個狀態徽章
+     （課前問卷／課後問卷／知識建構空間／我的學習軌跡）對全部 96 位受試者
+     從來沒有被畫出來過，而加它們的理由是「鎖著就要說出來，不然點下去
+     換來一張整頁擋板」。第 7 輪已經把窄版 .rail 從橫向捲動改成 row wrap，
+     徽章不再有擠爆一列的風險。橫排時不要用 margin-left:auto 把它推到列尾。 */
+  .rail .badge{margin-left:6px}
   .wrap{padding:16px 14px 60px}
   .brand span{display:none}
   .aal{grid-template-columns:1fr}
@@ -795,6 +855,7 @@ pre.prompt{
   .grid.split{grid-template-columns:1fr}
   .pill{white-space:normal}
   .stat .v{white-space:normal; overflow-wrap:anywhere}
+  .canvas{height:calc(100dvh - var(--sticky-top, 64px) - 11rem); min-height:16rem}
 }
 :root[data-narrow] .main{flex-direction:column; align-items:stretch}
 :root[data-narrow] .rail{position:static; width:100%; flex:0 0 auto; align-self:stretch; min-width:0;
@@ -804,7 +865,7 @@ pre.prompt{
 :root[data-narrow] .stage{min-height:0}
 :root[data-narrow] .rail-group{display:inline-flex; align-items:center; padding:0 8px; font-size:0.8rem; color:var(--ink-3)}
 :root[data-narrow] .rail a{white-space:nowrap}
-:root[data-narrow] .rail .badge{display:none}
+:root[data-narrow] .rail .badge{margin-left:6px}
 :root[data-narrow] .wrap{padding:16px 14px 60px}
 :root[data-narrow] .brand span{display:none}
 :root[data-narrow] .aal{grid-template-columns:1fr}
@@ -812,6 +873,7 @@ pre.prompt{
 :root[data-narrow] .grid.split{grid-template-columns:1fr}
 :root[data-narrow] .pill{white-space:normal}
 :root[data-narrow] .stat .v{white-space:normal; overflow-wrap:anywhere}
+:root[data-narrow] .canvas{height:calc(100dvh - var(--sticky-top, 64px) - 11rem); min-height:16rem}
 @media (prefers-reduced-motion:reduce){*{animation:none!important; transition:none!important}}
 @media print{.rail,.topbar,.kb-toolbar{display:none} .app,.main{display:block} .stage{min-height:0}}
 

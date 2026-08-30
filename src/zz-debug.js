@@ -2468,3 +2468,343 @@ window.assertStatFitAndCode = function(){
   console.log('[assertStatFitAndCode]', r);
   return r;
 };
+
+/* ==========================================================================
+   第 9 輪 B3：作答頁的觸控／鍵盤／報讀器四條
+   一次開一次後測頁，量四件事：
+     (1) 句子鈕的命中區要補滿行盒（原本每行上下各約 9–10px 是靜默死區）
+     (2) 導覽列的焦點順序要等於視覺順序（原本用 inline order 反向重排）
+     (3) 每一句的 ::after 不得把 U+258D 放進可及名稱（@supports 退路）
+     (4) 整篇文章預設只進一次可及性樹（連續閱讀版改成 opt-in）
+
+   console 一行：assertPassagePane()
+   ========================================================================== */
+window.assertPassagePane = function(){
+  const fails = [], seen = {};
+  const realRole = state.ui.role, realHash = location.hash;
+  const keptSub = state.submissions.slice();
+  const keptLog = (state.logs || []).slice();
+
+  function fin(){
+    state.submissions = keptSub;
+    state.logs = keptLog;
+    state.ui.role = realRole; renderShell();
+    QUIZ = null; AAL = null;
+    location.hash = realHash || '#/teacher'; render();
+    const r = {pass: fails.length === 0, fails: fails, 觀察: seen};
+    console.log('[assertPassagePane]', r);
+    return r;
+  }
+
+  const k = state.classes.find(function(c){ return c.condition === 'control'; }) || state.classes[0];
+  const sid = k.studentIds[0];
+  state.submissions = keptSub.filter(function(x){ return !(x.sid === sid && x.aid === 'a-post'); });
+  state.ui.role = sid; renderShell();
+  QUIZ = null; AAL = null; location.hash = '#/aal/a-post'; render();
+  if (!AAL){ fails.push('後測頁沒有開起來'); return fin(); }
+
+  /* --- (1) 句子鈕的命中區 --- */
+  const para = document.querySelector('.passage .para');
+  const sent = document.querySelector('.passage .sent');
+  if (!para || !sent) fails.push('找不到句子鈕');
+  else {
+    const lh = parseFloat(getComputedStyle(para).lineHeight);
+    seen.行高 = Math.round(lh);
+    if (!lh) fails.push('量不到 .para 的行高');
+    /* 真正用命中測試量，不要量盒高：display:inline 的按鈕跨行時
+       getClientRects 在不同引擎回傳的東西不一樣，量出來的「覆蓋率」
+       可能大於 1 卻仍然有死區。沿著段落中央往下取樣，看每一點落在誰身上。 */
+    const box = para.getBoundingClientRect();
+    const x = Math.round(box.left + box.width * 0.35);
+    let hitSent = 0, hitPara = 0, other = 0;
+    const misses = [];
+    for (let y = Math.ceil(box.top) + 1; y < box.bottom - 1; y += 2){
+      const el = document.elementFromPoint(x, y);
+      if (!el) { other++; continue; }
+      if (el.classList && el.classList.contains('sent')) hitSent++;
+      else if (el.classList && el.classList.contains('para')){ hitPara++; misses.push(Math.round(y - box.top)); }
+      else other++;
+    }
+    const tot = hitSent + hitPara + other;
+    seen.取樣點 = tot;
+    seen.落在句子上 = hitSent;
+    seen.落在死區 = hitPara;
+    seen.死區覆蓋率 = tot ? +(hitSent / tot).toFixed(2) : 0;
+    if (tot < 10) fails.push('命中測試取樣點太少（' + tot + '）');
+    else if (hitSent / tot < 0.9)
+      fails.push('段落中央往下取樣，只有 ' + (hitSent / tot * 100).toFixed(0) +
+                 '% 的點落在句子鈕上（' + hitPara + ' 個點落在不可點的行距上）——' +
+                 '漏點完全沒有回饋：不寫 MARK、不變色、沒有 toast');
+    /* 補內距不可以改變行盒高度（否則整段會重新斷行，而 aalMark 刻意不 render） */
+    const paraH0 = para.getBoundingClientRect().height;
+    const n0 = para.querySelectorAll('.sent').length;
+    aalMark(0);
+    const paraH1 = para.getBoundingClientRect().height;
+    aalMark(0);
+    seen.標記前後段高 = Math.round(paraH0) + ' → ' + Math.round(paraH1);
+    if (Math.abs(paraH0 - paraH1) > 1)
+      fails.push('標記一句之後整段的高度從 ' + Math.round(paraH0) + ' 變成 ' +
+                 Math.round(paraH1) + 'px——盒模型被標記態改掉了，整段會重新斷行');
+    if (para.querySelectorAll('.sent').length !== n0) fails.push('標記把句子數改掉了');
+  }
+
+  /* --- (3) ::after 不得帶可見字元進可及名稱 --- */
+  if (sent){
+    const c = getComputedStyle(sent, '::after').content;
+    seen.after內容 = c;
+    if (/▍|▍/.test(String(c)))
+      fails.push('.sent::after 仍把 U+258D 放進生成內容：' + c +
+                 '（報讀器逐句多唸一個方塊，點字列每句多一格亂碼）');
+  }
+  const hasSupports = Array.prototype.slice.call(document.styleSheets).some(function(s){
+    try {
+      return Array.prototype.slice.call(s.cssRules).some(function(r){
+        return r.type === CSSRule.SUPPORTS_RULE && /content/.test(r.conditionText || '');
+      });
+    } catch (e) { return false; }
+  });
+  if (hasSupports) fails.push('content 的 @supports 退路還在——它會把方塊字元放回舊瀏覽器');
+
+  /* --- (2) 導覽列：焦點順序＝視覺順序 --- */
+  const nav = document.getElementById('aalNav');
+  const bar = nav && nav.parentNode;
+  if (!nav || !bar) fails.push('找不到 #aalNav');
+  else {
+    const els = Array.prototype.slice.call(
+      bar.querySelectorAll('button, [href], [tabindex]:not([tabindex="-1"])'));
+    const order = els.map(function(e){
+      return {t: e.textContent.trim().slice(0, 6), x: Math.round(e.getBoundingClientRect().left),
+              y: Math.round(e.getBoundingClientRect().top),
+              ord: getComputedStyle(e).order};
+    });
+    seen.導覽列 = order;
+    order.forEach(function(o, i){
+      if (o.ord && o.ord !== '0' && o.ord !== 'auto')
+        fails.push('第 ' + (i + 1) + ' 顆（' + o.t + '）還帶著 order:' + o.ord);
+    });
+    for (let i = 1; i < order.length; i++){
+      const a = order[i - 1], b = order[i];
+      const laterLine = b.y > a.y + 4;
+      if (!laterLine && b.x < a.x - 4)
+        fails.push('焦點順序與視覺順序相反：〈' + a.t + '〉在 DOM 上排在〈' + b.t +
+                   '〉之前，畫面上卻在它右邊（' + a.x + ' vs ' + b.x + '）');
+    }
+  }
+
+  /* --- (4) 整篇文章預設只進一次可及性樹 --- */
+  const card = document.querySelector('.aal-text.card');
+  const tx = getText(aalItem().unit);
+  const probe = String((tx.paras && tx.paras[0]) || '').slice(0, 18);
+  function occurrences(){
+    if (!probe) return 0;
+    let n = 0;
+    /* 只算真的會進可及性樹的文字：.sr-only 會、aria-hidden 不會 */
+    const walk = document.createTreeWalker(card, NodeFilter.SHOW_TEXT, null);
+    let node;
+    while ((node = walk.nextNode())){
+      let el = node.parentElement, hidden = false;
+      while (el && el !== card){ if (el.getAttribute('aria-hidden') === 'true') hidden = true; el = el.parentElement; }
+      if (!hidden && node.nodeValue.indexOf(probe.slice(0, 8)) >= 0) n++;
+    }
+    return n;
+  }
+  seen.探針 = probe.slice(0, 10);
+  const before = occurrences();
+  seen.預設出現次數 = before;
+  if (before !== 1)
+    fails.push('整篇文章預設在可及性樹裡出現 ' + before +
+               ' 次（應為 1，與前測一致）——用報讀器的孩子要把同一篇聽兩遍');
+
+  const tgl = document.querySelector('[data-act="prose-toggle"]');
+  seen.有連續閱讀版控制項 = !!tgl;
+  if (!tgl) fails.push('沒有〈連續閱讀版〉的開關');
+  else {
+    if (tgl.getAttribute('aria-expanded') !== 'false')
+      fails.push('〈連續閱讀版〉的 aria-expanded 預設不是 false');
+    tgl.click();
+    const after = occurrences();
+    seen.打開後出現次數 = after;
+    if (after !== 2) fails.push('打開之後文章出現 ' + after + ' 次（應為 2）');
+    if (tgl.getAttribute('aria-expanded') !== 'true')
+      fails.push('打開之後 aria-expanded 沒有變成 true');
+    const reg = document.getElementById('proseRegion');
+    seen.打開後焦點 = document.activeElement ? (document.activeElement.id || document.activeElement.tagName) : '(無)';
+    if (!reg) fails.push('打開之後找不到 #proseRegion');
+    else if (document.activeElement !== reg)
+      fails.push('打開之後焦點沒有移進連續閱讀版（報讀器使用者不知道多了什麼）');
+    tgl.click();
+    const back = occurrences();
+    seen.收起後出現次數 = back;
+    if (back !== 1) fails.push('收起之後文章仍出現 ' + back + ' 次');
+  }
+  /* 讀完散文之後要有前進出口——原有的那顆在整張卡最上面 */
+  const skips = card ? card.querySelectorAll('[data-act="skip-passage"]') : [];
+  seen.跳離控制項數 = skips.length;
+  if (skips.length < 2)
+    fails.push('文章之後沒有第二顆〈跳到題目〉：讀完散文的人碰不到向前的出口');
+  else {
+    const passage = card.querySelector('.passage');
+    const last = skips[skips.length - 1];
+    if (!(passage.compareDocumentPosition(last) & Node.DOCUMENT_POSITION_FOLLOWING))
+      fails.push('第二顆〈跳到題目〉不在文章之後');
+  }
+  return fin();
+};
+
+/* ==========================================================================
+   第 9 輪 B3：白板的可視框要隨視窗夾住
+   height 原本寫死 33rem，而根字級是 calc(1.25rem * var(--fs))：100% 時
+   660px、175% 時 1155px。教室平板 1024×768 橫放的可用高度只有約 450–570px，
+   於是孩子被關進一個看不到上下邊界、又會先吃掉他捲動手勢的框裡，
+   而知識建構那一軌的全部依變項只能從這塊白板產生。
+
+   console 一行：assertCanvasFits()
+   ========================================================================== */
+window.assertCanvasFits = function(){
+  const fails = [], seen = {};
+  const realRole = state.ui.role, realHash = location.hash;
+  const realFs = document.documentElement.style.getPropertyValue('--fs');
+  const realNarrow = document.documentElement.getAttribute('data-narrow');
+  const keptSub = state.submissions.slice();
+
+  const k = state.classes.find(function(c){ return c.condition === 'tutor'; }) || state.classes[0];
+  const sid = k.studentIds[0];
+  state.ui.role = sid; renderShell();
+  location.hash = '#/kb'; render();
+  const v = (state.views || [])[0];
+  if (v){ location.hash = '#/kb/' + v.id; render(); }
+
+  document.documentElement.setAttribute('data-narrow', '');
+  const rows = {};
+  ['1', '1.25', '1.5', '1.75'].forEach(function(fs){
+    document.documentElement.style.setProperty('--fs', fs);
+    if (typeof syncTopbarHeight === 'function') syncTopbarHeight();
+    const cv = document.querySelector('.canvas');
+    if (!cv){ rows[fs] = '(找不到白板)'; return; }
+    const h = cv.getBoundingClientRect().height;
+    const vh = window.innerHeight;
+    rows[fs] = Math.round(h) + 'px / 視窗 ' + vh + 'px';
+    if (h > vh)
+      fails.push('字級 ' + fs + '（窄版）：白板高 ' + Math.round(h) +
+                 'px，比視窗（' + vh + 'px）還高——孩子看不到它的上下邊界');
+    if (h < 180)
+      fails.push('字級 ' + fs + '：白板只有 ' + Math.round(h) + 'px，被夾得太扁');
+  });
+  seen.高度 = rows;
+  document.documentElement.style.setProperty('--fs', realFs || '1');
+  if (realNarrow === null) document.documentElement.removeAttribute('data-narrow');
+  if (typeof syncTopbarHeight === 'function') syncTopbarHeight();
+
+  /* 不可以再寫死 rem 高度 */
+  const hard = Array.prototype.slice.call(document.styleSheets).some(function(s){
+    try { return Array.prototype.slice.call(s.cssRules).some(function(r){
+      return r.selectorText === '.canvas' && /^\d+(\.\d+)?rem$/.test(r.style.height || '');
+    }); } catch (e) { return false; }
+  });
+  if (hard) fails.push('.canvas 的 height 還是寫死的 rem');
+
+  state.submissions = keptSub;
+  state.ui.role = realRole; renderShell();
+  location.hash = realHash || '#/teacher'; render();
+  const r = {pass: fails.length === 0, fails: fails, 觀察: seen};
+  console.log('[assertCanvasFits]', r);
+  return r;
+};
+
+/* ==========================================================================
+   第 9 輪 B3：側欄徽章要畫得出來，象限色塊要跟著字級長
+   ‧ syncNarrow 判定 1024px 平板橫放恆為窄版，而窄版的 .rail .badge 原本是
+     display:none——四個狀態徽章對全部 96 位受試者從來沒有被畫出來過。
+   ‧ .swatch 原本寫死 10×10px，完全不吃 --fs，而它是成績頁「圓點顏色 →
+     象限意義」的唯一對照表。
+   ‧ KIDMAP 的 role="img" 會讓整個子樹變 presentational，每顆圓點的 <title>
+     （「這一點是第幾題」的唯一可及路徑）因此被擋在可及性樹外。
+
+   console 一行：assertBadgeAndSwatch()
+   ========================================================================== */
+window.assertBadgeAndSwatch = function(){
+  const fails = [], seen = {};
+  const realRole = state.ui.role, realHash = location.hash;
+  const realFs = document.documentElement.style.getPropertyValue('--fs');
+  const realNarrow = document.documentElement.getAttribute('data-narrow');
+  const keptSub = state.submissions.slice();
+  const keptSv = (state.surveys || []).slice();
+  const keptKey = JSON.stringify((state.settings || {}).keyReleased || {});
+
+  const k = state.classes.find(function(c){ return c.condition === 'tutor'; }) || state.classes[0];
+  const sid = k.studentIds[0];
+  /* 交了後測、還沒填課後問卷：側欄應該有「問卷後開放」「待填」等徽章 */
+  state.submissions = keptSub.filter(function(x){ return x.sid !== sid; })
+    .concat([{aid:'a-pre', sid:sid, at:Date.now()}, {aid:'a-post', sid:sid, at:Date.now()}]);
+  state.surveys = keptSv.filter(function(x){ return !(x.sid === sid && x.phase === 'post'); });
+  state.ui.role = sid; renderShell();
+  location.hash = '#/student'; render();
+
+  document.documentElement.setAttribute('data-narrow', '');
+  const badges = document.querySelectorAll('#rail .badge');
+  seen.徽章數 = badges.length;
+  seen.徽章 = Array.prototype.map.call(badges, function(b){ return b.textContent; });
+  if (!badges.length) fails.push('側欄一個狀態徽章都沒有（測具或狀態不對）');
+  let hidden = 0;
+  Array.prototype.forEach.call(badges, function(b){
+    const cs = getComputedStyle(b);
+    if (cs.display === 'none' || b.getBoundingClientRect().height === 0) hidden++;
+  });
+  seen.窄版被隱藏的徽章 = hidden;
+  if (hidden)
+    fails.push('窄版有 ' + hidden + ' 個側欄徽章被畫不出來——而施測用的每一台平板' +
+               '（1024px 橫放）都恆為窄版，等於這些狀態對全部受試者從未顯示過');
+  /* 徽章本身要 aria-hidden，另有 .sr-only 副本，兩者不可以同時被唸 */
+  Array.prototype.forEach.call(badges, function(b){
+    if (b.getAttribute('aria-hidden') !== 'true')
+      fails.push('徽章「' + b.textContent + '」沒有 aria-hidden，會與 sr-only 副本重複播報');
+  });
+  if (realNarrow === null) document.documentElement.removeAttribute('data-narrow');
+
+  /* --- 象限色塊：跟著字級長 ---
+     兩個階段要的狀態相反：徽章要「課後問卷還沒填」才長得出來，
+     而成績頁與學習軌跡都被同一道課後問卷門擋著（先看到分數再回答，
+     自陳就會被分數帶著走）。所以這裡把問卷放回去。
+     閱讀地圖與它的圖例另外吃 keyLocked，答案卡也要先打開，量完再還原。 */
+  state.surveys = keptSv;
+  state.settings.keyReleased = state.settings.keyReleased || {};
+  state.settings.keyReleased['a-post'] = true;
+  location.hash = '#/result/a-post'; render();
+  let sw = document.querySelector('.swatch');
+  if (!sw){ location.hash = '#/mygrowth'; render(); sw = document.querySelector('.swatch'); }
+  if (!sw) fails.push('找不到象限色塊 .swatch');
+  else {
+    const sizes = {};
+    ['1', '1.75'].forEach(function(fs){
+      document.documentElement.style.setProperty('--fs', fs);
+      const el = document.querySelector('.swatch');
+      sizes[fs] = el ? Math.round(el.getBoundingClientRect().width * 10) / 10 : 0;
+    });
+    seen.色塊寬 = sizes;
+    document.documentElement.style.setProperty('--fs', realFs || '1');
+    if (!(sizes['1.75'] > sizes['1'] * 1.5))
+      fails.push('色塊不跟著字級長：100% 是 ' + sizes['1'] + 'px，175% 還是 ' +
+                 sizes['1.75'] + 'px——孩子把字級開到 175% 正是因為 10px 的東西看不清楚');
+  }
+
+  /* --- KIDMAP 不可以是 presentational --- */
+  const km = document.querySelector('svg.kidmap');
+  if (km){
+    seen.kidmapRole = km.getAttribute('role') || '(無)';
+    if (km.getAttribute('role') === 'img')
+      fails.push('KIDMAP 還帶著 role="img"——整個子樹變 presentational，' +
+                 '每顆圓點的 <title> 全部從可及性樹消失');
+    if (!km.querySelector('title')) fails.push('KIDMAP 沒有 <title>');
+    if (!km.querySelector('desc')) fails.push('KIDMAP 沒有 <desc>');
+  }
+
+  document.documentElement.style.setProperty('--fs', realFs || '1');
+  state.submissions = keptSub;
+  state.surveys = keptSv;
+  state.settings.keyReleased = JSON.parse(keptKey);
+  state.ui.role = realRole; renderShell();
+  location.hash = realHash || '#/teacher'; render();
+  const r = {pass: fails.length === 0, fails: fails, 觀察: seen};
+  console.log('[assertBadgeAndSwatch]', r);
+  return r;
+};

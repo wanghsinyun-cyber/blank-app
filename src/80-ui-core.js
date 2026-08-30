@@ -480,8 +480,13 @@ function renderRail(){
     const same = base === parts[0] &&
       (parts.length < 2 || base !== ROUTE.name || parts[0] === 'assign' || ROUTE.args[0] === parts[1]);
     const cur = same ? ' aria-current="page"' : '';
-    /* 徽章在窄版會被 CSS 隱藏，所以另外給一份只有報讀器聽得到的文字，
-       否則「待填」「測驗後開放」這些狀態在手機上等於消失。 */
+    /* 徽章本身 aria-hidden（它是視覺記號，直接併進連結名稱會念成
+       「課前問卷待填」），另外給一份加了括號的 .sr-only 副本。
+       第 9 輪之前這裡還有另一個理由：窄版的 .rail .badge 是 display:none，
+       而 syncNarrow 判定 1024px 平板橫放恆為窄版——也就是說這些徽章
+       對全部 96 位受試者從來沒有被畫出來過，補償只有這份 sr-only，
+       對「看得見但看不到徽章」的所有人等於不存在。CSS 那一側已經改掉，
+       這份副本仍然要留：兩者不會重複播報（上面那個是 aria-hidden）。 */
     const badge = n.b
       ? '<span class="badge" aria-hidden="true">' + esc(String(n.b)) + '</span>' +
         '<span class="sr-only">（' + esc(String(n.b)) + '）</span>'
@@ -570,7 +575,13 @@ function kidmapSVG(diag, ps, student){
   const parts = [];
   /* role="img" + aria-label 會讓整個子樹變 presentational，
      裡面的象限標籤、刻度與所有資料點文字全部從可及性樹消失。
-     改用 title + desc，並在 desc 裡寫出老師真正要的摘要（迷思題號）。 */
+     改用 title + desc，並在 desc 裡寫出老師真正要的摘要（迷思題號）。
+     ——但 role="img" 原本還留在標籤上（只是把 aria-label 換成
+     aria-labelledby），而換成 aria-labelledby 並不解除 presentational：
+     註解描述的修法從來沒有落到程式碼上，每一顆圓點的 <title>（那是
+     「這一點是第幾題」的唯一可及路徑）照樣被擋在可及性樹外。
+     SVG 原生的 title/desc 本來就會被曝露，拿掉 role 即可。
+     其餘幾張圖是純裝飾的整體摘要，role="img" + aria-label 是對的。 */
   const q2list = ps.cells.filter(function(c){ return c.q === 2; })
     .map(function(c){ return itemLabel(diag.assignment.id, c.iid); });
   const qn = [1,2,3,4].map(function(k){ return ps.cells.filter(function(c){ return c.q === k; }).length; });
@@ -579,7 +590,7 @@ function kidmapSVG(diag, ps, student){
        ' 題、合理答對 ' + qn[3] + ' 題。')
     + (q2list.length ? (student ? '可惜的題目：' : '落在迷思象限的是：') + q2list.join('、') + '。'
                      : (student ? '這次沒有可惜的題目。' : '沒有題目落在迷思象限。'));
-  parts.push('<svg class="kidmap" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-labelledby="kmTitle kmDesc">');
+  parts.push('<svg class="kidmap" viewBox="0 0 ' + W + ' ' + H + '" aria-labelledby="kmTitle kmDesc">');
   parts.push('<title id="kmTitle">' + esc(student ? '你這次的閱讀地圖' : 'KIDMAP 四象限圖') + '</title>');
   parts.push('<desc id="kmDesc">' + esc(desc) + '</desc>');
   // 四個象限底色

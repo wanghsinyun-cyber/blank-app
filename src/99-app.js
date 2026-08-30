@@ -887,6 +887,30 @@ function bindEvents(){
       go('#/student'); render();
       return; }
 
+    /* 〈連續閱讀版〉。插進 DOM 才存在，關掉就整段移除——預設的可及性樹裡
+       文章只出現一次，與前測一致（見 92-ui-aal.js 那一段說明）。
+       打開之後把焦點移進去，否則報讀器使用者不知道多了什麼、在哪裡。 */
+    if (act === 'prose-toggle'){
+      const box = document.getElementById('proseBox');
+      if (!box || !AAL) return;
+      const open = t.getAttribute('aria-expanded') === 'true';
+      if (open){
+        box.innerHTML = '';
+        t.setAttribute('aria-expanded', 'false');
+        t.textContent = '連續閱讀版（沒有按鈕的整段文章）';
+        try { t.focus({preventScroll:true}); } catch (e) {}
+      } else {
+        const tx = getText(aalItem().unit);
+        box.innerHTML = '<div class="sr-only" role="region" tabindex="-1" id="proseRegion"' +
+          ' aria-label="連續閱讀版：' + esc(tx.title) + '">' +
+          (tx.paras || []).map(function(x){ return '<p>' + esc(x) + '</p>'; }).join('') +
+          '</div>';
+        t.setAttribute('aria-expanded', 'true');
+        t.textContent = '收起連續閱讀版';
+        const reg = document.getElementById('proseRegion');
+        if (reg) try { reg.focus({preventScroll:true}); } catch (e) {}
+      }
+      return; }
     if (act === 'skip-passage'){
       const el = document.getElementById('aalAnswer');
       if (el){ el.focus(); el.scrollIntoView({block:'start'}); }
