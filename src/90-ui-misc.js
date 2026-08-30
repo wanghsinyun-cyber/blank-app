@@ -141,7 +141,7 @@ function viewSettings(){
         return '<button type="button" class="btn sm' + (on ? ' primary' : '') +
           '" data-act="toggle-key" data-id="' + a.id + '" aria-pressed="' + on + '">' +
           '<span aria-hidden="true">' + (on ? '☑' : '☐') + '</span>' +
-          esc(a.title) + '　' + (on ? '已開放' : '尚未開放') + '</button>';
+          esc(assignmentLabel(a)) + '　' + (on ? '已開放' : '尚未開放') + '</button>';
       }).join('') + '</div>' +
       '<span class="muted small">按下去，這份派題的逐題答案就對已交卷的學生打開，' +
       '<strong>知識建構空間也會一起打開</strong>（見 kbLocked 的第三道門）。' +

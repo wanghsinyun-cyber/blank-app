@@ -18,6 +18,9 @@ perl tools/lint-strings.pl src/*.js
 # 括號配對。同一類「整份 dist 變成一個 SyntaxError」的第三次，這次是
 # 編輯時把一行結尾重複貼了一次、多出一個 ')'——引號檢查看不到它。
 perl tools/lint-balance.pl src/*.js
+# ASI：return 後面只剩註解、值換到下一行。第 9 輪吃過一次——問卷 47 題
+# 一題都不印，沒有例外、沒有語法錯誤，上面兩支 linter 都看不到。
+perl tools/lint-asi.pl src/*.js
 
 emit_body(){
   cat src/00-head.html

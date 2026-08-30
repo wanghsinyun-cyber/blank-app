@@ -54,9 +54,20 @@ function kbGate(){
     '如果你先看到別人怎麼想，就很難知道自己本來會怎麼讀了。</p>' +
     '<p class="muted small">還沒交的有 ' + pend.length + ' 份。</p>' +
     '<div class="row" style="margin-top:14px">' +
+    /* 按鈕文字要跟首頁作業卡說同一件事。這裡原本一律印「開始這節課」，
+       而寫到一半、甚至全部寫完只差交卷的孩子，在首頁讀到的是
+       〈接著上次繼續〉或〈去交卷〉——同一個狀態三個入口三種說法，
+       而「開始」讀起來像要從頭來過。 */
     pend.map(function(a){
+      const n = a.itemIds.length;
+      const dn = (a.aal && typeof aalDraftProgress === 'function')
+        ? (aalDraftProgress(a.id, me.id) || {}).n
+        : (typeof quizDraftProgress === 'function' ? (quizDraftProgress(a.id, me.id) || {}).n : 0);
+      const cta = (dn >= n && n > 0) ? '去交卷 →'
+                : dn ? '接著上次繼續 →'
+                : (a.aal ? '開始這節課 →' : '開始作答 →');
       return '<a class="btn primary" href="#/' + (a.aal ? 'aal' : 'quiz') + '/' + a.id + '">' +
-        esc(a.title) + '　' + (a.aal ? '開始這節課 →' : '開始作答 →') + '</a>';
+        esc(a.title) + '　' + cta + '</a>';
     }).join('') +
     '<a class="btn" href="#/student">回我的作業</a></div></div>';
 }

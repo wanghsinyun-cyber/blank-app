@@ -162,6 +162,13 @@ function render(){
      原本只寫進當下的 DOM，任何一次 render() 都會把它們清掉，
      只剩抬頭「已完成 46 / 共 47 題」——孩子被退回來卻不知道要補哪一題。 */
   if (ROUTE.name === 'survey' && typeof surveyPaintMiss === 'function') surveyPaintMiss();
+  if (ROUTE.name === 'survey' && typeof surveyPaintNav === 'function') surveyPaintNav();
+  /* 作答頁的缺答紅框同樣要跨重繪。原本 missIdx 只是 aalSubmit 的區域變數，
+     走一次 render()（按上一題／下一題、調字級、按高對比、跨分頁 a11y 同步）
+     紅框就消失而且不會再回來——而作答頁只有上一題／下一題，沒有跳題，
+     也沒有逐題完成狀態，孩子沒有第二個線索找得回那一題。
+     問卷那一側早就用 SURVEY._miss + surveyPaintMiss() 修掉了。 */
+  if (ROUTE.name === 'aal' && typeof aalPaintMiss === 'function') aalPaintMiss();
 
   if (!samePage){
     try { window.scrollTo(0, 0); } catch (e) {}
@@ -1210,6 +1217,10 @@ function bindEvents(){
       const d = document.getElementById('svDone');
       if (d) d.textContent = surveyKeys(SURVEY.phase, conditionOfStudent(currentUser().id))
         .filter(function(k2){ return SURVEY.resp[k2]; }).length;
+      /* 抬頭的「47 / 47」就地更新了，頁尾那一排按鈕原本沒有——於是畫面
+         同時說「全部填完」與「沒有任何可以送出的地方」。只重寫右半邊那一格，
+         焦點停在量尺上不會被吃掉。 */
+      if (typeof surveyPaintNav === 'function') surveyPaintNav();
       surveyDraftSave();
       return; }
     if (act === 'search-field'){ KBSEARCH.field = t.value; render(); return; }
@@ -1347,6 +1358,19 @@ function bindEvents(){
     if (act === 'aal-note'){
       const it = aalItem();
       AAL.notes[it.id] = t.value;
+      /* 記下筆記自己的最後按鍵時間。flushNoteFor 用它當 NOTE 事件的時間戳，
+         而 aalTypeTelemetry 全庫只有作答框（aal-text）一個呼叫端——
+         16 題裡的 14 題選擇題根本沒有作答框，tele.lastKey 恆為 null，
+         於是那 14 題的 NOTE 一律退回 flush 的那一刻（換題／交卷／離開路由），
+         第 8 輪「'N' 不再結構性排在序列最後」那條修正對它們從未生效；
+         剩下 2 題非選拿到的則是作答框的最後按鍵，與筆記無關。
+         另開欄位而不是直接呼叫 aalTypeTelemetry：三個 AI 條件的對話輸入框
+         同樣不寫遙測，把筆記字數混進 keystrokes 會造出新的條件不對稱。 */
+      if (!e.isComposing){
+        const te = aalTele(it.id);
+        te.noteLastKey = Date.now();
+        if (te.noteFirstKey == null) te.noteFirstKey = te.noteLastKey;
+      }
       /* 打字期間不再寫 code:'N' 的行為事件（見 flushTypeTelemetry 的說明）：
          那會讓對照組的分析單位密度比三個 AI 組高一到兩個數量級。
          筆記在離開這一題或交卷時整筆寫一次。這裡只負責存草稿。 */

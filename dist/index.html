@@ -1403,12 +1403,23 @@ function buildSeedState(){
       return acc;
     }, []);
   const pre = {
-    id:'a-pre', title:'閱讀理解 前測', desc:'先看看大家目前的讀法，答錯沒關係，等一下我們一起討論。',
+    /* title 是學生端到處都印的名字（作業卡、作答頁抬頭、成績頁副標、
+       知識建構空間的門檻卡），rlabel 只給教師端與研究端。
+       原本兩份的 title 分別是「閱讀理解 前測」與
+       「閱讀理解 評量即學習事件（後測）」——前後測是同一份 16 題，
+       孩子在第一頁就被告知這是同一次測驗的第一次與第二次，
+       而且後測那一份還把研究構念的名字（評量即學習事件）印在抬頭上。
+       這兩件事各自都會改變他在後測的作答姿態（重測覺察與需求特徵），
+       而後測 θ 正是 RQ1 的主要依變項；四個條件都印同一句，
+       所以它不是組間差異，是把整條 Δθ 一起抬起來或壓下去的共同偏誤。
+       學生端只看得到兩個中性的活動名稱，順序資訊不可避免也無害。 */
+    id:'a-pre', title:'閱讀活動（一）', rlabel:'前測',
+    desc:'先看看大家目前的讀法，答錯沒關係，等一下我們一起討論。',
     classIds: allClassIds, teacherId:'u-t1', itemIds: allIds, phase:'pre',
     createdAt: now - 12 * DAY, due: now - 9 * DAY
   };
   const post = {
-    id:'a-post', title:'閱讀理解 評量即學習事件（後測）',
+    id:'a-post', title:'閱讀活動（二）', rlabel:'評量即學習事件（後測）',
     desc:'這一節你會一邊讀一邊回答問題。答錯沒關係，重點是把你怎麼讀的說出來。',
     classIds: allClassIds, teacherId:'u-t1', itemIds: allIds, phase:'post', linkedTo:'a-pre',
     aal: true, createdAt: now - 1 * DAY, due: now + 3 * DAY
@@ -1491,7 +1502,11 @@ function buildSeedState(){
 
   const v1 = {
     id:'v-1', title:'那棵樹最後為什麼「正好」站在紅色鐵門旁邊？', createdAt: now - 8 * DAY, classId:'c-1',
-    desc:'從前測第 8 題長出來的共同問題：這是巧合，還是作者早就安排好的？',
+    /* 白板是學生讀的。「前測第 8 題」與題本抬頭是同一個問題：
+       前後測同一份 16 題，displayNo 也同源，所以「第 8 題」本身
+       就足以指出是哪一題，多的那兩個字只提供「這是同一次測驗的第一次」
+       這一個訊息。見 30-data.js 上面 a-pre／a-post 的 rlabel 註解。 */
+    desc:'從第 8 題長出來的共同問題：這是巧合，還是作者早就安排好的？',
     origin:{aid:'a-pre', iid:'R08', mis:'E1'}, links:['v-2']
   };
   const v2 = {
@@ -1534,7 +1549,7 @@ function buildSeedState(){
   mkNote({v:'v-1', t:'【全班共同問題】結尾是巧合，還是作者早就安排好的？', kind:'problem',
     a:['u-t1'], at:now - 8*DAY, x:60, y:40, k:['伏筆','結局'],
     item:{aid:'a-pre', iid:'R08'},
-    segs:[{s:'s2', text:'前測第 8 題問「作者在前面埋了哪一個線索」，有不少同學選了跟結尾無關的細節。有趣的是，這些同學在比較難的第 7 題反而答對了——照他們的能力，這一題本來應該會。我們一起來弄清楚：什麼樣的細節才算「伏筆」？'}]});
+    segs:[{s:'s2', text:'第 8 題問「作者在前面埋了哪一個線索」，有不少同學選了跟結尾無關的細節。有趣的是，這些同學在比較難的第 7 題反而答對了——照他們的能力，這一題本來應該會。我們一起來弄清楚：什麼樣的細節才算「伏筆」？'}]});
 
   mkNote({v:'v-1', t:'我覺得就是剛好而已', a:['王品瑄'], at:now - 8*DAY + 3600e3, x:330, y:36, k:['結局'],
     segs:[{s:'s1', text:'我讀的時候覺得樹回到鐵門旁邊只是剛好。老先生每天搬來搬去，總有一天會搬回去啊。'}]});
@@ -1583,7 +1598,7 @@ function buildSeedState(){
   mkNote({v:'v-2', t:'【全班共同問題】答對了，但說得出理由嗎？', kind:'problem',
     a:['u-t1'], at:now - 7*DAY, x:60, y:40, k:['證據'],
     item:{aid:'a-pre', iid:'R09'},
-    segs:[{s:'s2', text:'前測第 9 題有不少同學選對了，但寫下的理由是「因為老人家很辛苦」——那是你的想法，不是文章的訊息。請大家想清楚：怎樣才算真的從文章裡讀出來的？'}]});
+    segs:[{s:'s2', text:'第 9 題有不少同學選對了，但寫下的理由是「因為老人家很辛苦」——那是你的想法，不是文章的訊息。請大家想清楚：怎樣才算真的從文章裡讀出來的？'}]});
 
   mkNote({v:'v-2', t:'我以為想得通就算有根據', a:['張家豪'], at:now - 7*DAY + 3600e3, x:330, y:36,
     bo:'n-11', k:['證據'],
@@ -1770,7 +1785,13 @@ const CONDITIONS = [
       的「那你呢？」立刻把球丟回去，自己的讀法一個字都沒有。
       宣告了「我先講」卻什麼都沒講，對等關係的操弄在第一輪就自我否定。
       改文案而不是改劑量：不承諾先後。 */
-   frame:'我也在讀這一篇。我們各自說說自己是怎麼讀的，再對一下。',
+   /* 結尾原本是「再對一下」。同一支檔案的 PROMPT_ROLE.peer 剛剛才為了
+      同一個詞被改掉——「對一下」在台灣國小教室的固定搭配是「對答案」，
+      tutor 與 tutee 的 frame 都明確宣告自己沒有答案，只有它宣告了一個
+      可供比對的參照物。提示詞那一側修了，孩子真正讀到的那一句沒有。
+      而 frame 是對話卡的第一則訊息，也印在首頁的條件卡上，每換一題重印。
+      維持兩句、字數不變。 */
+   frame:'我也在讀這一篇。我們各自說說自己是怎麼讀的，我想聽你的。',
    mech:'分享觀點、共構理解',
    note:'處理負擔分散於人機之間。'},
   {id:'control', name:'無對象', en:'System-scaffold control', cls:'', mark:'◇',
@@ -2316,30 +2337,47 @@ const SENT_NEG = ['不懂', '不會', '好難', '看不懂', '卡住', '亂', '�
 const SENT_NEG_MARK = ['不', '沒', '別', '無法'];
 const SENT_INTENS = ['很', '超', '非常', '好', '真的', '完全', '太'];
 
+/* 一次掃過全文，每個位置只取最長的一個詞條，同一詞條最多計兩次。
+   原本是兩個各自獨立的 indexOf 迴圈，三個後果都會直接改變 POS／NEG 的編碼：
+
+   （一）反諷式漏判：否定詞的檢查只寫在正向那一圈，負向那一圈沒有。
+         「沒錯」「不錯」都會命中 SENT_NEG 的「錯」而拿到 −1——在國小
+         學童的對話裡這兩個詞幾乎都是肯定，而且正好是「懂了」之後最常
+         出現的說法，也就是被誤判成負向的地方，正是我們最想量到正向的地方。
+
+   （二）重疊詞條重複計數：「看不懂」同時命中「看不懂」與「不懂」得 −2，
+         「好煩」同時命中「好煩」與「煩」得 −2，而「卡住」只有 −1。
+         詞典寫得愈細的情緒，分數愈重，權重來自詞條長度而不是強度。
+
+   （三）疊字灌滿量表：「哈」是單字詞條且不限次數，「哈哈哈」＝ +3，
+         除以 3 之後正好是 +1.0，一個語助詞就頂到量表上限，並在 ENA
+         裡翻成一個 POS 編碼。
+
+   三者都與條件無關但與孩子的語言習慣有關，會被讀成處遇效果。 */
 function sentimentOf(text){
   const t = String(text || '');
-  let score = 0, hits = [];
-  SENT_POS.forEach(function(w){
-    let i = t.indexOf(w);
-    while (i >= 0){
-      let v = 1;
-      const pre = t.slice(Math.max(0, i - 2), i);
-      if (SENT_NEG_MARK.some(function(n){ return pre.indexOf(n) >= 0; })) v = -1;
-      if (SENT_INTENS.some(function(n){ return pre.indexOf(n) >= 0; })) v *= 1.5;
-      score += v; hits.push((v > 0 ? '+' : '−') + w);
-      i = t.indexOf(w, i + w.length);
+  /* 長詞優先，才能讓「看不懂」蓋掉「不懂」、「對耶」蓋掉「耶」 */
+  const LEX = SENT_POS.map(function(w){ return {w: w, s: 1}; })
+    .concat(SENT_NEG.map(function(w){ return {w: w, s: -1}; }))
+    .sort(function(a, b){ return b.w.length - a.w.length; });
+  let score = 0; const hits = []; const seen = {};
+  for (let i = 0; i < t.length; ){
+    let m = null;
+    for (let k = 0; k < LEX.length; k++){
+      if (t.startsWith(LEX[k].w, i)){ m = LEX[k]; break; }
     }
-  });
-  SENT_NEG.forEach(function(w){
-    let i = t.indexOf(w);
-    while (i >= 0){
-      let v = -1;
+    if (!m){ i++; continue; }
+    const n = (seen[m.w] || 0) + 1;
+    seen[m.w] = n;
+    if (n <= 2){                       /* 同一詞條最多算兩次 */
       const pre = t.slice(Math.max(0, i - 2), i);
-      if (SENT_INTENS.some(function(n){ return pre.indexOf(n) >= 0; })) v *= 1.5;
-      score += v; hits.push('−' + w);
-      i = t.indexOf(w, i + w.length);
+      let v = m.s;
+      if (SENT_NEG_MARK.some(function(x){ return pre.indexOf(x) >= 0; })) v = -v;
+      if (SENT_INTENS.some(function(x){ return pre.indexOf(x) >= 0; })) v *= 1.5;
+      score += v; hits.push((v > 0 ? '+' : '−') + m.w);
     }
-  });
+    i += m.w.length;
+  }
   const norm = Math.max(-1, Math.min(1, score / 3));
   return {score: norm, hits: hits,
           label: norm > 0.2 ? '正向' : (norm < -0.2 ? '負向' : '中性')};
@@ -3720,6 +3758,7 @@ function loadState(){
         if (responsesMatchKey(s)){
           /* 接上磁碟上的版次，這個分頁之後寫出的版次才會比它大 */
           STATE_REV = s.rev || 0;
+          migrateState(s);
           return s;
         }
         console.warn('[KAIROS] 作答紀錄與現行題本的答案鍵不一致，已重新產生示範資料。');
@@ -3728,6 +3767,47 @@ function loadState(){
   } catch (e) { /* 讀不到就重新產生示範資料 */ }
   return buildSeedState();
 }
+/* 同版次之內的就地修補。
+   載入器只有兩條路：版次相同就原封不動接受，不同就整份重建示範資料。
+   純文案的更正因此沒有出路——加版次會把已經收到的作答一起洗掉，
+   不加版次則舊資料永遠帶著舊文字。這一支補的是後者：只改欄位、
+   不動任何作答，而且必須是冪等的（每次載入都會跑一遍）。 */
+function migrateState(s){
+  if (!s || !Array.isArray(s.assignments)) return s;
+  /* 第 9 輪：題本名稱在學生端要中性。
+     「閱讀理解 前測」「閱讀理解 評量即學習事件（後測）」是存進 state 的
+     字串，不是常數——只改 30-data.js 的種子，舊資料（也就是真正在用的
+     那一份）永遠不會變。研究標記改掛在 rlabel，教師端與研究端照舊看得到。 */
+  const NEUTRAL = {
+    'a-pre':  {title:'閱讀活動（一）', rlabel:'前測'},
+    'a-post': {title:'閱讀活動（二）', rlabel:'評量即學習事件（後測）'}
+  };
+  s.assignments.forEach(function(a){
+    const n = NEUTRAL[a.id];
+    if (!n) return;
+    /* 老師自己改過標題就不要覆蓋回去；只補 rlabel。 */
+    if (/前測|後測|評量即學習事件/.test(a.title || '')) a.title = n.title;
+    if (!a.rlabel) a.rlabel = n.rlabel;
+  });
+  /* 示範白板上的三句「前測第 N 題」。白板是學生讀的，理由同上。
+     逐字比對再換掉，不做通用的字串取代——老師自己寫的貼文不能被改。 */
+  const DEMO = [
+    ['從前測第 8 題長出來的共同問題：', '從第 8 題長出來的共同問題：'],
+    ['前測第 8 題問「作者在前面埋了哪一個線索」，', '第 8 題問「作者在前面埋了哪一個線索」，'],
+    ['前測第 9 題有不少同學選對了，', '第 9 題有不少同學選對了，']
+  ];
+  function scrub(t){
+    let out = t;
+    DEMO.forEach(function(p){ if (out.indexOf(p[0]) >= 0) out = out.split(p[0]).join(p[1]); });
+    return out;
+  }
+  (s.views || []).forEach(function(v){ if (v.desc) v.desc = scrub(v.desc); });
+  (s.notes || []).forEach(function(n){
+    (n.segs || []).forEach(function(g){ if (g.text) g.text = scrub(g.text); });
+  });
+  return s;
+}
+
 function resetState(){
   try { localStorage.removeItem(STORE_KEY); } catch (e) {}
   state = buildSeedState(); save();
@@ -4550,7 +4630,15 @@ function enaLines(){
                      .sort(function(a, b){ return a.t - b.t; });
     s.forEach(function(e, i){
       const c = {};
-      if (e.type === 'ASK'){
+      /* 發話行的三個編碼（歷程、情緒、援引依據）對兩種發話一起套用。
+         原本 EVID 的前後 ±2 掃描只寫在 ASK 這一支，'N'（無對象組寫在
+         「我的筆記」裡的字）只拿到歷程與情緒。ENA 量的是同一行裡的共現，
+         所以那一條「一邊標題幹、一邊說出自己的讀法」的邊，在對照組的網絡裡
+         結構上不可能出現——不是孩子沒做，是讀取端沒編。
+         對照組是 RQ1 的比較基準，這個缺口會被讀成「有 AI 才會回到文本」。
+         標記事件本身在兩組都照樣獨立成行（下面的 e.code === 'M'），
+         差別只在共現，所以補上這一支不會重複計數。 */
+      if (e.type === 'ASK' || e.code === 'N'){
         c[codeUtteranceProcess(e.text || '')] = 1;
         const sm = sentimentOf(e.text || '');
         if (sm.score > 0.2) c.POS = 1;
@@ -4566,11 +4654,6 @@ function enaLines(){
         for (let j = Math.max(0, i - 3); j < i; j++){
           if (s[j].code === 'A' || String(s[j].code).indexOf('Q') === 0) c.REV = 1;
         }
-      } else if (e.code === 'N'){
-        const sm = sentimentOf(e.text || '');
-        c[codeUtteranceProcess(e.text || '')] = 1;
-        if (sm.score > 0.2) c.POS = 1;
-        if (sm.score < -0.2) c.NEG = 1;
       }
       const on = Object.keys(c);
       if (on.length) lines.push({sid:e.sid, cond:e.cond, iid:e.iid, seq:k, i:i, codes:on});
@@ -6536,13 +6619,22 @@ async function runAI(outId, fn, force){
    rerouteInRender 會在轉向之後覆寫 ROUTE，所以這一支放在 render() 結尾、
    讀最終的 ROUTE，標題與畫面永遠是同一頁。
    ========================================================================== */
+/* 教師端與研究端的作業顯示名：學生端的中性名稱 + 研究標記。
+   學生端一律直接用 a.title（見 30-data.js 的 rlabel 註解）。 */
+function assignmentLabel(a){
+  if (!a) return '';
+  return a.title + (a.rlabel ? '（' + a.rlabel + '）' : '');
+}
+
 const PAGE_TITLES = {
   teacher:'教師後台', create:'建立派題', assign:'派題分析',
   kb:'知識建構空間', note:'貼文', synth:'想法串綜整',
   dash:'雙軌評量儀表板', bank:'文本與題庫', settings:'系統設定',
   about:'名詞說明', unlock:'切換身分', research:'研究控制台',
-  aal:'評量即學習事件', inspect:'唯讀重播',
-  student:'我的作業', quiz:'前測作答', result:'我的成績', mygrowth:'我的學習軌跡'
+  /* 學生端的分頁標題也不可以印研究構念（見 30-data.js 的 rlabel 註解）。
+     唯讀重播只有教師走得到，維持原名。 */
+  aal:'閱讀活動作答', inspect:'唯讀重播',
+  student:'我的作業', quiz:'閱讀活動作答', result:'我的成績', mygrowth:'我的學習軌跡'
 };
 function pageTitleFor(route){
   const r = route || ROUTE;
@@ -6619,7 +6711,7 @@ function viewTeacher(){
       const d = diagnose(state, a.id);
       const done = d ? d.done.length : 0;
       const fl = d && d.ready ? d.flagged.length : '—';
-      return '<tr><td><a href="#/assign/' + a.id + '">' + esc(a.title) + '</a><div class="muted small">' + esc(a.desc || '') + '</div></td>' +
+      return '<tr><td><a href="#/assign/' + a.id + '">' + esc(assignmentLabel(a)) + '</a><div class="muted small">' + esc(a.desc || '') + '</div></td>' +
         '<td><span class="pill">' + (a.phase === 'post' ? '共構後測' : '前測') + '</span></td>' +
         '<td class="n">' + a.itemIds.length + '</td><td class="n">' + done + ' / ' + assignmentRoster(a).length + '</td>' +
         '<td class="n">' + fl + '</td><td class="num small">' + fmtDate(a.createdAt) + '</td>' +
@@ -6747,7 +6839,7 @@ function viewAssign(aid, tab){
   else body = tabAI(diag);
 
   const k = currentClass();
-  return sectionHead(a.title, (a.phase === 'post' ? '共構後測' : '前測') + '　·　' +
+  return sectionHead(assignmentLabel(a), (a.phase === 'post' ? '共構後測' : '前測') + '　·　' +
       '四班共同校準　·　' + diag.done.length + ' / ' + diag.roster.length + ' 位已交' +
       '（本班 ' + k.studentIds.length + ' 人）　·　' + diag.items.length + ' 道選擇題',
       '<a class="btn" href="#/teacher">回教師後台</a>') +
@@ -7310,9 +7402,20 @@ function kbGate(){
     '如果你先看到別人怎麼想，就很難知道自己本來會怎麼讀了。</p>' +
     '<p class="muted small">還沒交的有 ' + pend.length + ' 份。</p>' +
     '<div class="row" style="margin-top:14px">' +
+    /* 按鈕文字要跟首頁作業卡說同一件事。這裡原本一律印「開始這節課」，
+       而寫到一半、甚至全部寫完只差交卷的孩子，在首頁讀到的是
+       〈接著上次繼續〉或〈去交卷〉——同一個狀態三個入口三種說法，
+       而「開始」讀起來像要從頭來過。 */
     pend.map(function(a){
+      const n = a.itemIds.length;
+      const dn = (a.aal && typeof aalDraftProgress === 'function')
+        ? (aalDraftProgress(a.id, me.id) || {}).n
+        : (typeof quizDraftProgress === 'function' ? (quizDraftProgress(a.id, me.id) || {}).n : 0);
+      const cta = (dn >= n && n > 0) ? '去交卷 →'
+                : dn ? '接著上次繼續 →'
+                : (a.aal ? '開始這節課 →' : '開始作答 →');
       return '<a class="btn primary" href="#/' + (a.aal ? 'aal' : 'quiz') + '/' + a.id + '">' +
-        esc(a.title) + '　' + (a.aal ? '開始這節課 →' : '開始作答 →') + '</a>';
+        esc(a.title) + '　' + cta + '</a>';
     }).join('') +
     '<a class="btn" href="#/student">回我的作業</a></div></div>';
 }
@@ -8329,9 +8432,16 @@ function viewStudent(){
           /* 課後問卷還沒送出時，這張卡片本身就不能印分數——
              「已完成 · 選擇題答對 12」是一次績效回饋，而它就擺在
              「去填課後問卷」的旁邊（見 viewResult 的門檻說明）。 */
+          /* 四種狀態，不是三種。第四種是「全部寫完但沒交卷」——用
+             〈先離開（進度會保留）〉離開的孩子回來看到「寫到一半 · 已寫
+             16 / 16 題」，按鈕寫〈接著上次繼續〉，整張卡沒有一個字提到
+             還差一個〈交卷〉動作。他很可能就這樣走了，而那份作答永遠
+             停在草稿：後測 θ 是 RQ1 的主要依變項，缺答不進 Rasch。 */
           (done ? (hideScore
                     ? '<span class="pill q1"><span class="dot"></span>已完成</span>'
                     : '<span class="pill q1"><span class="dot"></span>已完成 · 選擇題答對 ' + right + '</span>')
+                : (draftN >= n && n > 0)
+                  ? '<span class="pill q2"><span class="dot"></span>都寫完了，還沒交卷</span>'
                 : draftN ? '<span class="pill q4"><span class="dot"></span>寫到一半 · 已寫 ' + draftN + ' / ' + n + ' 題</span>'
                 : '<span class="pill">尚未作答</span>') +
         '</div></div>' +
@@ -8352,7 +8462,9 @@ function viewStudent(){
                  這兩顆就在同一張畫面上，而按錯的代價是永久的。 */
               ? '<span class="muted small">' + (surveyOf(me.id, 'pre') ? '要先做前面那一份' : '要先填課前問卷') + '</span>'
               : '<a class="btn primary" href="#/' + (a.aal ? 'aal' : 'quiz') + '/' + a.id + '">' +
-                (draftN ? '接著上次繼續 →' : (a.aal ? '開始這節課 →' : '開始作答 →')) + '</a>')) + '</div>' +
+                ((draftN >= n && n > 0) ? '去交卷 →'
+                  : draftN ? '接著上次繼續 →'
+                  : (a.aal ? '開始這節課 →' : '開始作答 →')) + '</a>')) + '</div>' +
         '</div></div></div>';
     }).join('') + '</div>' +
     '<div class="card" style="margin-top:16px"><div class="card-p">' +
@@ -8639,7 +8751,7 @@ function viewQuiz(aid){
            是只打在鍵盤使用者身上的系統性失分。而前測 θ 是 ANCOVA 的共變數，
            又沒有補交路徑。逐字用同一句，三處就一致了。 */
         '<p class="muted small" style="margin-top:6px">直接點你要的答案就可以。' +
-        '用鍵盤的話，Tab 進到這一組，上下方向鍵移到哪一格就是選哪一格；想換答案再按方向鍵移過去就好。</p>' +
+        '用鍵盤的話，Tab 進到這一組會先停在第 1 格、但還沒選它：要選第 1 格請按空白鍵，其他格用方向鍵移過去就會選到；想換答案再按方向鍵移就好。</p>' +
         '</div></div>';
   }
 }
@@ -9170,26 +9282,18 @@ function initPads(){
          就是愈來愈小、愈來愈細的字，而他無從復原。
          改成：w0/h0 記下「這些座標是在多大的板子上寫的」，之後永遠不動。 */
       if (p && !p.w0){ p.w0 = w; p.h0 = h; }
-      /* 書寫座標系必須涵蓋「現在寫得到的每一個點」。
-         k = min(w/w0, h/h0) 是單一等比因子，但畫布的長寬比並不固定
-         （width:100% 由版面決定、height:11rem 跟著 --fs 走），取 min 之後
-         必有一軸的可寫範圍嚴格大於 w0／h0：字級 100%→175% 時寬度不變、
-         k=1，y 寫得到 385 而 h0 還是 220；橫轉直 k=0.733，y 寫得到 300。
-         而 padPayload 記 w0／h0、strokesSvg 的 viewBox 就是 0 0 w0 h0
-         （svg 預設 overflow:hidden），那些點在教師評閱、學生成績頁、
-         唯讀重播與匯出檔全部被裁掉——孩子寫的時候畫布上看得到，
-         所以他不會舉手；老師拿到一張缺了下半截的圖，只能給低分。
-         盒子只長不縮：長到涵蓋當下可寫範圍就停（一步到不動點），
-         座標仍然永遠不動，而 k 對同一個盒子仍是可逆的。
-         代價是「用過比較高的板子之後回到矮的」會整體縮小顯示——
-         那是誠實的：內容確實比視窗高，縮到看得完才對，總比裁掉好。 */
-      if (p && p.w0 && p.h0){
-        const k0 = Math.min(w / p.w0, h / p.h0);
-        if (isFinite(k0) && k0 > 0){
-          p.w0 = Math.max(p.w0, w / k0);
-          p.h0 = Math.max(p.h0, h / k0);
-        }
-      }
+      /* 書寫座標系依「實際落下的墨水」長大，不是依「現在寫得到的範圍」。
+         這兩者差很多：畫布高度是 CSS 11rem（跟著 --fs）、寬度跟著版面，
+         長寬比一變，「可寫範圍」在那一軸就超出盒子。若依可寫範圍成長，
+         交替改字級會棘輪：100%→175% 時 k0=1、h0 由 220 長成 385；
+         再回 100% 時 k0=0.571、w0 由 960 長成 1680，padScale 從 1 掉到
+         0.571，第二次來回掉到 0.327——**就算孩子一筆都沒有往下寫**。
+         而 padPayload 把 w0／h0 當 viewBox 交出去，評閱者拿到的就是縮在
+         左上角、筆畫愈來愈細的字。「一步到不動點」只對單向變化成立。
+         依墨水成長就沒有這個問題：沒寫新東西，盒子不動、k 精確回到原值；
+         真的往下寫了，盒子在那一刻就長到涵蓋它（此時 k 由較窄的那一軸
+         決定，不會突然縮）。裁切的風險已經由 padPayload 的 used 夾擠兜底。 */
+      if (p) padGrowToInk(id);
       /* 筆畫是 CSS px 絕對座標。原本 resize 只重設畫布尺寸就直接重畫舊座標，
          平板由橫轉直（約 1024→768）之後，寫在右半邊的字整片落在畫布外——
          資料還在、畫面沒了，而孩子最可能的反應是按〈清空〉整題重寫。
@@ -9277,6 +9381,10 @@ function initPads(){
    · 解除「還沒寫完」的紅框並更新進度——原本 aalClearMissing 只掛在選項與
      textarea 上，在畫布上寫再多都消不掉那個紅字。 */
 function padChanged(id){
+  /* 剛寫完的那一筆可能落在盒子外（放大的板子上寫得到）——在這裡就把盒子
+     撐到涵蓋它，而不是等下一次 resize。這樣草稿與交卷帶出去的 w0／h0
+     永遠含得住自己的墨水。 */
+  if (typeof padGrowToInk === 'function') padGrowToInk(id);
   if (QUIZ && !/^aal-/.test(id)){ QUIZ.strokes[id] = PADS[id].strokes; quizSaveSoon(); }
   if (typeof quizProgressUpdate === 'function' && QUIZ) quizProgressUpdate();
   if (/^aal-/.test(id)){
@@ -9310,6 +9418,23 @@ function padChanged(id){
    他自己的筆跡也應該跟著大。
    關鍵是這個因子每次都從 w0／h0 重算，不會累積：
    橫→直→橫、100%→175%→100% 都會精確回到原來的樣子。 */
+/* 把書寫座標系撐到涵蓋所有已經落下的墨水。只長不縮。
+   在兩個時機呼叫：size()（版面／字級變動）與 padChanged()（剛寫完一筆）。
+   依墨水而不是依可寫範圍成長，是為了避免交替改字級把盒子棘輪式撐大——
+   詳見 size() 裡那一段。 */
+function padGrowToInk(id){
+  const p = PADS[id];
+  if (!p || !p.w0 || !p.h0) return;
+  let mx = 0, my = 0;
+  (p.strokes || []).forEach(function(s){
+    (s.pts || []).forEach(function(pt){
+      if (pt[0] > mx) mx = pt[0];
+      if (pt[1] > my) my = pt[1];
+    });
+  });
+  if (mx > p.w0) p.w0 = mx;
+  if (my > p.h0) p.h0 = my;
+}
 function padScale(id){
   const p = PADS[id];
   if (!p || !p.cv) return 1;
@@ -9482,7 +9607,7 @@ function viewSettings(){
         return '<button type="button" class="btn sm' + (on ? ' primary' : '') +
           '" data-act="toggle-key" data-id="' + a.id + '" aria-pressed="' + on + '">' +
           '<span aria-hidden="true">' + (on ? '☑' : '☐') + '</span>' +
-          esc(a.title) + '　' + (on ? '已開放' : '尚未開放') + '</button>';
+          esc(assignmentLabel(a)) + '　' + (on ? '已開放' : '尚未開放') + '</button>';
       }).join('') + '</div>' +
       '<span class="muted small">按下去，這份派題的逐題答案就對已交卷的學生打開，' +
       '<strong>知識建構空間也會一起打開</strong>（見 kbLocked 的第三道門）。' +
@@ -10114,7 +10239,10 @@ function aalStudentTurns(iid){
 }
 function aalTele(iid){
   return AAL.tele[iid] = AAL.tele[iid] || {firstKeyLatency:null, keystrokes:0, deletions:0,
-    longPauses:0, lastKey:null, enter:Date.now(), prevLen:0, revisits:0};
+    longPauses:0, lastKey:null, enter:Date.now(), prevLen:0, revisits:0,
+    /* 筆記自己的按鍵時間。對照組整節課只在這裡打字，而作答框的 lastKey
+       對 14 題選擇題永遠是 null——兩者不可以共用一個欄位。 */
+    noteFirstKey:null, noteLastKey:null};
 }
 
 /* 進出題目的邊界。這一支同時修掉兩個結構性失效的匯出變項：
@@ -10283,7 +10411,11 @@ function viewAaL(aid){
       '用鍵盤的話，Tab 停在句子上，按 Enter 或空白鍵就是標記；' +
       '想單純往下讀，把焦點停在文章區塊本身再用方向鍵捲。' +
       '用報讀器的話，這一篇在下面還有一份不含按鈕的「連續閱讀版」，' +
-      '和前測那一份一樣是整段的文章。' +
+      /* 原本是「和前測那一份一樣是整段的文章。」。這一句印在孩子正在作答的
+         後測頁面上，主動告訴他這兩份是同一件事的第一次與第二次——
+         與 30-data.js 把題本改成中性名稱是同一個理由，改在那裡卻沒改在這裡
+         等於白改。說明「連續閱讀版」是什麼，不必提另一份。 */
+      '是整段沒有按鈕的文章。' +
       '標記不會影響你的分數，換題也不會消失；每一篇文章的標記分開記。' +
       '老師之後可以看到你標了哪幾句，這是為了知道你怎麼讀。</p>' +
       /* 連續閱讀版。前測 viewQuiz 把同樣這兩篇直接輸出成 <p>，報讀器讀到的是
@@ -10344,7 +10476,7 @@ function viewAaL(aid){
              講的是他做不到的事，而且完全沒提可以用點的。
              點選寫在前面（那是多數孩子的路徑），鍵盤寫在後面。 */
           '<p class="muted small" style="margin-top:6px">直接點你要的答案就可以。' +
-          '用鍵盤的話，Tab 進到這一組，上下方向鍵移到哪一格就是選哪一格；想換答案再按方向鍵移過去就好。</p>'
+          '用鍵盤的話，Tab 進到這一組會先停在第 1 格、但還沒選它：要選第 1 格請按空白鍵，其他格用方向鍵移過去就會選到；想換答案再按方向鍵移就好。</p>'
         /* 非選題的作答通道，前後測必須一致。
            前測（走 viewQuiz）的兩題非選有 textarea ＋ 手寫板＋筆色／筆寬／
            復原／清空，後測這一支卻只有 textarea——而 aalSubmit 第 879 行
@@ -10360,9 +10492,16 @@ function viewAaL(aid){
            用報讀器作答的孩子要先把題幹背下來再切到焦點模式打字－－
            這是作答負荷，不是閱讀理解負荷，而 CR 是論述層次評定的來源，
            前後測同兩題做 Δ 比較，每次各吃一次這個負荷。 */
-        : '<div class="field"><label id="crLbl" for="crText">寫出你的答案，並說明你的理由</label>' +
-          '<textarea id="crText" aria-labelledby="aalStem crLbl" data-act="aal-text" rows="7" style="min-height:11rem" ' +
-          'placeholder="先寫你的看法，再寫你是從文章哪一段看出來的">' +
+        /* 與前測逐字對齊：同兩題非選、同一份題本，兩次施測的作答介面不可以
+           不一樣。原本後測的 label 是「寫出你的答案，並說明你的理由」、
+           rows=7、min-height:11rem，而且多一句 placeholder
+           「先寫你的看法，再寫你是從文章哪一段看出來的」——那是一句明示的
+           閱讀策略提示，只有後測拿得到，而 CR 是論述層次評定與前後測 Δ 的
+           來源。作答框大 22% 也一樣：可見行數會影響書寫量。
+           前測那一句不能補（補上去就污染基線），所以拿掉後測這一句。
+           規格由 zz-debug 的 assertCrParity 釘住。 */
+        : '<div class="field"><label id="crLbl" for="crText">請寫出你的解題過程與說明</label>' +
+          '<textarea id="crText" aria-labelledby="aalStem crLbl" data-act="aal-text" rows="6" style="min-height:9rem">' +
           esc(AAL.texts[it.id] || '') + '</textarea></div>' +
           '<div class="field" style="margin-top:10px">' +
           '<label for="aalPad-' + esc(it.id) + '">也可以手寫：先按下面的〈開始手寫〉，再用手指或筆寫（老師評閱時看得到）</label>' +
@@ -10531,6 +10670,27 @@ const OPTION_DEBOUNCE_MS = 350;
 function aalClearMissing(){
   const card = document.getElementById('aalAnswer');
   if (card) card.classList.remove('missing');
+  /* 這一題補好了就從清單裡拿掉，不然下一次重繪紅框又回來。 */
+  if (AAL && AAL._miss && AAL._miss.length){
+    AAL._miss = AAL._miss.filter(function(i){ return i !== AAL.idx; });
+    if (typeof aalPaintMiss === 'function') aalPaintMiss();
+  }
+}
+
+/* 缺答紅框與「還有幾題沒寫完」跨重繪重掛。形狀與問卷那一側的
+   surveyPaintMiss() 相同，掛在 render() 的同一個呼叫點。 */
+function aalPaintMiss(){
+  const bar = document.getElementById('aalMissAlert');
+  if (bar) bar.remove();
+  if (!AAL || !AAL._miss || !AAL._miss.length) return;
+  const card = document.getElementById('aalAnswer');
+  if (card && AAL._miss.indexOf(AAL.idx) >= 0) card.classList.add('missing');
+  const nav = document.getElementById('aalNav');
+  if (!nav || document.getElementById('aalMissAlert')) return;
+  nav.insertAdjacentHTML('afterend',
+    '<p id="aalMissAlert" role="alert" class="small" style="margin:8px 0 0;color:var(--crit);font-weight:600">' +
+    '還有 ' + AAL._miss.length + ' 題沒寫完：' +
+    AAL._miss.map(function(i){ return '第 ' + (i + 1) + ' 題'; }).join('、') + '</p>');
 }
 
 function aalPick(k){
@@ -10671,7 +10831,11 @@ function flushNoteFor(it){
      密度不動——仍然是每題每次造訪最多一筆（見上面的 _noteWritten 守門），
      不讓對照組的分析單位數超過三個 AI 條件。 */
   const te = AAL.tele[it.id];
-  const ts = (te && te.lastKey) || Date.now();
+  /* 先讀筆記自己的最後按鍵（noteLastKey），再退回作答框的 lastKey。
+     反過來的話，兩題非選會拿到「作答框」的最後按鍵——那與筆記無關；
+     而 14 題選擇題根本沒有作答框，lastKey 恆為 null，時間戳整批退回
+     flush 的那一刻，'N' 又變回結構性排在序列最後。 */
+  const ts = (te && (te.noteLastKey || te.lastKey)) || Date.now();
   /* sent 與 ucode 要在寫入端就算好。ASK 事件一直都帶著它們，NOTE 沒有——
      於是兩個匯出檔各自把對照組丟掉了一半：toENACsv 查不到 dialog 紀錄，
      四個歷程欄整列輸出 0；toTelemetryCsv 只認 e.type==='ASK'，turns 恆為 0、
@@ -10764,10 +10928,22 @@ async function aalSay(){
   aalSay._ac = ac;
   if (chat){
     chat.insertAdjacentHTML('beforeend',
-      '<div class="msg agent" id="aalThinking">' + esc(condition(AAL.cond).name) + '正在想…' +
-      (ac ? ' <button class="btn sm quiet" data-act="aal-say-cancel">不等了</button>' : '') +
-      '</div>');
+      '<div class="msg agent" id="aalThinking">' + esc(condition(AAL.cond).name) + '正在想…</div>');
     chat.scrollTop = chat.scrollHeight;
+  }
+  /* 〈不等了〉掛在輸入列，不掛在對話串裡。原本它是 #aalThinking 的子節點，
+     而 #aalThinking 被 append 進 #aalChat——那是 role="log" aria-live="polite"
+     aria-relevant="additions" 的區域：新增的節點會被整塊唸出來，於是報讀器
+     使用者聽到的是「老師小葵正在想… 不等了 按鈕」，「不等了」讀起來像夥伴
+     說的第三句話。對話串的內容就是 RQ4 的語料，孩子（尤其是靠聽的孩子）
+     據以判斷夥伴說了什麼；把一顆控制項放進去，等於在三個 AI 條件的語料裡
+     各加了一句對照組不會有的話。
+     控制項搬到輸入列（送出鈕旁），與它實際控制的東西放在一起，
+     也讓 Tab 順序從輸入框 → 送出 → 不等了，不必先進對話串。 */
+  const bar = sendBtn && sendBtn.parentNode;
+  if (ac && bar && !document.getElementById('aalCancelWait')){
+    sendBtn.insertAdjacentHTML('afterend',
+      '<button class="btn sm quiet" id="aalCancelWait" data-act="aal-say-cancel">不等了</button>');
   }
   aalSave();
 
@@ -10889,6 +11065,16 @@ async function aalSay(){
   /* 拿掉「正在想…」、append 回覆、把輸入框交還給學生 */
   const think = document.getElementById('aalThinking');
   if (think) think.remove();
+  /* 一起收掉輸入列上的〈不等了〉。移除一個握有焦點的節點會把焦點丟回
+     <body>，而下面那道 focusIsOurs 只認 box 與 sendBtn，收不回來——
+     孩子（回覆在他 Tab 到這顆鈕的時候抵達）得從頁首再穿過三四十顆句子鈕。
+     先把焦點交回輸入框再移除。 */
+  const cancelBtn = document.getElementById('aalCancelWait');
+  if (cancelBtn){
+    if (document.activeElement === cancelBtn && box)
+      try { box.focus({preventScroll:true}); } catch (e) {}
+    cancelBtn.remove();
+  }
   if (chat){
     chat.insertAdjacentHTML('beforeend', '<div class="msg agent"><b>' +
       esc(condition(AAL.cond).name) + '</b>' + esc(reply.text) + '</div>');
@@ -11002,12 +11188,16 @@ function aalSubmit(){
   function onCancelMissing(){
     /* 取消不是什麼都不做——把他帶到第一題沒寫完的地方 */
     if (!AAL) return;
+    /* 記在 AAL 上，紅框才跨得過重繪。原本 missIdx 只是這一支的區域變數，
+       走一次 render()（按上一題／下一題、調字級、按高對比、跨分頁 a11y
+       同步）紅框就消失而且不會再回來；而作答頁只有上一題／下一題、
+       沒有跳題、也沒有逐題完成狀態，他沒有第二個線索找得回那一題。 */
+    AAL._miss = missIdx.slice();
     AAL.idx = missIdx[0];
     aalSave();
-    render();
+    render();          // render 尾段會呼叫 aalPaintMiss()
     const ans = document.getElementById('aalAnswer');
     if (ans){
-      ans.classList.add('missing');
       ans.focus({preventScroll:true});
       ans.scrollIntoView({block:'start'});
     }
@@ -11461,7 +11651,8 @@ function viewSurvey(phase, page){
       s.items.map(function(txt, i){
         const key = s.key + '_' + i;
         const no = s.from + i + 1;
-        return '<div class="likert"><div class="q" id="q_' + key + '">' + no + '. ' + esc(txt) + '</div>' +
+        /* tabindex="-1"：缺答救援把焦點放在題幹上，不放在任何一格上（見 surveyPaintMiss）。 */
+        return '<div class="likert"><div class="q" id="q_' + key + '" tabindex="-1">' + no + '. ' + esc(txt) + '</div>' +
           /* 原生 radio：拿回語意與方向鍵行為，Tab 停留點是「一題」而不是「一格」 */
           '<div class="scale" role="radiogroup" aria-labelledby="q_' + key + '">' +
           new Array(s.scale.n).fill(0).map(function(_, v){
@@ -11519,7 +11710,7 @@ function viewSurvey(phase, page){
         /* 量尺與作答頁的選項是同一個 radiogroup 形狀，第一次填時
            行為完全一樣：Tab 進來會停在第一格但不勾選它。
            兩處的說明也要一致：先講點選，再講鍵盤。 */
-        '直接點你要的那一格就可以。用鍵盤的話，Tab 進到這一組，上下方向鍵移到哪一格就是選哪一格；想換答案再按方向鍵移過去就好。</p></div>'
+        '直接點你要的那一格就可以。用鍵盤的話，Tab 進到這一組會先停在第 1 格、但還沒選它：要選第 1 格請按空白鍵，其他格用方向鍵移過去就會選到；想換答案再按方向鍵移就好。</p></div>'
       : '') +
     (scaleChanged
       ? '<div class="card card-p" style="margin-bottom:14px;border-left:3px solid var(--accent)">' +
@@ -11543,16 +11734,40 @@ function viewSurvey(phase, page){
          〈送出問卷〉原本只長在最後一段，而缺答救援會把孩子丟到第一段缺答的
          頁碼——三個 AI 條件的後測有 12 段，缺答通常落在前幾段，他補完那一題
          要連按 9–11 次〈下一段〉才回得到送出鈕，中間沒有任何段落索引可跳。 */
-      '<span class="row">' +
-      (!last && answered === total
-        ? '<button class="btn primary" data-act="sv-submit" data-id="' + phase + '">填完了，送出問卷</button>'
-        : '') +
-      (last
-        ? '<button class="btn primary" data-act="sv-submit" data-id="' + phase + '">送出問卷</button>'
-        : '<button class="btn' + (answered === total ? '' : ' primary') +
-          '" data-act="sv-page" data-v="' + (SURVEY.page + 1) + '">下一段 →</button>') +
-      '</span>' +
+      /* 這一格由 surveyPaintNav() 就地重寫。sv-pick 依設計不重繪（為了不丟
+         焦點），所以「全部填完就一律畫出送出鈕」原本永遠不會在孩子按下最後
+         一格的那一刻生效：抬頭就地跳成「47 / 47」、紅框與紅字都消失，
+         畫面上卻只有〈上一段〉與一顆仍掛著 .primary 的〈下一段〉。
+         下課鐘響時最合理的解讀是「我填完了」然後走人——這份後測問卷從此
+         停在草稿，五項自陳依變項、SUS 與三題操弄檢核全部拿不到。 */
+      '<span class="row" id="svNavRight">' + surveyNavHtml(phase, last) + '</span>' +
     '</div>';
+}
+
+/* 問卷頁尾右半邊。依當下的 SURVEY.resp 現算，不吃 viewSurvey 的閉包變數——
+   sv-pick 就地更新之後要能重寫它。 */
+function surveyNavHtml(phase, last){
+  if (!SURVEY) return '';
+  const cond = conditionOfStudent(SURVEY.sid);
+  const keys = surveyKeys(phase, cond);
+  const total = keys.length;
+  const answered = keys.filter(function(k){ return SURVEY.resp[k]; }).length;
+  return (!last && answered === total
+      ? '<button class="btn primary" data-act="sv-submit" data-id="' + phase + '">填完了，送出問卷</button>'
+      : '') +
+    (last
+      ? '<button class="btn primary" data-act="sv-submit" data-id="' + phase + '">送出問卷</button>'
+      : '<button class="btn' + (answered === total ? '' : ' primary') +
+        '" data-act="sv-page" data-v="' + (SURVEY.page + 1) + '">下一段 →</button>');
+}
+function surveyPaintNav(){
+  if (!SURVEY) return;
+  const box = document.getElementById('svNavRight');
+  if (!box) return;
+  const secs = surveySections(SURVEY.phase, conditionOfStudent(SURVEY.sid));
+  const html = surveyNavHtml(SURVEY.phase, SURVEY.page === secs.length);
+  /* 只在真的變了才寫，免得每一次點選都重建節點、把焦點或按下狀態弄掉。 */
+  if (box.innerHTML !== html) box.innerHTML = html;
 }
 
 /* 缺答標記要跨重繪存活。原本紅框、aria-invalid 與「這一段還有 N 題沒有選」
@@ -11569,7 +11784,13 @@ function surveyPaintMiss(){
     const row = el.closest('.likert');
     if (row){ row.classList.add('missing'); row.setAttribute('aria-invalid', 'true'); }
     n++;
-    if (!first) first = el;
+    /* 焦點給題幹，不給任何一格。原本回傳的是 el——[data-k] 的第一個命中
+       就是 value 1，也就是「非常不同意」「完全不符合」那一格。聚焦本身
+       不會勾選，但這個焦點是在確認框關掉的那一刻用程式放上去的，孩子的
+       手還在鍵盤上，一個反射的空白鍵就把量尺最負向的那一端送出去，
+       而且系統性地只發生在缺答被退回來的孩子身上（多落在 anx 這一段）。
+       改落在題幹上：報讀器先唸題目，任何一次按鍵都不會直接寫入。 */
+    if (!first) first = (row && row.querySelector('.q')) || el;
   });
   const box = document.getElementById('svMissSlot');
   if (n && box && !document.getElementById('svMissAlert')){
@@ -11759,7 +11980,7 @@ function viewInspect(aid, sid){
     }).join('') + '</select>';
 
   return sectionHead('作答與 AI 互動檢視',
-      esc(a.title) + '　·　與學生當時看到的版面相同，此處為唯讀重播。',
+      esc(assignmentLabel(a)) + '　·　與學生當時看到的版面相同，此處為唯讀重播。',
       '<a class="btn" href="#/assign/' + aid + '/replay">← 回唯讀重播</a>') +
 
     '<div class="card card-p" style="margin-bottom:14px">' +
@@ -12540,7 +12761,7 @@ function rExport(){
       const landed = state.responses.filter(function(r){
         return r.aid === o.aid && r.sid === o.sid && r.choice != null; }).length;
       return '<tr><td>' + esc(userName(o.sid)) + '</td>' +
-        '<td class="small">' + esc((getAssignment(o.aid) || {}).title || o.aid) + '</td>' +
+        '<td class="small">' + esc(assignmentLabel(getAssignment(o.aid)) || o.aid) + '</td>' +
         '<td class="small num">' + fmtDateTime(o.at) + '</td>' +
         '<td class="n">' + nMc + '</td><td class="n">' + nTxt + '</td><td class="n">' + nInk + '</td>' +
         '<td class="n">' + landed + '</td>' +
@@ -12796,6 +13017,13 @@ function render(){
      原本只寫進當下的 DOM，任何一次 render() 都會把它們清掉，
      只剩抬頭「已完成 46 / 共 47 題」——孩子被退回來卻不知道要補哪一題。 */
   if (ROUTE.name === 'survey' && typeof surveyPaintMiss === 'function') surveyPaintMiss();
+  if (ROUTE.name === 'survey' && typeof surveyPaintNav === 'function') surveyPaintNav();
+  /* 作答頁的缺答紅框同樣要跨重繪。原本 missIdx 只是 aalSubmit 的區域變數，
+     走一次 render()（按上一題／下一題、調字級、按高對比、跨分頁 a11y 同步）
+     紅框就消失而且不會再回來——而作答頁只有上一題／下一題，沒有跳題，
+     也沒有逐題完成狀態，孩子沒有第二個線索找得回那一題。
+     問卷那一側早就用 SURVEY._miss + surveyPaintMiss() 修掉了。 */
+  if (ROUTE.name === 'aal' && typeof aalPaintMiss === 'function') aalPaintMiss();
 
   if (!samePage){
     try { window.scrollTo(0, 0); } catch (e) {}
@@ -13844,6 +14072,10 @@ function bindEvents(){
       const d = document.getElementById('svDone');
       if (d) d.textContent = surveyKeys(SURVEY.phase, conditionOfStudent(currentUser().id))
         .filter(function(k2){ return SURVEY.resp[k2]; }).length;
+      /* 抬頭的「47 / 47」就地更新了，頁尾那一排按鈕原本沒有——於是畫面
+         同時說「全部填完」與「沒有任何可以送出的地方」。只重寫右半邊那一格，
+         焦點停在量尺上不會被吃掉。 */
+      if (typeof surveyPaintNav === 'function') surveyPaintNav();
       surveyDraftSave();
       return; }
     if (act === 'search-field'){ KBSEARCH.field = t.value; render(); return; }
@@ -13981,6 +14213,19 @@ function bindEvents(){
     if (act === 'aal-note'){
       const it = aalItem();
       AAL.notes[it.id] = t.value;
+      /* 記下筆記自己的最後按鍵時間。flushNoteFor 用它當 NOTE 事件的時間戳，
+         而 aalTypeTelemetry 全庫只有作答框（aal-text）一個呼叫端——
+         16 題裡的 14 題選擇題根本沒有作答框，tele.lastKey 恆為 null，
+         於是那 14 題的 NOTE 一律退回 flush 的那一刻（換題／交卷／離開路由），
+         第 8 輪「'N' 不再結構性排在序列最後」那條修正對它們從未生效；
+         剩下 2 題非選拿到的則是作答框的最後按鍵，與筆記無關。
+         另開欄位而不是直接呼叫 aalTypeTelemetry：三個 AI 條件的對話輸入框
+         同樣不寫遙測，把筆記字數混進 keystrokes 會造出新的條件不對稱。 */
+      if (!e.isComposing){
+        const te = aalTele(it.id);
+        te.noteLastKey = Date.now();
+        if (te.noteFirstKey == null) te.noteFirstKey = te.noteLastKey;
+      }
       /* 打字期間不再寫 code:'N' 的行為事件（見 flushTypeTelemetry 的說明）：
          那會讓對照組的分析單位密度比三個 AI 組高一到兩個數量級。
          筆記在離開這一題或交卷時整筆寫一次。這裡只負責存草稿。 */

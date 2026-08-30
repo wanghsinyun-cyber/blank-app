@@ -201,9 +201,16 @@ function viewStudent(){
           /* 課後問卷還沒送出時，這張卡片本身就不能印分數——
              「已完成 · 選擇題答對 12」是一次績效回饋，而它就擺在
              「去填課後問卷」的旁邊（見 viewResult 的門檻說明）。 */
+          /* 四種狀態，不是三種。第四種是「全部寫完但沒交卷」——用
+             〈先離開（進度會保留）〉離開的孩子回來看到「寫到一半 · 已寫
+             16 / 16 題」，按鈕寫〈接著上次繼續〉，整張卡沒有一個字提到
+             還差一個〈交卷〉動作。他很可能就這樣走了，而那份作答永遠
+             停在草稿：後測 θ 是 RQ1 的主要依變項，缺答不進 Rasch。 */
           (done ? (hideScore
                     ? '<span class="pill q1"><span class="dot"></span>已完成</span>'
                     : '<span class="pill q1"><span class="dot"></span>已完成 · 選擇題答對 ' + right + '</span>')
+                : (draftN >= n && n > 0)
+                  ? '<span class="pill q2"><span class="dot"></span>都寫完了，還沒交卷</span>'
                 : draftN ? '<span class="pill q4"><span class="dot"></span>寫到一半 · 已寫 ' + draftN + ' / ' + n + ' 題</span>'
                 : '<span class="pill">尚未作答</span>') +
         '</div></div>' +
@@ -224,7 +231,9 @@ function viewStudent(){
                  這兩顆就在同一張畫面上，而按錯的代價是永久的。 */
               ? '<span class="muted small">' + (surveyOf(me.id, 'pre') ? '要先做前面那一份' : '要先填課前問卷') + '</span>'
               : '<a class="btn primary" href="#/' + (a.aal ? 'aal' : 'quiz') + '/' + a.id + '">' +
-                (draftN ? '接著上次繼續 →' : (a.aal ? '開始這節課 →' : '開始作答 →')) + '</a>')) + '</div>' +
+                ((draftN >= n && n > 0) ? '去交卷 →'
+                  : draftN ? '接著上次繼續 →'
+                  : (a.aal ? '開始這節課 →' : '開始作答 →')) + '</a>')) + '</div>' +
         '</div></div></div>';
     }).join('') + '</div>' +
     '<div class="card" style="margin-top:16px"><div class="card-p">' +
@@ -511,7 +520,7 @@ function viewQuiz(aid){
            是只打在鍵盤使用者身上的系統性失分。而前測 θ 是 ANCOVA 的共變數，
            又沒有補交路徑。逐字用同一句，三處就一致了。 */
         '<p class="muted small" style="margin-top:6px">直接點你要的答案就可以。' +
-        '用鍵盤的話，Tab 進到這一組，上下方向鍵移到哪一格就是選哪一格；想換答案再按方向鍵移過去就好。</p>' +
+        '用鍵盤的話，Tab 進到這一組會先停在第 1 格、但還沒選它：要選第 1 格請按空白鍵，其他格用方向鍵移過去就會選到；想換答案再按方向鍵移就好。</p>' +
         '</div></div>';
   }
 }
@@ -1042,26 +1051,18 @@ function initPads(){
          就是愈來愈小、愈來愈細的字，而他無從復原。
          改成：w0/h0 記下「這些座標是在多大的板子上寫的」，之後永遠不動。 */
       if (p && !p.w0){ p.w0 = w; p.h0 = h; }
-      /* 書寫座標系必須涵蓋「現在寫得到的每一個點」。
-         k = min(w/w0, h/h0) 是單一等比因子，但畫布的長寬比並不固定
-         （width:100% 由版面決定、height:11rem 跟著 --fs 走），取 min 之後
-         必有一軸的可寫範圍嚴格大於 w0／h0：字級 100%→175% 時寬度不變、
-         k=1，y 寫得到 385 而 h0 還是 220；橫轉直 k=0.733，y 寫得到 300。
-         而 padPayload 記 w0／h0、strokesSvg 的 viewBox 就是 0 0 w0 h0
-         （svg 預設 overflow:hidden），那些點在教師評閱、學生成績頁、
-         唯讀重播與匯出檔全部被裁掉——孩子寫的時候畫布上看得到，
-         所以他不會舉手；老師拿到一張缺了下半截的圖，只能給低分。
-         盒子只長不縮：長到涵蓋當下可寫範圍就停（一步到不動點），
-         座標仍然永遠不動，而 k 對同一個盒子仍是可逆的。
-         代價是「用過比較高的板子之後回到矮的」會整體縮小顯示——
-         那是誠實的：內容確實比視窗高，縮到看得完才對，總比裁掉好。 */
-      if (p && p.w0 && p.h0){
-        const k0 = Math.min(w / p.w0, h / p.h0);
-        if (isFinite(k0) && k0 > 0){
-          p.w0 = Math.max(p.w0, w / k0);
-          p.h0 = Math.max(p.h0, h / k0);
-        }
-      }
+      /* 書寫座標系依「實際落下的墨水」長大，不是依「現在寫得到的範圍」。
+         這兩者差很多：畫布高度是 CSS 11rem（跟著 --fs）、寬度跟著版面，
+         長寬比一變，「可寫範圍」在那一軸就超出盒子。若依可寫範圍成長，
+         交替改字級會棘輪：100%→175% 時 k0=1、h0 由 220 長成 385；
+         再回 100% 時 k0=0.571、w0 由 960 長成 1680，padScale 從 1 掉到
+         0.571，第二次來回掉到 0.327——**就算孩子一筆都沒有往下寫**。
+         而 padPayload 把 w0／h0 當 viewBox 交出去，評閱者拿到的就是縮在
+         左上角、筆畫愈來愈細的字。「一步到不動點」只對單向變化成立。
+         依墨水成長就沒有這個問題：沒寫新東西，盒子不動、k 精確回到原值；
+         真的往下寫了，盒子在那一刻就長到涵蓋它（此時 k 由較窄的那一軸
+         決定，不會突然縮）。裁切的風險已經由 padPayload 的 used 夾擠兜底。 */
+      if (p) padGrowToInk(id);
       /* 筆畫是 CSS px 絕對座標。原本 resize 只重設畫布尺寸就直接重畫舊座標，
          平板由橫轉直（約 1024→768）之後，寫在右半邊的字整片落在畫布外——
          資料還在、畫面沒了，而孩子最可能的反應是按〈清空〉整題重寫。
@@ -1149,6 +1150,10 @@ function initPads(){
    · 解除「還沒寫完」的紅框並更新進度——原本 aalClearMissing 只掛在選項與
      textarea 上，在畫布上寫再多都消不掉那個紅字。 */
 function padChanged(id){
+  /* 剛寫完的那一筆可能落在盒子外（放大的板子上寫得到）——在這裡就把盒子
+     撐到涵蓋它，而不是等下一次 resize。這樣草稿與交卷帶出去的 w0／h0
+     永遠含得住自己的墨水。 */
+  if (typeof padGrowToInk === 'function') padGrowToInk(id);
   if (QUIZ && !/^aal-/.test(id)){ QUIZ.strokes[id] = PADS[id].strokes; quizSaveSoon(); }
   if (typeof quizProgressUpdate === 'function' && QUIZ) quizProgressUpdate();
   if (/^aal-/.test(id)){
@@ -1182,6 +1187,23 @@ function padChanged(id){
    他自己的筆跡也應該跟著大。
    關鍵是這個因子每次都從 w0／h0 重算，不會累積：
    橫→直→橫、100%→175%→100% 都會精確回到原來的樣子。 */
+/* 把書寫座標系撐到涵蓋所有已經落下的墨水。只長不縮。
+   在兩個時機呼叫：size()（版面／字級變動）與 padChanged()（剛寫完一筆）。
+   依墨水而不是依可寫範圍成長，是為了避免交替改字級把盒子棘輪式撐大——
+   詳見 size() 裡那一段。 */
+function padGrowToInk(id){
+  const p = PADS[id];
+  if (!p || !p.w0 || !p.h0) return;
+  let mx = 0, my = 0;
+  (p.strokes || []).forEach(function(s){
+    (s.pts || []).forEach(function(pt){
+      if (pt[0] > mx) mx = pt[0];
+      if (pt[1] > my) my = pt[1];
+    });
+  });
+  if (mx > p.w0) p.w0 = mx;
+  if (my > p.h0) p.h0 = my;
+}
 function padScale(id){
   const p = PADS[id];
   if (!p || !p.cv) return 1;

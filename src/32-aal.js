@@ -42,7 +42,13 @@ const CONDITIONS = [
       的「那你呢？」立刻把球丟回去，自己的讀法一個字都沒有。
       宣告了「我先講」卻什麼都沒講，對等關係的操弄在第一輪就自我否定。
       改文案而不是改劑量：不承諾先後。 */
-   frame:'我也在讀這一篇。我們各自說說自己是怎麼讀的，再對一下。',
+   /* 結尾原本是「再對一下」。同一支檔案的 PROMPT_ROLE.peer 剛剛才為了
+      同一個詞被改掉——「對一下」在台灣國小教室的固定搭配是「對答案」，
+      tutor 與 tutee 的 frame 都明確宣告自己沒有答案，只有它宣告了一個
+      可供比對的參照物。提示詞那一側修了，孩子真正讀到的那一句沒有。
+      而 frame 是對話卡的第一則訊息，也印在首頁的條件卡上，每換一題重印。
+      維持兩句、字數不變。 */
+   frame:'我也在讀這一篇。我們各自說說自己是怎麼讀的，我想聽你的。',
    mech:'分享觀點、共構理解',
    note:'處理負擔分散於人機之間。'},
   {id:'control', name:'無對象', en:'System-scaffold control', cls:'', mark:'◇',
@@ -588,30 +594,47 @@ const SENT_NEG = ['不懂', '不會', '好難', '看不懂', '卡住', '亂', '�
 const SENT_NEG_MARK = ['不', '沒', '別', '無法'];
 const SENT_INTENS = ['很', '超', '非常', '好', '真的', '完全', '太'];
 
+/* 一次掃過全文，每個位置只取最長的一個詞條，同一詞條最多計兩次。
+   原本是兩個各自獨立的 indexOf 迴圈，三個後果都會直接改變 POS／NEG 的編碼：
+
+   （一）反諷式漏判：否定詞的檢查只寫在正向那一圈，負向那一圈沒有。
+         「沒錯」「不錯」都會命中 SENT_NEG 的「錯」而拿到 −1——在國小
+         學童的對話裡這兩個詞幾乎都是肯定，而且正好是「懂了」之後最常
+         出現的說法，也就是被誤判成負向的地方，正是我們最想量到正向的地方。
+
+   （二）重疊詞條重複計數：「看不懂」同時命中「看不懂」與「不懂」得 −2，
+         「好煩」同時命中「好煩」與「煩」得 −2，而「卡住」只有 −1。
+         詞典寫得愈細的情緒，分數愈重，權重來自詞條長度而不是強度。
+
+   （三）疊字灌滿量表：「哈」是單字詞條且不限次數，「哈哈哈」＝ +3，
+         除以 3 之後正好是 +1.0，一個語助詞就頂到量表上限，並在 ENA
+         裡翻成一個 POS 編碼。
+
+   三者都與條件無關但與孩子的語言習慣有關，會被讀成處遇效果。 */
 function sentimentOf(text){
   const t = String(text || '');
-  let score = 0, hits = [];
-  SENT_POS.forEach(function(w){
-    let i = t.indexOf(w);
-    while (i >= 0){
-      let v = 1;
-      const pre = t.slice(Math.max(0, i - 2), i);
-      if (SENT_NEG_MARK.some(function(n){ return pre.indexOf(n) >= 0; })) v = -1;
-      if (SENT_INTENS.some(function(n){ return pre.indexOf(n) >= 0; })) v *= 1.5;
-      score += v; hits.push((v > 0 ? '+' : '−') + w);
-      i = t.indexOf(w, i + w.length);
+  /* 長詞優先，才能讓「看不懂」蓋掉「不懂」、「對耶」蓋掉「耶」 */
+  const LEX = SENT_POS.map(function(w){ return {w: w, s: 1}; })
+    .concat(SENT_NEG.map(function(w){ return {w: w, s: -1}; }))
+    .sort(function(a, b){ return b.w.length - a.w.length; });
+  let score = 0; const hits = []; const seen = {};
+  for (let i = 0; i < t.length; ){
+    let m = null;
+    for (let k = 0; k < LEX.length; k++){
+      if (t.startsWith(LEX[k].w, i)){ m = LEX[k]; break; }
     }
-  });
-  SENT_NEG.forEach(function(w){
-    let i = t.indexOf(w);
-    while (i >= 0){
-      let v = -1;
+    if (!m){ i++; continue; }
+    const n = (seen[m.w] || 0) + 1;
+    seen[m.w] = n;
+    if (n <= 2){                       /* 同一詞條最多算兩次 */
       const pre = t.slice(Math.max(0, i - 2), i);
-      if (SENT_INTENS.some(function(n){ return pre.indexOf(n) >= 0; })) v *= 1.5;
-      score += v; hits.push('−' + w);
-      i = t.indexOf(w, i + w.length);
+      let v = m.s;
+      if (SENT_NEG_MARK.some(function(x){ return pre.indexOf(x) >= 0; })) v = -v;
+      if (SENT_INTENS.some(function(x){ return pre.indexOf(x) >= 0; })) v *= 1.5;
+      score += v; hits.push((v > 0 ? '+' : '−') + m.w);
     }
-  });
+    i += m.w.length;
+  }
   const norm = Math.max(-1, Math.min(1, score / 3));
   return {score: norm, hits: hits,
           label: norm > 0.2 ? '正向' : (norm < -0.2 ? '負向' : '中性')};

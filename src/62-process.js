@@ -132,7 +132,15 @@ function enaLines(){
                      .sort(function(a, b){ return a.t - b.t; });
     s.forEach(function(e, i){
       const c = {};
-      if (e.type === 'ASK'){
+      /* 發話行的三個編碼（歷程、情緒、援引依據）對兩種發話一起套用。
+         原本 EVID 的前後 ±2 掃描只寫在 ASK 這一支，'N'（無對象組寫在
+         「我的筆記」裡的字）只拿到歷程與情緒。ENA 量的是同一行裡的共現，
+         所以那一條「一邊標題幹、一邊說出自己的讀法」的邊，在對照組的網絡裡
+         結構上不可能出現——不是孩子沒做，是讀取端沒編。
+         對照組是 RQ1 的比較基準，這個缺口會被讀成「有 AI 才會回到文本」。
+         標記事件本身在兩組都照樣獨立成行（下面的 e.code === 'M'），
+         差別只在共現，所以補上這一支不會重複計數。 */
+      if (e.type === 'ASK' || e.code === 'N'){
         c[codeUtteranceProcess(e.text || '')] = 1;
         const sm = sentimentOf(e.text || '');
         if (sm.score > 0.2) c.POS = 1;
@@ -148,11 +156,6 @@ function enaLines(){
         for (let j = Math.max(0, i - 3); j < i; j++){
           if (s[j].code === 'A' || String(s[j].code).indexOf('Q') === 0) c.REV = 1;
         }
-      } else if (e.code === 'N'){
-        const sm = sentimentOf(e.text || '');
-        c[codeUtteranceProcess(e.text || '')] = 1;
-        if (sm.score > 0.2) c.POS = 1;
-        if (sm.score < -0.2) c.NEG = 1;
       }
       const on = Object.keys(c);
       if (on.length) lines.push({sid:e.sid, cond:e.cond, iid:e.iid, seq:k, i:i, codes:on});

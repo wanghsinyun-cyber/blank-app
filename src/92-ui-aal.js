@@ -266,7 +266,10 @@ function aalStudentTurns(iid){
 }
 function aalTele(iid){
   return AAL.tele[iid] = AAL.tele[iid] || {firstKeyLatency:null, keystrokes:0, deletions:0,
-    longPauses:0, lastKey:null, enter:Date.now(), prevLen:0, revisits:0};
+    longPauses:0, lastKey:null, enter:Date.now(), prevLen:0, revisits:0,
+    /* 筆記自己的按鍵時間。對照組整節課只在這裡打字，而作答框的 lastKey
+       對 14 題選擇題永遠是 null——兩者不可以共用一個欄位。 */
+    noteFirstKey:null, noteLastKey:null};
 }
 
 /* 進出題目的邊界。這一支同時修掉兩個結構性失效的匯出變項：
@@ -435,7 +438,11 @@ function viewAaL(aid){
       '用鍵盤的話，Tab 停在句子上，按 Enter 或空白鍵就是標記；' +
       '想單純往下讀，把焦點停在文章區塊本身再用方向鍵捲。' +
       '用報讀器的話，這一篇在下面還有一份不含按鈕的「連續閱讀版」，' +
-      '和前測那一份一樣是整段的文章。' +
+      /* 原本是「和前測那一份一樣是整段的文章。」。這一句印在孩子正在作答的
+         後測頁面上，主動告訴他這兩份是同一件事的第一次與第二次——
+         與 30-data.js 把題本改成中性名稱是同一個理由，改在那裡卻沒改在這裡
+         等於白改。說明「連續閱讀版」是什麼，不必提另一份。 */
+      '是整段沒有按鈕的文章。' +
       '標記不會影響你的分數，換題也不會消失；每一篇文章的標記分開記。' +
       '老師之後可以看到你標了哪幾句，這是為了知道你怎麼讀。</p>' +
       /* 連續閱讀版。前測 viewQuiz 把同樣這兩篇直接輸出成 <p>，報讀器讀到的是
@@ -496,7 +503,7 @@ function viewAaL(aid){
              講的是他做不到的事，而且完全沒提可以用點的。
              點選寫在前面（那是多數孩子的路徑），鍵盤寫在後面。 */
           '<p class="muted small" style="margin-top:6px">直接點你要的答案就可以。' +
-          '用鍵盤的話，Tab 進到這一組，上下方向鍵移到哪一格就是選哪一格；想換答案再按方向鍵移過去就好。</p>'
+          '用鍵盤的話，Tab 進到這一組會先停在第 1 格、但還沒選它：要選第 1 格請按空白鍵，其他格用方向鍵移過去就會選到；想換答案再按方向鍵移就好。</p>'
         /* 非選題的作答通道，前後測必須一致。
            前測（走 viewQuiz）的兩題非選有 textarea ＋ 手寫板＋筆色／筆寬／
            復原／清空，後測這一支卻只有 textarea——而 aalSubmit 第 879 行
@@ -512,9 +519,16 @@ function viewAaL(aid){
            用報讀器作答的孩子要先把題幹背下來再切到焦點模式打字－－
            這是作答負荷，不是閱讀理解負荷，而 CR 是論述層次評定的來源，
            前後測同兩題做 Δ 比較，每次各吃一次這個負荷。 */
-        : '<div class="field"><label id="crLbl" for="crText">寫出你的答案，並說明你的理由</label>' +
-          '<textarea id="crText" aria-labelledby="aalStem crLbl" data-act="aal-text" rows="7" style="min-height:11rem" ' +
-          'placeholder="先寫你的看法，再寫你是從文章哪一段看出來的">' +
+        /* 與前測逐字對齊：同兩題非選、同一份題本，兩次施測的作答介面不可以
+           不一樣。原本後測的 label 是「寫出你的答案，並說明你的理由」、
+           rows=7、min-height:11rem，而且多一句 placeholder
+           「先寫你的看法，再寫你是從文章哪一段看出來的」——那是一句明示的
+           閱讀策略提示，只有後測拿得到，而 CR 是論述層次評定與前後測 Δ 的
+           來源。作答框大 22% 也一樣：可見行數會影響書寫量。
+           前測那一句不能補（補上去就污染基線），所以拿掉後測這一句。
+           規格由 zz-debug 的 assertCrParity 釘住。 */
+        : '<div class="field"><label id="crLbl" for="crText">請寫出你的解題過程與說明</label>' +
+          '<textarea id="crText" aria-labelledby="aalStem crLbl" data-act="aal-text" rows="6" style="min-height:9rem">' +
           esc(AAL.texts[it.id] || '') + '</textarea></div>' +
           '<div class="field" style="margin-top:10px">' +
           '<label for="aalPad-' + esc(it.id) + '">也可以手寫：先按下面的〈開始手寫〉，再用手指或筆寫（老師評閱時看得到）</label>' +
@@ -683,6 +697,27 @@ const OPTION_DEBOUNCE_MS = 350;
 function aalClearMissing(){
   const card = document.getElementById('aalAnswer');
   if (card) card.classList.remove('missing');
+  /* 這一題補好了就從清單裡拿掉，不然下一次重繪紅框又回來。 */
+  if (AAL && AAL._miss && AAL._miss.length){
+    AAL._miss = AAL._miss.filter(function(i){ return i !== AAL.idx; });
+    if (typeof aalPaintMiss === 'function') aalPaintMiss();
+  }
+}
+
+/* 缺答紅框與「還有幾題沒寫完」跨重繪重掛。形狀與問卷那一側的
+   surveyPaintMiss() 相同，掛在 render() 的同一個呼叫點。 */
+function aalPaintMiss(){
+  const bar = document.getElementById('aalMissAlert');
+  if (bar) bar.remove();
+  if (!AAL || !AAL._miss || !AAL._miss.length) return;
+  const card = document.getElementById('aalAnswer');
+  if (card && AAL._miss.indexOf(AAL.idx) >= 0) card.classList.add('missing');
+  const nav = document.getElementById('aalNav');
+  if (!nav || document.getElementById('aalMissAlert')) return;
+  nav.insertAdjacentHTML('afterend',
+    '<p id="aalMissAlert" role="alert" class="small" style="margin:8px 0 0;color:var(--crit);font-weight:600">' +
+    '還有 ' + AAL._miss.length + ' 題沒寫完：' +
+    AAL._miss.map(function(i){ return '第 ' + (i + 1) + ' 題'; }).join('、') + '</p>');
 }
 
 function aalPick(k){
@@ -823,7 +858,11 @@ function flushNoteFor(it){
      密度不動——仍然是每題每次造訪最多一筆（見上面的 _noteWritten 守門），
      不讓對照組的分析單位數超過三個 AI 條件。 */
   const te = AAL.tele[it.id];
-  const ts = (te && te.lastKey) || Date.now();
+  /* 先讀筆記自己的最後按鍵（noteLastKey），再退回作答框的 lastKey。
+     反過來的話，兩題非選會拿到「作答框」的最後按鍵——那與筆記無關；
+     而 14 題選擇題根本沒有作答框，lastKey 恆為 null，時間戳整批退回
+     flush 的那一刻，'N' 又變回結構性排在序列最後。 */
+  const ts = (te && (te.noteLastKey || te.lastKey)) || Date.now();
   /* sent 與 ucode 要在寫入端就算好。ASK 事件一直都帶著它們，NOTE 沒有——
      於是兩個匯出檔各自把對照組丟掉了一半：toENACsv 查不到 dialog 紀錄，
      四個歷程欄整列輸出 0；toTelemetryCsv 只認 e.type==='ASK'，turns 恆為 0、
@@ -916,10 +955,22 @@ async function aalSay(){
   aalSay._ac = ac;
   if (chat){
     chat.insertAdjacentHTML('beforeend',
-      '<div class="msg agent" id="aalThinking">' + esc(condition(AAL.cond).name) + '正在想…' +
-      (ac ? ' <button class="btn sm quiet" data-act="aal-say-cancel">不等了</button>' : '') +
-      '</div>');
+      '<div class="msg agent" id="aalThinking">' + esc(condition(AAL.cond).name) + '正在想…</div>');
     chat.scrollTop = chat.scrollHeight;
+  }
+  /* 〈不等了〉掛在輸入列，不掛在對話串裡。原本它是 #aalThinking 的子節點，
+     而 #aalThinking 被 append 進 #aalChat——那是 role="log" aria-live="polite"
+     aria-relevant="additions" 的區域：新增的節點會被整塊唸出來，於是報讀器
+     使用者聽到的是「老師小葵正在想… 不等了 按鈕」，「不等了」讀起來像夥伴
+     說的第三句話。對話串的內容就是 RQ4 的語料，孩子（尤其是靠聽的孩子）
+     據以判斷夥伴說了什麼；把一顆控制項放進去，等於在三個 AI 條件的語料裡
+     各加了一句對照組不會有的話。
+     控制項搬到輸入列（送出鈕旁），與它實際控制的東西放在一起，
+     也讓 Tab 順序從輸入框 → 送出 → 不等了，不必先進對話串。 */
+  const bar = sendBtn && sendBtn.parentNode;
+  if (ac && bar && !document.getElementById('aalCancelWait')){
+    sendBtn.insertAdjacentHTML('afterend',
+      '<button class="btn sm quiet" id="aalCancelWait" data-act="aal-say-cancel">不等了</button>');
   }
   aalSave();
 
@@ -1041,6 +1092,16 @@ async function aalSay(){
   /* 拿掉「正在想…」、append 回覆、把輸入框交還給學生 */
   const think = document.getElementById('aalThinking');
   if (think) think.remove();
+  /* 一起收掉輸入列上的〈不等了〉。移除一個握有焦點的節點會把焦點丟回
+     <body>，而下面那道 focusIsOurs 只認 box 與 sendBtn，收不回來——
+     孩子（回覆在他 Tab 到這顆鈕的時候抵達）得從頁首再穿過三四十顆句子鈕。
+     先把焦點交回輸入框再移除。 */
+  const cancelBtn = document.getElementById('aalCancelWait');
+  if (cancelBtn){
+    if (document.activeElement === cancelBtn && box)
+      try { box.focus({preventScroll:true}); } catch (e) {}
+    cancelBtn.remove();
+  }
   if (chat){
     chat.insertAdjacentHTML('beforeend', '<div class="msg agent"><b>' +
       esc(condition(AAL.cond).name) + '</b>' + esc(reply.text) + '</div>');
@@ -1154,12 +1215,16 @@ function aalSubmit(){
   function onCancelMissing(){
     /* 取消不是什麼都不做——把他帶到第一題沒寫完的地方 */
     if (!AAL) return;
+    /* 記在 AAL 上，紅框才跨得過重繪。原本 missIdx 只是這一支的區域變數，
+       走一次 render()（按上一題／下一題、調字級、按高對比、跨分頁 a11y
+       同步）紅框就消失而且不會再回來；而作答頁只有上一題／下一題、
+       沒有跳題、也沒有逐題完成狀態，他沒有第二個線索找得回那一題。 */
+    AAL._miss = missIdx.slice();
     AAL.idx = missIdx[0];
     aalSave();
-    render();
+    render();          // render 尾段會呼叫 aalPaintMiss()
     const ans = document.getElementById('aalAnswer');
     if (ans){
-      ans.classList.add('missing');
       ans.focus({preventScroll:true});
       ans.scrollIntoView({block:'start'});
     }
@@ -1613,7 +1678,8 @@ function viewSurvey(phase, page){
       s.items.map(function(txt, i){
         const key = s.key + '_' + i;
         const no = s.from + i + 1;
-        return '<div class="likert"><div class="q" id="q_' + key + '">' + no + '. ' + esc(txt) + '</div>' +
+        /* tabindex="-1"：缺答救援把焦點放在題幹上，不放在任何一格上（見 surveyPaintMiss）。 */
+        return '<div class="likert"><div class="q" id="q_' + key + '" tabindex="-1">' + no + '. ' + esc(txt) + '</div>' +
           /* 原生 radio：拿回語意與方向鍵行為，Tab 停留點是「一題」而不是「一格」 */
           '<div class="scale" role="radiogroup" aria-labelledby="q_' + key + '">' +
           new Array(s.scale.n).fill(0).map(function(_, v){
@@ -1671,7 +1737,7 @@ function viewSurvey(phase, page){
         /* 量尺與作答頁的選項是同一個 radiogroup 形狀，第一次填時
            行為完全一樣：Tab 進來會停在第一格但不勾選它。
            兩處的說明也要一致：先講點選，再講鍵盤。 */
-        '直接點你要的那一格就可以。用鍵盤的話，Tab 進到這一組，上下方向鍵移到哪一格就是選哪一格；想換答案再按方向鍵移過去就好。</p></div>'
+        '直接點你要的那一格就可以。用鍵盤的話，Tab 進到這一組會先停在第 1 格、但還沒選它：要選第 1 格請按空白鍵，其他格用方向鍵移過去就會選到；想換答案再按方向鍵移就好。</p></div>'
       : '') +
     (scaleChanged
       ? '<div class="card card-p" style="margin-bottom:14px;border-left:3px solid var(--accent)">' +
@@ -1695,16 +1761,40 @@ function viewSurvey(phase, page){
          〈送出問卷〉原本只長在最後一段，而缺答救援會把孩子丟到第一段缺答的
          頁碼——三個 AI 條件的後測有 12 段，缺答通常落在前幾段，他補完那一題
          要連按 9–11 次〈下一段〉才回得到送出鈕，中間沒有任何段落索引可跳。 */
-      '<span class="row">' +
-      (!last && answered === total
-        ? '<button class="btn primary" data-act="sv-submit" data-id="' + phase + '">填完了，送出問卷</button>'
-        : '') +
-      (last
-        ? '<button class="btn primary" data-act="sv-submit" data-id="' + phase + '">送出問卷</button>'
-        : '<button class="btn' + (answered === total ? '' : ' primary') +
-          '" data-act="sv-page" data-v="' + (SURVEY.page + 1) + '">下一段 →</button>') +
-      '</span>' +
+      /* 這一格由 surveyPaintNav() 就地重寫。sv-pick 依設計不重繪（為了不丟
+         焦點），所以「全部填完就一律畫出送出鈕」原本永遠不會在孩子按下最後
+         一格的那一刻生效：抬頭就地跳成「47 / 47」、紅框與紅字都消失，
+         畫面上卻只有〈上一段〉與一顆仍掛著 .primary 的〈下一段〉。
+         下課鐘響時最合理的解讀是「我填完了」然後走人——這份後測問卷從此
+         停在草稿，五項自陳依變項、SUS 與三題操弄檢核全部拿不到。 */
+      '<span class="row" id="svNavRight">' + surveyNavHtml(phase, last) + '</span>' +
     '</div>';
+}
+
+/* 問卷頁尾右半邊。依當下的 SURVEY.resp 現算，不吃 viewSurvey 的閉包變數——
+   sv-pick 就地更新之後要能重寫它。 */
+function surveyNavHtml(phase, last){
+  if (!SURVEY) return '';
+  const cond = conditionOfStudent(SURVEY.sid);
+  const keys = surveyKeys(phase, cond);
+  const total = keys.length;
+  const answered = keys.filter(function(k){ return SURVEY.resp[k]; }).length;
+  return (!last && answered === total
+      ? '<button class="btn primary" data-act="sv-submit" data-id="' + phase + '">填完了，送出問卷</button>'
+      : '') +
+    (last
+      ? '<button class="btn primary" data-act="sv-submit" data-id="' + phase + '">送出問卷</button>'
+      : '<button class="btn' + (answered === total ? '' : ' primary') +
+        '" data-act="sv-page" data-v="' + (SURVEY.page + 1) + '">下一段 →</button>');
+}
+function surveyPaintNav(){
+  if (!SURVEY) return;
+  const box = document.getElementById('svNavRight');
+  if (!box) return;
+  const secs = surveySections(SURVEY.phase, conditionOfStudent(SURVEY.sid));
+  const html = surveyNavHtml(SURVEY.phase, SURVEY.page === secs.length);
+  /* 只在真的變了才寫，免得每一次點選都重建節點、把焦點或按下狀態弄掉。 */
+  if (box.innerHTML !== html) box.innerHTML = html;
 }
 
 /* 缺答標記要跨重繪存活。原本紅框、aria-invalid 與「這一段還有 N 題沒有選」
@@ -1721,7 +1811,13 @@ function surveyPaintMiss(){
     const row = el.closest('.likert');
     if (row){ row.classList.add('missing'); row.setAttribute('aria-invalid', 'true'); }
     n++;
-    if (!first) first = el;
+    /* 焦點給題幹，不給任何一格。原本回傳的是 el——[data-k] 的第一個命中
+       就是 value 1，也就是「非常不同意」「完全不符合」那一格。聚焦本身
+       不會勾選，但這個焦點是在確認框關掉的那一刻用程式放上去的，孩子的
+       手還在鍵盤上，一個反射的空白鍵就把量尺最負向的那一端送出去，
+       而且系統性地只發生在缺答被退回來的孩子身上（多落在 anx 這一段）。
+       改落在題幹上：報讀器先唸題目，任何一次按鍵都不會直接寫入。 */
+    if (!first) first = (row && row.querySelector('.q')) || el;
   });
   const box = document.getElementById('svMissSlot');
   if (n && box && !document.getElementById('svMissAlert')){
@@ -1911,7 +2007,7 @@ function viewInspect(aid, sid){
     }).join('') + '</select>';
 
   return sectionHead('作答與 AI 互動檢視',
-      esc(a.title) + '　·　與學生當時看到的版面相同，此處為唯讀重播。',
+      esc(assignmentLabel(a)) + '　·　與學生當時看到的版面相同，此處為唯讀重播。',
       '<a class="btn" href="#/assign/' + aid + '/replay">← 回唯讀重播</a>') +
 
     '<div class="card card-p" style="margin-bottom:14px">' +

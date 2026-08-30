@@ -800,13 +800,22 @@ async function runAI(outId, fn, force){
    rerouteInRender 會在轉向之後覆寫 ROUTE，所以這一支放在 render() 結尾、
    讀最終的 ROUTE，標題與畫面永遠是同一頁。
    ========================================================================== */
+/* 教師端與研究端的作業顯示名：學生端的中性名稱 + 研究標記。
+   學生端一律直接用 a.title（見 30-data.js 的 rlabel 註解）。 */
+function assignmentLabel(a){
+  if (!a) return '';
+  return a.title + (a.rlabel ? '（' + a.rlabel + '）' : '');
+}
+
 const PAGE_TITLES = {
   teacher:'教師後台', create:'建立派題', assign:'派題分析',
   kb:'知識建構空間', note:'貼文', synth:'想法串綜整',
   dash:'雙軌評量儀表板', bank:'文本與題庫', settings:'系統設定',
   about:'名詞說明', unlock:'切換身分', research:'研究控制台',
-  aal:'評量即學習事件', inspect:'唯讀重播',
-  student:'我的作業', quiz:'前測作答', result:'我的成績', mygrowth:'我的學習軌跡'
+  /* 學生端的分頁標題也不可以印研究構念（見 30-data.js 的 rlabel 註解）。
+     唯讀重播只有教師走得到，維持原名。 */
+  aal:'閱讀活動作答', inspect:'唯讀重播',
+  student:'我的作業', quiz:'閱讀活動作答', result:'我的成績', mygrowth:'我的學習軌跡'
 };
 function pageTitleFor(route){
   const r = route || ROUTE;

@@ -623,7 +623,7 @@ function rExport(){
       const landed = state.responses.filter(function(r){
         return r.aid === o.aid && r.sid === o.sid && r.choice != null; }).length;
       return '<tr><td>' + esc(userName(o.sid)) + '</td>' +
-        '<td class="small">' + esc((getAssignment(o.aid) || {}).title || o.aid) + '</td>' +
+        '<td class="small">' + esc(assignmentLabel(getAssignment(o.aid)) || o.aid) + '</td>' +
         '<td class="small num">' + fmtDateTime(o.at) + '</td>' +
         '<td class="n">' + nMc + '</td><td class="n">' + nTxt + '</td><td class="n">' + nInk + '</td>' +
         '<td class="n">' + landed + '</td>' +

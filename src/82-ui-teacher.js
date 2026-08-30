@@ -58,7 +58,7 @@ function viewTeacher(){
       const d = diagnose(state, a.id);
       const done = d ? d.done.length : 0;
       const fl = d && d.ready ? d.flagged.length : '—';
-      return '<tr><td><a href="#/assign/' + a.id + '">' + esc(a.title) + '</a><div class="muted small">' + esc(a.desc || '') + '</div></td>' +
+      return '<tr><td><a href="#/assign/' + a.id + '">' + esc(assignmentLabel(a)) + '</a><div class="muted small">' + esc(a.desc || '') + '</div></td>' +
         '<td><span class="pill">' + (a.phase === 'post' ? '共構後測' : '前測') + '</span></td>' +
         '<td class="n">' + a.itemIds.length + '</td><td class="n">' + done + ' / ' + assignmentRoster(a).length + '</td>' +
         '<td class="n">' + fl + '</td><td class="num small">' + fmtDate(a.createdAt) + '</td>' +
@@ -186,7 +186,7 @@ function viewAssign(aid, tab){
   else body = tabAI(diag);
 
   const k = currentClass();
-  return sectionHead(a.title, (a.phase === 'post' ? '共構後測' : '前測') + '　·　' +
+  return sectionHead(assignmentLabel(a), (a.phase === 'post' ? '共構後測' : '前測') + '　·　' +
       '四班共同校準　·　' + diag.done.length + ' / ' + diag.roster.length + ' 位已交' +
       '（本班 ' + k.studentIds.length + ' 人）　·　' + diag.items.length + ' 道選擇題',
       '<a class="btn" href="#/teacher">回教師後台</a>') +

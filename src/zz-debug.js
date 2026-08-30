@@ -1,6 +1,29 @@
 /* 只用於除錯建置（dist/debug.html），不會進入正式版 */
+
+/* 背景分頁的計時器節流。
+   自動巡檢是一條 setTimeout(step, 20) 的鏈，47 關；瀏覽器把不可見分頁的
+   計時器壓到每秒最多一次（有些情況更久），於是整趟從三分鐘變成看起來
+   「卡在第 56 關」——實測誤判過一次，而且卡住的那一關看起來就像剛才那批
+   改動造成的無窮迴圈。驗證工具製造假陽性比沒有工具更糟（本檔一貫的原則）。
+   只攔 ≤50ms 的延遲、只在除錯建置裡，其餘一律交還原生實作。 */
+(function(){
+  if (!window.MessageChannel) return;
+  var native = window.setTimeout;
+  var ch = new MessageChannel();
+  var q = [];
+  ch.port1.onmessage = function(){ var fn = q.shift(); if (fn) { try { fn(); } catch (e) { setTimeout(function(){ throw e; }, 0); } } };
+  window.setTimeout = function(fn, ms){
+    if (typeof fn === 'function' && (ms == null || ms <= 50) && arguments.length <= 2){
+      q.push(fn); ch.port2.postMessage(0);
+      return -1;                       /* clearTimeout(-1) 是無害的 no-op */
+    }
+    return native.apply(window, arguments);
+  };
+})();
+
 (function(){
   var panel = document.createElement('div');
+
   panel.style.cssText = 'position:fixed;left:8px;bottom:8px;z-index:99999;background:#0b0f14;color:#7CFF9B;' +
     'font:12px/1.5 monospace;padding:10px;max-height:70vh;overflow:auto;width:460px;border:1px solid #2a3a2a';
   document.body.appendChild(panel);
@@ -1090,8 +1113,11 @@ window.assertPadAspect = function(){
         '，原本 ' + w0 + '×' + h0 + '）——盒子只准長大');
   }
 
-  /* 字級掃描：畫布寬高都跟著 --fs 走 */
-  ['1.25', '1.5', '1.75', '1'].forEach(function(fs){
+  /* 字級掃描：畫布寬高都跟著 --fs 走。
+     順序刻意是「大→小→大→小」而不是單調遞增：棘輪（盒子每放大一次就
+     跟著長大、縮回來卻不還原）只在來回時才看得出來，單調掃一圈永遠是
+     遞增的，所以第 8 輪那一版怎麼跑都會過。 */
+  ['1.75', '1', '1.75', '1', '1.25', '1'].forEach(function(fs){
     document.documentElement.style.setProperty('--fs', fs);
     if (typeof syncPads === 'function') syncPads();
     const a = aspect();
@@ -1102,15 +1128,22 @@ window.assertPadAspect = function(){
   });
   document.documentElement.style.setProperty('--fs', realFs || '1');
   if (typeof syncPads === 'function') syncPads();
-  /* 可逆性要這樣定義：**同一個盒子、同一個畫布尺寸，k 必須一樣**。
-     不能要求「回到 100% 時 k 精確是 1」——盒子在 175% 那一趟長大了，
-     回到 100% 之後內容確實比視窗高，縮到看得完才是對的。
-     真正要擋的是「來回一趟就少一截」的累積損失。 */
+  /* 可逆性現在可以要求得更嚴：沒有寫新東西，字級來回之後 k 必須精確回到 1。
+     第 8 輪的說法是「盒子在 175% 那一趟長大了，回到 100% 之後 k 小於 1
+     才是對的」——那個說法本身就是棘輪。盒子沒有理由跟著視窗長：
+     它只需要涵蓋墨水（padGrowToInk），而這一段從頭到尾沒有加新的筆畫。
+     舊版實測 k = 1 → 0.571 → 0.327，孩子每放大一次字級，自己寫的字就
+     再縮一截，而且縮不回來。 */
   const kBack = padScale(id);
   document.documentElement.style.setProperty('--fs', realFs || '1');
   if (typeof syncPads === 'function') syncPads();
   if (Math.abs(padScale(id) - kBack) > 0.001)
     fails.push('同一個字級量兩次，縮放因子不一樣（' + kBack.toFixed(3) + ' vs ' + padScale(id).toFixed(3) + '）');
+  if (Math.abs(kBack - 1) > 0.001)
+    fails.push('沒有寫新東西，字級來回之後縮放因子卻是 ' + kBack.toFixed(3) + '（應該精確回到 1）——盒子被棘輪撐大了');
+  if (PADS[id].w0 > w0 + 0.5 || PADS[id].h0 > h0 + 0.5)
+    fails.push('沒有寫新東西，書寫座標系卻從 ' + w0 + '×' + h0 +
+               ' 長成 ' + PADS[id].w0 + '×' + PADS[id].h0);
   rows.push({step:'字級掃一圈之後', aspect:+aspect().toFixed(3), 在畫布內:inside(), k:+kBack.toFixed(3),
              盒子:PADS[id].w0 + '×' + PADS[id].h0});
 
@@ -1539,5 +1572,472 @@ window.assertStemParity = function(){
 
   const r = {pass: fails.length === 0, fails: fails, 量到的: info};
   console.log('[assertStemParity]', r);
+  return r;
+};
+
+/* ==========================================================================
+   第 9 輪：社會框架不得帶判定語或參照物
+   三個 AI 條件的 frame 是對話卡的第一則訊息，也印在首頁的條件卡上，
+   每換一題重印一次——它是孩子讀到最多次的一句話，卻從來不經過
+   leakGuard（leakGuard 只看模型產生的文字）。規格因此只靠註解維持，
+   而第 9 輪 peer 的「再對一下」正是在提示詞那一側被修掉、frame 這一側
+   沒改，兩者已經飄開了一輪。這條把三句一起釘住。
+
+   刻意不檢查 LETTER_NEAR：那一組（「對」「選」「可以」…）的設計就是
+   「與裸露的 A–D 同句才算」，frame 裡沒有任何字母選項，單獨比對會把
+   tutee 的「你可以講給我聽嗎？」誤判成洩答。
+
+   console 一行：assertFrameNeutral()
+   ========================================================================== */
+window.assertFrameNeutral = function(){
+  const fails = [], seen = {};
+  const BAD = VERDICT_WORDS.concat(VERDICT_SOFT).concat(POINTER_WORDS);
+  const IDS = ['tutor', 'tutee', 'peer'];
+  IDS.forEach(function(id){
+    const f = condition(id).frame;
+    seen[id] = {字數: f ? f.length : 0, 文字: f};
+    if (!f){ fails.push(id + ' 沒有 frame'); return; }
+    BAD.forEach(function(w){
+      if (f.indexOf(w) >= 0) fails.push(id + ' 的 frame 含判定／指路語「' + w + '」：' + f);
+    });
+    /* 「對答案」的固定搭配與發言順序的承諾。VERDICT_SOFT 抓不到，因為它們
+       本身不是判定語，而是宣告了一個可供比對的參照物、或一個夥伴其實
+       做不到的先後（agentTurn 永遠等孩子先講）。三句都必須否認自己有答案。 */
+    ['對一下', '對答案', '我先講', '我先說'].forEach(function(w){
+      if (f.indexOf(w) >= 0)
+        fails.push(id + ' 的 frame 含「' + w + '」（承諾了參照物或發言順序）：' + f);
+    });
+    const sentences = f.split(/[。？！]/).filter(function(x){ return x.trim(); }).length;
+    if (sentences !== 2) fails.push(id + ' 的 frame 是 ' + sentences + ' 句，不是兩句：' + f);
+  });
+  const lens = IDS.map(function(id){ return (condition(id).frame || '').length; });
+  const spread = Math.max.apply(null, lens) - Math.min.apply(null, lens);
+  seen.字數差 = spread;
+  if (spread > 2) fails.push('三句 frame 的字數差 ' + spread + ' 字（上限 2）：' + lens.join(' / '));
+  if (condition('control').frame !== '') fails.push('對照組不該有 frame');
+  const r = {pass: fails.length === 0, fails: fails, frames: seen};
+  console.log('[assertFrameNeutral]', r);
+  return r;
+};
+
+/* ==========================================================================
+   第 9 輪：情感詞典不得因語言習慣而系統性偏誤
+   sentimentOf 的輸出直接變成 ENA 的 POS／NEG 編碼與情緒時間線。
+   三個缺陷（反諷漏判、重疊詞條重複計數、疊字灌滿量表）都與條件無關、
+   只與孩子怎麼講話有關，會被讀成處遇效果。
+
+   console 一行：assertSentiment()
+   ========================================================================== */
+window.assertSentiment = function(){
+  const fails = [], got = {};
+  function s(t){ const v = sentimentOf(t).score; got[t] = +v.toFixed(3); return v; }
+
+  /* (1) 反諷式漏判：「沒錯」「不錯」在國小對話裡是肯定 */
+  ['沒錯，我懂了', '我覺得這樣寫不錯'].forEach(function(t){
+    if (s(t) < 0) fails.push('「' + t + '」被判成負向（' + got[t] + '）——否定詞沒有套到負向詞條');
+  });
+  if (s('沒錯') <= 0) fails.push('「沒錯」單獨出現時是 ' + got['沒錯'] + '，應為正');
+
+  /* (2) 重疊詞條不得重複計數：長詞蓋短詞，同一次認知只算一次 */
+  if (Math.abs(Math.abs(s('看不懂')) - Math.abs(s('卡住'))) > 0.001)
+    fails.push('「看不懂」(' + got['看不懂'] + ') 與「卡住」(' + got['卡住'] +
+               ') 強度不同——「看不懂」同時命中「看不懂」與「不懂」被算了兩次');
+  if (Math.abs(Math.abs(s('好煩')) - Math.abs(s('煩'))) > 0.501)
+    fails.push('「好煩」(' + got['好煩'] + ') 與「煩」(' + got['煩'] + ') 差距超過一個程度副詞');
+
+  /* (3) 疊字不得灌滿量表 */
+  if (s('哈哈哈') >= 1) fails.push('「哈哈哈」＝ ' + got['哈哈哈'] + '，一個語助詞就頂到量表上限');
+  if (s('哈哈哈哈哈哈') !== s('哈哈哈')) fails.push('疊字次數還會繼續加分（同一詞條上限應為 2 次）');
+  if (s('哈') <= 0) fails.push('「哈」本身應仍為正向');
+
+  /* (4) 沒有情緒詞就是中性 */
+  if (s('這一段在講水的循環') !== 0)
+    fails.push('沒有情緒詞的句子不是 0：' + got['這一段在講水的循環']);
+
+  /* (5) 真正的負向仍要判成負向（不能因為 (1) 把負向整組翻掉） */
+  ['我不懂', '好難', '我找不到', '我寫錯了'].forEach(function(t){
+    if (s(t) >= 0) fails.push('「' + t + '」應為負向，實得 ' + got[t]);
+  });
+  /* (6) 正向仍要判成正向 */
+  ['我懂了', '原來是這樣', '我找到了'].forEach(function(t){
+    if (s(t) <= 0) fails.push('「' + t + '」應為正向，實得 ' + got[t]);
+  });
+  const r = {pass: fails.length === 0, fails: fails, 分數: got};
+  console.log('[assertSentiment]', r);
+  return r;
+};
+
+/* ==========================================================================
+   第 9 輪：對照組的發話也要進 EVID 的共現視窗
+   ENA 量的是同一行裡的共現。EVID 的前後 ±2 掃描原本只寫在 ASK 那一支，
+   對照組寫在「我的筆記」裡的字（code 'N'）拿不到——那條
+   「一邊標題幹、一邊說出自己的讀法」的邊在對照組的網絡裡結構上不存在，
+   而對照組是 RQ1 的比較基準，這個缺口會被讀成「有 AI 才會回到文本」。
+
+   console 一行：assertEnaControlEvid()
+   ========================================================================== */
+window.assertEnaControlEvid = function(){
+  const fails = [], seen = {};
+  const kept = (state.logs || []).slice();
+  try {
+    const t0 = Date.now();
+    function mk(sid, cond, o){
+      return Object.assign({sid:sid, cond:cond, aid:'a-post', iid:'__probe', t:t0 + (o.dt || 0)}, o);
+    }
+    /* 對照組：標記題幹 → 在筆記裡寫下自己的讀法（相隔一格，落在 ±2 內）。
+       AI 組：同樣的形狀，只是發話走 ASK。兩者必須產生同一種共現。 */
+    const TXT = '我覺得他後來很後悔，因為前面有寫他一直回頭看。';
+    state.logs = kept.concat([
+      mk('__pC', 'control', {type:'MARK', code:'M', dt:0}),
+      mk('__pC', 'control', {type:'NOTE', code:'N', dt:1000, text:TXT}),
+      mk('__pT', 'tutor',   {type:'MARK', code:'M', dt:0}),
+      mk('__pT', 'tutor',   {type:'ASK',  code:'Q0', dt:1000, text:TXT})
+    ]);
+    const lines = enaLines();
+    function rows(sid){ return lines.filter(function(l){ return l.sid === sid; }); }
+    function pairs(sid){ return rows(sid).filter(function(l){ return l.codes.length > 1; }); }
+    seen.對照組 = rows('__pC').map(function(l){ return l.codes.join('+'); });
+    seen.tutor  = rows('__pT').map(function(l){ return l.codes.join('+'); });
+    function hasEvidPair(rs){
+      return rs.some(function(l){
+        return l.codes.indexOf('EVID') >= 0 &&
+               l.codes.some(function(x){ return ['FR','SI','II','EE'].indexOf(x) >= 0; });
+      });
+    }
+    if (!hasEvidPair(pairs('__pT')))
+      fails.push('tutor 的 ASK 沒有產生「歷程 + EVID」的共現行——測具本身壞了，下面那一條也就不算數');
+    if (!hasEvidPair(pairs('__pC')))
+      fails.push('對照組的筆記沒有產生「歷程 + EVID」的共現行——EVID 的 ±2 視窗沒有套到 code "N"');
+    /* 標記事件本身仍要各自獨立成行，不可以因為補了共現而被吃掉或重複計數 */
+    if (!rows('__pC').some(function(l){ return l.codes.length === 1 && l.codes[0] === 'EVID'; }))
+      fails.push('對照組的 MARK 事件不再獨立成 EVID 行');
+    if (rows('__pC').length !== rows('__pT').length)
+      fails.push('同形狀的序列在兩個條件下產生的行數不同：對照組 ' +
+                 rows('__pC').length + '、tutor ' + rows('__pT').length);
+  } catch (e) {
+    fails.push('擲出例外：' + (e && e.message));
+  } finally {
+    state.logs = kept;
+  }
+  const r = {pass: fails.length === 0, fails: fails, 共現行: seen};
+  console.log('[assertEnaControlEvid]', r);
+  return r;
+};
+
+/* ==========================================================================
+   第 9 輪：學生端不得出現「前測／後測／評量即學習事件」
+   前後測是同一份 16 題。把測驗的角色印在孩子看得到的地方，等於在後測
+   當下告訴他「這是同一次測驗的第二次，而且它在量什麼」——重測覺察與
+   需求特徵一起進來，而後測 θ 是 RQ1 的主要依變項。四個條件都印同一句，
+   所以它不是組間差異，是把整條 Δθ 一起抬起來或壓下去的共同偏誤。
+   反過來，教師端與研究端必須還分得出哪一份是哪一份。
+
+   console 一行：assertNeutralTitles()
+   ========================================================================== */
+window.assertNeutralTitles = function(){
+  const fails = [], seen = {};
+  const BAD = ['前測', '後測', '評量即學習事件', 'Assessment as Learning'];
+  const realRole = state.ui.role, realHash = location.hash;
+  /* 走過幾頁就會留下瀏覽紀錄（RESUME／VIEW）。單獨看無害，但這些斷言
+     會被連續跑很多遍，而 assertSeedCanary 讀的是同一份 state——
+     漂移累積起來就是一次假的「ANCOVA 迴歸」。一起快照還原。 */
+  const keptLog = (state.logs || []).slice();
+  const k = state.classes.find(function(c){ return c.condition === 'tutor'; }) || state.classes[0];
+  const sid = k.studentIds[0];
+  state.ui.role = sid; renderShell();
+  ['#/student', '#/quiz/a-pre', '#/aal/a-post', '#/survey/pre/1', '#/survey/post/1',
+   '#/result/a-pre', '#/mygrowth', '#/kb'].forEach(function(h){
+    QUIZ = null; SURVEY = null; AAL = null;
+    location.hash = h; render();
+    const v = document.getElementById('view');
+    const rail = document.getElementById('rail');
+    const txt = (v ? v.textContent : '') + ' ' + document.title + ' ' +
+                (rail ? rail.textContent : '');
+    const hit = BAD.filter(function(w){ return txt.indexOf(w) >= 0; });
+    seen[h] = hit.length ? hit.join('、') : '—';
+    hit.forEach(function(w){ fails.push(h + '（學生視角）印出了「' + w + '」'); });
+  });
+  state.ui.role = realRole; renderShell();
+  QUIZ = null; SURVEY = null; AAL = null;
+  location.hash = realHash || '#/teacher'; render();
+  state.logs = keptLog;
+
+  ['a-pre', 'a-post'].forEach(function(aid){
+    const a = getAssignment(aid);
+    if (!a){ fails.push('找不到 ' + aid); return; }
+    if (!a.rlabel){ fails.push(aid + ' 沒有 rlabel（教師端就分不出前後測）'); return; }
+    if (assignmentLabel(a).indexOf(a.rlabel) < 0)
+      fails.push(aid + ' 的 assignmentLabel 沒有帶出研究標記');
+    BAD.forEach(function(w){
+      if (a.title.indexOf(w) >= 0) fails.push(aid + ' 的學生端 title 仍含「' + w + '」');
+    });
+  });
+  const r = {pass: fails.length === 0, fails: fails, 各頁命中: seen};
+  console.log('[assertNeutralTitles]', r);
+  return r;
+};
+
+/* ==========================================================================
+   第 9 輪：前後測的非選作答框必須逐字對等
+   同一份 16 題施測兩次做 Δ 比較。作答介面只要不一樣，量到的差就有一部分
+   是介面差。第 9 輪查到後測多一句 placeholder（而且那是一句明示的閱讀
+   策略提示：「先寫你的看法，再寫你是從文章哪一段看出來的」，只有後測
+   拿得到）、rows 7 對 6、min-height 11rem 對 9rem——可見行數會影響書寫量，
+   而 CR 是論述層次評定的來源。
+
+   console 一行：assertCrParity()
+   ========================================================================== */
+window.assertCrParity = function(){
+  const fails = [], seen = {};
+  const realRole = state.ui.role, realHash = location.hash;
+  const keptSub = state.submissions.slice();
+  /* 走過幾頁就會留下瀏覽紀錄（RESUME／VIEW）。單獨看無害，但這些斷言
+     會被連續跑很多遍，而 assertSeedCanary 讀的是同一份 state——
+     漂移累積起來就是一次假的「ANCOVA 迴歸」。一起快照還原。 */
+  const keptLog = (state.logs || []).slice();
+  const k = state.classes.find(function(c){ return c.condition === 'tutor'; }) || state.classes[0];
+  const sid = k.studentIds[0];
+  state.ui.role = sid; renderShell();
+  /* 兩個階段要的門檻剛好相反：前測頁在 a-pre 已交時會轉去成績頁，
+     而後測頁在 a-pre 未交時根本不開（AAL 會是 null，於是找不到 #crText，
+     看起來像介面壞了）。分兩段各自佈置，不要一次把所有交卷紀錄拿掉。 */
+  function only(drop){
+    state.submissions = keptSub.filter(function(x){
+      return !(x.sid === sid && drop.indexOf(x.aid) >= 0);
+    });
+  }
+
+  function grab(sel){
+    const el = document.querySelector(sel);
+    if (!el) return null;
+    let lab = '';
+    const byFor = document.querySelector('label[for="' + el.id + '"]');
+    if (byFor) lab = byFor.textContent.trim();
+    const cs = getComputedStyle(el);
+    return {rows: el.rows, minH: cs.minHeight,
+            h: Math.round(el.getBoundingClientRect().height),
+            ph: el.getAttribute('placeholder') || '', label: lab};
+  }
+
+  only(['a-pre', 'a-post']);
+  QUIZ = null; AAL = null; location.hash = '#/quiz/a-pre'; render();
+  const pre = grab('#view textarea[id^="qText-"]');
+
+  only(['a-post']);                       /* a-pre 交回去，後測頁才會開 */
+  QUIZ = null; AAL = null; location.hash = '#/aal/a-post'; render();
+  if (typeof AAL === 'undefined' || !AAL) fails.push('後測頁沒有開起來（AAL 是 null）');
+  if (typeof AAL !== 'undefined' && AAL && AAL.items){
+    let ci = -1;
+    AAL.items.forEach(function(it, i){ if (ci < 0 && it.type === 'cr') ci = i; });
+    if (ci >= 0){ AAL.idx = ci; render(); }
+    else fails.push('後測題本裡找不到非選題');
+  }
+  const post = grab('#crText');
+  seen.前測 = pre; seen.後測 = post;
+
+  if (!pre) fails.push('前測找不到非選作答框');
+  if (!post) fails.push('後測找不到 #crText');
+  if (pre && post){
+    if (pre.rows !== post.rows) fails.push('rows 不同：前測 ' + pre.rows + '、後測 ' + post.rows);
+    if (pre.minH !== post.minH) fails.push('min-height 不同：前測 ' + pre.minH + '、後測 ' + post.minH);
+    if (Math.abs(pre.h - post.h) > 2)
+      fails.push('實際高度差 ' + Math.abs(pre.h - post.h) + 'px（前測 ' + pre.h + '、後測 ' + post.h + '）');
+    if (pre.label !== post.label)
+      fails.push('label 不同：前測「' + pre.label + '」、後測「' + post.label + '」');
+    if (pre.ph !== post.ph)
+      fails.push('placeholder 不對等：前測「' + pre.ph + '」、後測「' + post.ph + '」');
+    if (post.ph)
+      fails.push('後測的 placeholder 是一句只有後測拿得到的閱讀策略提示：「' + post.ph + '」');
+  }
+
+  state.submissions = keptSub;
+  state.logs = keptLog;
+  state.ui.role = realRole; renderShell();
+  QUIZ = null; AAL = null;
+  location.hash = realHash || '#/teacher'; render();
+  const r = {pass: fails.length === 0, fails: fails, 作答框: seen};
+  console.log('[assertCrParity]', r);
+  return r;
+};
+
+/* ==========================================================================
+   第 9 輪：等待中的控制項不得長在對話串裡
+   #aalChat 是 role="log" aria-live="polite" aria-relevant="additions"。
+   放進去的任何東西都會被當成「夥伴又說了一句」唸出來，而對話串的內容
+   就是 RQ4 的語料，也是靠聽的孩子判斷夥伴說了什麼的唯一依據——
+   三個 AI 條件因此各多一句對照組不會有的話。
+   這一條真的驅動一次等待：把 llmChat 換成一個握在手上的 Promise。
+   探針會寫 AAL 草稿與 state.dialog（額度！），所以兩者都要快照還原。
+
+   console 一行：await assertCancelPlacement()
+   ========================================================================== */
+window.assertCancelPlacement = function(){
+  const fails = [], seen = {};
+  const realRole = state.ui.role, realHash = location.hash;
+  const realEngine = state.settings.engine, realKey = state.settings.apiKey;
+  const realLlm = window.llmChat;
+  const keptSub = state.submissions.slice();
+  const keptDlg = JSON.stringify(state.dialog || []);
+  const keptLog = (state.logs || []).slice();
+  const keptDraft = (function(){ try { return localStorage.getItem(AAL_DRAFT_KEY); } catch (e) { return null; } })();
+
+  function fin(){
+    window.llmChat = realLlm;
+    state.settings.engine = realEngine;
+    state.settings.apiKey = realKey;
+    state.submissions = keptSub;
+    state.dialog = JSON.parse(keptDlg);
+    state.logs = keptLog;
+    try {
+      if (keptDraft === null) localStorage.removeItem(AAL_DRAFT_KEY);
+      else localStorage.setItem(AAL_DRAFT_KEY, keptDraft);
+    } catch (e) {}
+    state.ui.role = realRole; renderShell();
+    QUIZ = null; AAL = null;
+    location.hash = realHash || '#/teacher'; render();
+    const r = {pass: fails.length === 0, fails: fails, 觀察: seen};
+    console.log('[assertCancelPlacement]', r);
+    return r;
+  }
+
+  const k = state.classes.find(function(c){ return c.condition === 'tutor'; }) || state.classes[0];
+  const sid = k.studentIds[0];
+  /* 只拿掉 a-post。連 a-pre 一起拿掉的話後測頁根本不開（AAL 是 null），
+     而那會以「找不到輸入框」的形式冒出來，看起來像介面壞了。 */
+  state.submissions = keptSub.filter(function(x){ return !(x.sid === sid && x.aid === 'a-post'); });
+  state.ui.role = sid; renderShell();
+  QUIZ = null; AAL = null; location.hash = '#/aal/a-post'; render();
+  if (typeof AAL === 'undefined' || !AAL) fails.push('後測頁沒有開起來（AAL 是 null）');
+
+  let release = null;
+  state.settings.engine = 'llm';
+  state.settings.apiKey = '__probe';
+  window.llmChat = function(){ return new Promise(function(res){ release = res; }); };
+
+  if (aiEngine() !== 'llm'){ fails.push('無法切到外部模型引擎，這一條測不到'); return Promise.resolve(fin()); }
+  const box = document.getElementById('aalSay');
+  if (!box){ fails.push('找不到輸入框 #aalSay'); return Promise.resolve(fin()); }
+
+  let p;
+  try {
+    box.value = '我覺得他後來很後悔。';
+    p = aalSay();
+  } catch (e) {
+    fails.push('aalSay 擲出例外：' + (e && e.message));
+    return Promise.resolve(fin());
+  }
+
+  const btn = document.querySelector('[data-act="aal-say-cancel"]');
+  const chat = document.getElementById('aalChat');
+  const think = document.getElementById('aalThinking');
+  seen.找到鈕 = !!btn;
+  seen.在對話串裡 = !!(btn && chat && chat.contains(btn));
+  seen.在輸入列 = !!(btn && btn.closest && btn.closest('.pane-bar'));
+  seen.正在想的文字 = think ? think.textContent : '(沒有)';
+  if (!btn) fails.push('等待中沒有出現〈不等了〉');
+  if (btn && chat && chat.contains(btn))
+    fails.push('〈不等了〉長在 role="log" 的對話串裡，報讀器會把它唸成夥伴說的第三句話');
+  if (btn && btn.closest && !btn.closest('.pane-bar'))
+    fails.push('〈不等了〉不在輸入列上（應與它控制的送出鈕放在一起）');
+  if (think && think.querySelector('button'))
+    fails.push('「正在想…」那一則訊息裡還有按鈕');
+  if (think && /不等了/.test(think.textContent))
+    fails.push('「正在想…」被唸出來的文字裡含「不等了」');
+
+  /* 焦點停在鈕上時回覆抵達：移除一個握有焦點的節點會把焦點丟回 <body> */
+  if (btn) try { btn.focus(); } catch (e) {}
+  if (release) release('好，那你是從哪一句看出來的？');
+  else { fails.push('llmChat 沒有被呼叫（引擎沒切過去？）'); return Promise.resolve(fin()); }
+
+  return Promise.resolve(p).then(function(){
+    if (document.getElementById('aalCancelWait')) fails.push('回覆抵達後〈不等了〉沒有收掉');
+    const ae = document.activeElement;
+    seen.回覆後焦點 = ae ? (ae.id || ae.tagName) : '(無)';
+    if (ae === document.body) fails.push('回覆抵達後焦點掉回 <body>');
+    return fin();
+  }, function(e){
+    fails.push('等待流程 rejected：' + (e && e.message));
+    return fin();
+  });
+};
+
+/* ==========================================================================
+   第 9 輪：量尺的鍵盤說明必須說得出第 1 格怎麼選
+   原生 radiogroup 在一顆都沒選時，Tab 進來會停在第一顆但不勾選它，
+   接著按方向鍵會移到第二顆並勾選——第 1 格（量尺最負向的那一端）
+   用畫面上寫的方法選不到，只能按空白鍵或用點的。
+   缺答救援又會把焦點程式化地放在那一組上，所以受影響的正是被退回來補填
+   的孩子，而 anx 那幾段的第 1 格就是「非常不同意／完全不符合」。
+   前測、後測、問卷三處是同一句，必須逐字相同。
+
+   console 一行：assertScaleKeyCopy()
+   ========================================================================== */
+window.assertScaleKeyCopy = function(){
+  const fails = [], texts = {};
+  const realRole = state.ui.role, realHash = location.hash;
+  const keptSub = state.submissions.slice();
+  const keptSv = (state.surveys || []).slice();
+  /* 走過幾頁就會留下瀏覽紀錄（RESUME／VIEW）。單獨看無害，但這些斷言
+     會被連續跑很多遍，而 assertSeedCanary 讀的是同一份 state——
+     漂移累積起來就是一次假的「ANCOVA 迴歸」。一起快照還原。 */
+  const keptLog = (state.logs || []).slice();
+  const k = state.classes.find(function(c){ return c.condition === 'tutor'; }) || state.classes[0];
+  const sid = k.studentIds[0];
+  state.ui.role = sid; renderShell();
+  /* 三處各有各的門檻，而且互相衝突：
+     · 前測頁在 a-pre 已交時轉去成績頁；
+     · 後測頁在 a-pre 未交時根本不開（AAL 會是 null）；
+     · 問卷在已送出時只印一張「你已經送出了」；
+     · 而前後測兩頁又都要求課前問卷已經送出。
+     所以每一步都要各自佈置，不能在開頭一次拿掉全部。 */
+  function stage(dropSubs, dropSurvey){
+    state.submissions = keptSub.filter(function(x){
+      return !(x.sid === sid && dropSubs.indexOf(x.aid) >= 0);
+    });
+    state.surveys = keptSv.filter(function(x){
+      return !(x.sid === sid && dropSurvey);
+    });
+  }
+
+  const HEAD = '用鍵盤的話，Tab 進到這一組';
+  [['前測', '#/quiz/a-pre', ['a-pre', 'a-post'], false],
+   ['問卷', '#/survey/pre/1', ['a-pre', 'a-post'], true],
+   ['後測', '#/aal/a-post', ['a-post'], false]].forEach(function(p){
+    stage(p[2], p[3]);
+    QUIZ = null; SURVEY = null; AAL = null;
+    location.hash = p[1]; render();
+    const v = document.getElementById('view');
+    const t = v ? v.textContent : '';
+    const i = t.indexOf(HEAD);
+    const j = i < 0 ? -1 : t.indexOf('。', i);
+    texts[p[0]] = i < 0 ? null : t.slice(i, j < 0 ? t.length : j + 1);
+  });
+
+  Object.keys(texts).forEach(function(nm){
+    const t = texts[nm];
+    if (!t){ fails.push(nm + '：畫面上找不到量尺的鍵盤說明'); return; }
+    if (t.indexOf('空白鍵') < 0)
+      fails.push(nm + '：說明沒有提到空白鍵，照著做選不到第 1 格——「' + t + '」');
+    if (t.indexOf('第 1 格') < 0)
+      fails.push(nm + '：說明沒有點名第 1 格的特殊行為——「' + t + '」');
+  });
+  const vals = Object.keys(texts).map(function(nm){ return texts[nm]; });
+  const uniq = vals.filter(function(v, i, a){ return v && a.indexOf(v) === i; });
+  if (uniq.length > 1)
+    fails.push('三處的鍵盤說明不一致（前後測必須逐字相同）：' + JSON.stringify(texts));
+
+  /* 缺答救援的焦點不可以落在任何一格上：那是量尺最負向的那一端，
+     而確認框剛關掉、孩子的手還在鍵盤上，一個反射的空白鍵就送出去了。 */
+  if (String(surveyPaintMiss).indexOf("querySelector('.q')") < 0)
+    fails.push('surveyPaintMiss 的回傳值不是題幹——救援焦點會停在量尺最負向的那一格上');
+
+  state.submissions = keptSub;
+  state.surveys = keptSv;
+  state.logs = keptLog;
+  state.ui.role = realRole; renderShell();
+  QUIZ = null; SURVEY = null; AAL = null;
+  location.hash = realHash || '#/teacher'; render();
+  const r = {pass: fails.length === 0, fails: fails, 說明: texts};
+  console.log('[assertScaleKeyCopy]', r);
   return r;
 };

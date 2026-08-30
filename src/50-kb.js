@@ -404,6 +404,7 @@ function loadState(){
         if (responsesMatchKey(s)){
           /* 接上磁碟上的版次，這個分頁之後寫出的版次才會比它大 */
           STATE_REV = s.rev || 0;
+          migrateState(s);
           return s;
         }
         console.warn('[KAIROS] 作答紀錄與現行題本的答案鍵不一致，已重新產生示範資料。');
@@ -412,6 +413,47 @@ function loadState(){
   } catch (e) { /* 讀不到就重新產生示範資料 */ }
   return buildSeedState();
 }
+/* 同版次之內的就地修補。
+   載入器只有兩條路：版次相同就原封不動接受，不同就整份重建示範資料。
+   純文案的更正因此沒有出路——加版次會把已經收到的作答一起洗掉，
+   不加版次則舊資料永遠帶著舊文字。這一支補的是後者：只改欄位、
+   不動任何作答，而且必須是冪等的（每次載入都會跑一遍）。 */
+function migrateState(s){
+  if (!s || !Array.isArray(s.assignments)) return s;
+  /* 第 9 輪：題本名稱在學生端要中性。
+     「閱讀理解 前測」「閱讀理解 評量即學習事件（後測）」是存進 state 的
+     字串，不是常數——只改 30-data.js 的種子，舊資料（也就是真正在用的
+     那一份）永遠不會變。研究標記改掛在 rlabel，教師端與研究端照舊看得到。 */
+  const NEUTRAL = {
+    'a-pre':  {title:'閱讀活動（一）', rlabel:'前測'},
+    'a-post': {title:'閱讀活動（二）', rlabel:'評量即學習事件（後測）'}
+  };
+  s.assignments.forEach(function(a){
+    const n = NEUTRAL[a.id];
+    if (!n) return;
+    /* 老師自己改過標題就不要覆蓋回去；只補 rlabel。 */
+    if (/前測|後測|評量即學習事件/.test(a.title || '')) a.title = n.title;
+    if (!a.rlabel) a.rlabel = n.rlabel;
+  });
+  /* 示範白板上的三句「前測第 N 題」。白板是學生讀的，理由同上。
+     逐字比對再換掉，不做通用的字串取代——老師自己寫的貼文不能被改。 */
+  const DEMO = [
+    ['從前測第 8 題長出來的共同問題：', '從第 8 題長出來的共同問題：'],
+    ['前測第 8 題問「作者在前面埋了哪一個線索」，', '第 8 題問「作者在前面埋了哪一個線索」，'],
+    ['前測第 9 題有不少同學選對了，', '第 9 題有不少同學選對了，']
+  ];
+  function scrub(t){
+    let out = t;
+    DEMO.forEach(function(p){ if (out.indexOf(p[0]) >= 0) out = out.split(p[0]).join(p[1]); });
+    return out;
+  }
+  (s.views || []).forEach(function(v){ if (v.desc) v.desc = scrub(v.desc); });
+  (s.notes || []).forEach(function(n){
+    (n.segs || []).forEach(function(g){ if (g.text) g.text = scrub(g.text); });
+  });
+  return s;
+}
+
 function resetState(){
   try { localStorage.removeItem(STORE_KEY); } catch (e) {}
   state = buildSeedState(); save();
