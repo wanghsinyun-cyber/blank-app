@@ -4,6 +4,81 @@
 
 let QUIZ = null;    // {aid, answers:{iid:choice}, texts:{iid:string}, strokes:{iid:[]}}
 
+/* 前測草稿。原本前測完全沒有草稿——QUIZ 只是記憶體變數，quiz-pick 與
+   quiz-text 只寫進它，全庫沒有任何 localStorage 寫入點。平板一沒電，
+   16 題的選項、兩題非選的文字與筆跡同時歸零；而作業卡的「寫到一半」提示
+   被 (!done && a.aal) 擋在後測專用，於是重開之後那張卡印的是「尚未作答」、
+   按鈕是「開始作答 →」——同一個孩子、同一台平板、同一種故障，後測救得回來、
+   前測整份消失，而且畫面主動告訴他「什麼都沒有」。
+   前測 θ 是 ANCOVA 的共變數與 Rasch 校準的來源，缺答一律寫成 null 不進
+   Rasch，全站沒有補交路徑；一節課只有 40 分鐘，重寫一次量到的是疲勞與
+   時間壓力。做法與 AAL 草稿完全一致（獨立的 key，不擠進 save()）。 */
+const QUIZ_DRAFT_KEY = 'kairos-quiz-draft';
+
+function quizDraftOf(aid, sid){
+  try {
+    const all = JSON.parse(localStorage.getItem(QUIZ_DRAFT_KEY) || '{}');
+    return all[aid + '|' + sid] || null;
+  } catch (e) { return null; }
+}
+/* 草稿裡已經作答幾題（選擇題有選 + 非選有字或有手寫） */
+function quizDraftProgress(aid, sid){
+  const d = quizDraftOf(aid, sid);
+  if (!d) return 0;
+  const a = getAssignment(aid);
+  if (!a) return 0;
+  return a.itemIds.map(getItem).filter(Boolean).filter(function(i){
+    if (i.type === 'cr'){
+      if (String((d.texts || {})[i.id] || '').trim()) return true;
+      const sp = (d.strokes || {})[i.id];
+      const lines = Array.isArray(sp) ? sp : (sp && sp.lines);
+      return !!(lines && lines.length);
+    }
+    return (d.answers || {})[i.id] !== undefined && (d.answers || {})[i.id] !== null;
+  }).length;
+}
+function quizSave(){
+  if (isImpersonating()) return;
+  if (!QUIZ) return;
+  const me = currentUser();
+  try {
+    const all = JSON.parse(localStorage.getItem(QUIZ_DRAFT_KEY) || '{}');
+    const strokes = {};
+    (getAssignment(QUIZ.aid) || {itemIds:[]}).itemIds.map(getItem).filter(Boolean)
+      .forEach(function(i){ if (i.type === 'cr'){ const p = padPayload(i.id); if (p) strokes[i.id] = p; } });
+    all[QUIZ.aid + '|' + me.id] = {answers:QUIZ.answers, texts:QUIZ.texts,
+                                   strokes:strokes, savedAt:Date.now()};
+    localStorage.setItem(QUIZ_DRAFT_KEY, JSON.stringify(all));
+    QUIZ.dirty = false;
+  } catch (e) {
+    QUIZ.dirty = true;
+    /* 與 aalSave 相同：連續兩次失敗就常駐警示，不要只 toast 一次。 */
+    quizSave._fails = (quizSave._fails || 0) + 1;
+    if (quizSave._fails >= 2){
+      const b = document.getElementById('quizSaveWarn');
+      if (b) b.hidden = false;
+    }
+    toast('這一題沒能存起來，先不要關掉分頁。');
+  }
+}
+/* 打字每一鍵都寫 localStorage 會拖慢輸入，而作答速度本身是遙測變項；
+   去抖 600ms，離開作答頁時由 render() 那一支結清。 */
+function quizSaveSoon(){
+  clearTimeout(quizSaveSoon._t);
+  quizSaveSoon._t = setTimeout(function(){ if (QUIZ) quizSave(); }, 600);
+}
+function quizSaveFlush(){
+  clearTimeout(quizSaveSoon._t);
+  if (QUIZ) quizSave();
+}
+function quizDraftDrop(aid, sid){
+  try {
+    const all = JSON.parse(localStorage.getItem(QUIZ_DRAFT_KEY) || '{}');
+    delete all[aid + '|' + sid];
+    localStorage.setItem(QUIZ_DRAFT_KEY, JSON.stringify(all));
+  } catch (e) {}
+}
+
 function viewStudent(){
   const me = currentUser();
   const k = classOfStudent(me.id);
@@ -70,7 +145,9 @@ function viewStudent(){
     '<div class="col">' + asgs.map(function(a){
       const done = submitted(a.id, me.id);
       const n = a.itemIds.length;
-      const draftN = (!done && a.aal) ? aalDraftProgress(a.id, me.id) : 0;
+      /* 前測也要有「寫到一半」。原本這一行把它擋在後測專用（a.aal），
+         於是平板沒電重開之後，寫了十二題的孩子看到的是「尚未作答」與「開始作答」。 */
+      const draftN = done ? 0 : (a.aal ? aalDraftProgress(a.id, me.id) : quizDraftProgress(a.id, me.id));
       /* 兩個不同的條件，不能共用一個旗標：
          postPending — 後測還沒交。此時前測那張卡若印「已完成 · 選擇題答對 12」
            並掛著〈看我這次讀得怎麼樣〉，等於在後測途中把同一份題本的
@@ -219,7 +296,28 @@ function viewQuiz(aid){
     rerouteInRender('#/result/' + aid);
     return viewResult(aid);
   }
-  if (!QUIZ || QUIZ.aid !== aid) QUIZ = {aid:aid, answers:{}, texts:{}, strokes:{}};
+  /* 進來時先把草稿接回來。沒接的話，重載＝整份歸零（見 QUIZ_DRAFT_KEY）。 */
+  if (!QUIZ || QUIZ.aid !== aid){
+    QUIZ = {aid:aid, answers:{}, texts:{}, strokes:{}};
+    const d = quizDraftOf(aid, me.id);
+    if (d){
+      QUIZ.answers = d.answers || {};
+      QUIZ.texts   = d.texts   || {};
+      /* 手寫要放回 PADS，畫布還沒建出來也沒關係：initPads 會沿用既有的
+         PADS[id]，它的 size() 會依當時寬度換算座標再重畫。 */
+      Object.keys(d.strokes || {}).forEach(function(iid){
+        const sp = d.strokes[iid];
+        const lines = Array.isArray(sp) ? sp : (sp && sp.lines);
+        if (!lines || !lines.length) return;
+        PADS[iid] = PADS[iid] || {strokes:[], color:'ink', width:2};
+        PADS[iid].strokes = lines;
+        PADS[iid].w = (Array.isArray(sp) ? 0 : sp.w) || PADS[iid].w;
+        PADS[iid].h = (Array.isArray(sp) ? 240 : sp.h) || 240;
+        QUIZ.strokes[iid] = lines;
+        if (PADS[iid].cv) redraw(iid);
+      });
+    }
+  }
 
   const items = a.itemIds.map(getItem).filter(Boolean);
   /* 進度要涵蓋兩種題型。原本分子只數選擇題、分母也只數選擇題，
@@ -227,8 +325,9 @@ function viewQuiz(aid){
      孩子被告知做完了，交出去的卻是兩題空白的建構反應題，
      而前測沒有任何補交路徑。 */
   const answered = items.filter(function(i){
+    /* 手寫也算，與 quizProgressUpdate／submitQuiz 同一條判定。 */
     return i.type === 'cr'
-      ? !!String(QUIZ.texts[i.id] || '').trim()
+      ? (!!String(QUIZ.texts[i.id] || '').trim() || padHasInk(i.id))
       : QUIZ.answers[i.id] !== undefined;
   }).length;
   const total = items.length;
@@ -238,6 +337,14 @@ function viewQuiz(aid){
     answered + ' / ' + total + ' 題</span>' +
     '<div class="bar" style="flex:1;max-width:280px"><i style="width:' + (100 * answered / Math.max(1, total)) + '%"></i></div>' +
     '<div class="spacer"></div><button class="btn primary sm" data-act="quiz-submit" data-id="' + aid + '">交卷</button></div>' +
+    /* 存檔失敗的常駐警示，與後測那一支同一個形狀。quizSave 連續兩次失敗
+       會來掀開它——沒有這個節點的話那條安全網又是死碼（後測第 5 輪踩過同一個坑）。 */
+    '<div class="card card-p" id="quizSaveWarn" role="alert"' +
+      (QUIZ && QUIZ.dirty ? '' : ' hidden') +
+      ' style="margin-bottom:12px;border-left:3px solid var(--crit)">' +
+      '<p class="small" style="margin:0"><strong>你寫的東西沒能存起來。</strong>' +
+      '這台平板的儲存空間可能滿了。先不要關掉這個分頁——畫面上的內容還在，' +
+      '請舉手告訴老師。</p></div>' +
     /* 前測（以及任何非 AAL 的派題）走這一支，而這一支從來沒有渲染文章。
        16 題全部是文本依賴題——「小昀第一次發現柚子樹位置不對，是在什麼時候？」
        在沒有文章的畫面上只能用猜的。實測：畫面印得出全部題幹，
@@ -727,7 +834,7 @@ function initPads(){
    · 解除「還沒寫完」的紅框並更新進度——原本 aalClearMissing 只掛在選項與
      textarea 上，在畫布上寫再多都消不掉那個紅字。 */
 function padChanged(id){
-  if (QUIZ && !/^aal-/.test(id)) QUIZ.strokes[id] = PADS[id].strokes;
+  if (QUIZ && !/^aal-/.test(id)){ QUIZ.strokes[id] = PADS[id].strokes; quizSaveSoon(); }
   if (typeof quizProgressUpdate === 'function' && QUIZ) quizProgressUpdate();
   if (/^aal-/.test(id)){
     if (typeof AAL !== 'undefined' && AAL && typeof aalSave === 'function') aalSave();

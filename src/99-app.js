@@ -113,6 +113,9 @@ function render(){
     try { flushPendingPicks(); flushLogs(); } catch (e) {}
     AAL = null; AAL_LEFT_VIA = 'nav';
   }
+  /* 離開前測作答頁也要先結清去抖的存檔，理由與上面相同：
+     這裡是所有離開路徑的共同出口。QUIZ 不釋放（要讓他回來繼續）。 */
+  if (QUIZ && ROUTE.name !== 'quiz'){ try { quizSaveFlush(); } catch (e) {} }
   const prevY = window.scrollY;
   /* 內層捲動容器的位置。window.scrollY 還原不了它們——v.innerHTML 一換，
      容器就被重建、scrollTop 歸零。同一篇文章換題時，學生每次都要重新捲回
@@ -406,7 +409,10 @@ function bindEvents(){
   window.addEventListener('beforeunload', function(e){
     /* 關分頁是最後一次寫入機會：待處理的選項、最後一段打字與日誌一起結清 */
     if (AAL){ try { flushPendingPicks(); } catch (e2) {} flushLogs(); }
-    if (AAL && AAL.dirty){ e.preventDefault(); e.returnValue = ''; }
+    /* 前測同樣要在關分頁前把去抖中的草稿寫掉，否則最後 600ms 內作答的
+       那一題會遺失（而前測沒有任何補交路徑）。 */
+    if (QUIZ){ try { quizSaveFlush(); } catch (e2) {} }
+    if ((AAL && AAL.dirty) || (QUIZ && QUIZ.dirty)){ e.preventDefault(); e.returnValue = ''; }
   });
 
   /* 對話輸入框按 Enter 送出。
@@ -874,6 +880,7 @@ function bindEvents(){
       try {
         localStorage.removeItem('kairos-draft');
         localStorage.removeItem('kairos-survey-draft');
+        localStorage.removeItem('kairos-quiz-draft');
       } catch (e) {}
       AAL = null; SURVEY = null; QUIZ = null;
       /* PADS 是全域物件、只以題目 id 為鍵、不在 state 裡，所以上面這一排清場漏掉了它。
@@ -994,6 +1001,7 @@ function bindEvents(){
       /* 「回去寫完」留下的標記，選了就解除 */
       const pc = t.closest('.card'); if (pc) pc.classList.remove('missing');
       quizProgressUpdate();
+      quizSaveSoon();
       return; }
     if (act === 'cr-score'){
       const r = state.responses.find(function(x){ return x.aid === t.dataset.aid && x.sid === t.dataset.sid && x.iid === t.dataset.iid; });
@@ -1042,6 +1050,7 @@ function bindEvents(){
       return; }
     if (act === 'quiz-text'){
       QUIZ.texts[t.dataset.id] = t.value;
+      quizSaveSoon();
       /* 非選題現在也算進進度，所以打字要更新那一行；
          同時把「回去寫完」留下的標記解除。 */
       quizProgressUpdate();
@@ -1363,6 +1372,7 @@ function submitQuizCommit(aid){
       note:'請舉手告訴老師。'});
     return;
   }
+  quizDraftDrop(aid, me.id);   // 交出去了，草稿不用留（落地失敗時不會走到這一行）
   QUIZ = null;
   toast('已交卷。往下看你的個人診斷。');
   replaceHash('#/result/' + aid);
