@@ -338,8 +338,12 @@ function viewQuiz(aid){
   const gate = entryGate(aid, me.id);
   if (gate) return gate;
   /* 進來時先把草稿接回來。沒接的話，重載＝整份歸零（見 QUIZ_DRAFT_KEY）。 */
-  if (!QUIZ || QUIZ.aid !== aid){
-    QUIZ = {aid:aid, answers:{}, texts:{}, strokes:{}};
+  /* 還要比對學生。原本只比 aid，而 QUIZ 是模組層全域：
+     換人之後（或跨分頁同步把身分換掉之後），下一個孩子打開同一份前測，
+     條件 QUIZ.aid !== aid 不成立，上一個孩子的答案整份留在畫面上，
+     交卷時就成了他的作答。AAL 那一支早就比了 AAL.me。 */
+  if (!QUIZ || QUIZ.aid !== aid || QUIZ.sid !== me.id){
+    QUIZ = {aid:aid, sid:me.id, answers:{}, texts:{}, strokes:{}};
     const d = quizDraftOf(aid, me.id);
     if (d){
       QUIZ.answers = d.answers || {};
@@ -437,7 +441,7 @@ function viewQuiz(aid){
           '<div class="field"><label id="qLbl-' + esc(it.id) + '" for="qText-' + esc(it.id) + '">請寫出你的解題過程與說明</label>' +
           '<textarea id="qText-' + esc(it.id) + '" aria-labelledby="qStem-' + esc(it.id) + ' qLbl-' + esc(it.id) + '" rows="6" style="min-height:9rem" data-act="quiz-text" data-id="' + it.id + '">' + esc(QUIZ.texts[it.id] || '') + '</textarea></div>' +
           '<div class="field" style="margin-top:10px">' +
-          '<label for="qPad-' + esc(it.id) + '">也可以直接手寫（老師評閱時看得到）</label>' +
+          '<label for="qPad-' + esc(it.id) + '">也可以手寫：先按下面的〈開始手寫〉，再用手指或筆寫（老師評閱時看得到）</label>' +
           '<canvas class="pad" id="qPad-' + esc(it.id) + '" data-pad="' + it.id + '" height="240"></canvas>' +
           '<div class="row" style="margin-top:6px">' +
             '<label class="small muted" for="qPadC-' + esc(it.id) + '">筆色</label>' +
@@ -915,36 +919,35 @@ function initPads(){
       /* 量不到寬度時什麼都不要做。原本 `cv.clientWidth || 600` 在畫布已經
          脫離文件（交卷、換題、換頁之後）時會退回 600，然後拿它去換算座標，
          把整份筆跡就地乘掉。量不到就是量不到，不是 600。 */
-      if (!cv.isConnected || !cv.clientWidth) return;
+      if (!cv.isConnected || !cv.clientWidth || !cv.clientHeight) return;
       const w = cv.clientWidth;
+      const h = cv.clientHeight;   // 由 CSS 的 11rem 決定，跟著字級走
       const p = PADS[id];
       /* 筆畫是 CSS px 絕對座標。原本 resize 只重設畫布尺寸就直接重畫舊座標，
          平板由橫轉直（約 1024→768）之後，寫在右半邊的字整片落在畫布外——
          資料還在、畫面沒了，而孩子最可能的反應是按〈清空〉整題重寫。
          這裡依新舊寬度比例換算，字跟著縮，不會掉出去。 */
-      if (p && p.w && w && Math.abs(p.w - w) > 0.5){
-        const k = w / p.w;
+      if (p && p.w && p.h && w && h && (Math.abs(p.w - w) > 0.5 || Math.abs(p.h - h) > 0.5)){
+        /* x 與 y 各自照自己那一軸的比例換算。原本兩軸都乘寬度比，
+           而高度永遠是 240：畫布變寬時 y 被推出畫布外。 */
+        const kx = w / p.w, ky = h / p.h;
         p.strokes.forEach(function(s){
-          s.pts.forEach(function(pt){ pt[0] *= k; pt[1] *= k; });
-          s.width = (s.width || 2) * k;
+          s.pts.forEach(function(pt){ pt[0] *= kx; pt[1] *= ky; });
+          s.width = (s.width || 2) * kx;
         });
         /* 高度也要跟著等比放大。原本 x 與 y 都乘 k，實際的畫布高度却永遠是 240：
            畫布變寬（直式寫完轉橫式、或 175% 由雙欄翻成單欄後回來）時 k>1，
            y 被推到 240 以上，畫布上看不見，strokesSvg 的 viewBox 也切掉－－
            評閱端與唯讀重播看到的同樣是殘缺的那一份。
            原註解只推演了 1024→768 的縮小方向。 */
-        p.h = Math.round((p.h || padBaseHeight()) * k);
       }
-      if (p){ p.w = w; p.h = p.h || padBaseHeight(); }
-      const H = (p && p.h) || padBaseHeight();
-      /* height 屬性一起設：canvas 只有 width:100%，顯示高度由內建比例推出來。 */
-      cv.style.height = H + 'px';
-      cv.width = w * dpr; cv.height = H * dpr;
+      if (p){ p.w = w; p.h = h; }
+      cv.width = w * dpr; cv.height = h * dpr;
       const ctx = cv.getContext('2d');
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       redraw(id);
     }
-    PADS[id] = PADS[id] || {strokes:[], color:'ink', width:2, h:padBaseHeight(), cv:cv};
+    PADS[id] = PADS[id] || {strokes:[], color:'ink', width:2, cv:cv};
     PADS[id].cv = cv;
     size();
     /* 舊的監聽器要先拆掉。原本每渲染一次 CR 題就多掛一個 window resize
@@ -1013,6 +1016,21 @@ function padChanged(id){
   if (/^aal-/.test(id)){
     if (typeof AAL !== 'undefined' && AAL && typeof aalSave === 'function') aalSave();
     if (typeof aalClearMissing === 'function') aalClearMissing();
+    /* 手寫也要寫一筆行為事件。'W'（書寫作答）原本只由 #crText 的 input
+       產生，於是只用手寫作答的孩子在整份歷程資料裡完全沒有「作答」這個動作：
+       LSA 的轉移矩陣、ENA 的 REV 判定（往前 3 格有沒有 O／W）、SDIS 序列
+       全部看不到他，而他其實一直在寫。那群孩子正是不會注音打字的那一群，
+       缺漏因此與打字能力共變，不是隨機的。
+       節流與打字那一支同一個做法：連續筆畫不要每一筆都記。 */
+    const iid = String(id).replace(/^aal-/, '');
+    const it = (typeof AAL !== 'undefined' && AAL)
+      ? AAL.items.find(function(x){ return x.id === iid; }) : null;
+    if (it && typeof aalLog === 'function'){
+      if (!padChanged._last || Date.now() - padChanged._last > 4000){
+        padChanged._last = Date.now();
+        aalLog('TYPE', 'W', {len:(PADS[id].strokes || []).length, ink:true}, it);
+      }
+    }
   } else {
     const cv = PADS[id] && PADS[id].cv;
     const card = cv && cv.closest ? cv.closest('.card') : null;

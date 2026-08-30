@@ -37,9 +37,16 @@ function nextRev(){
    記憶體裡才有的狀態（AAL 的標記與草稿、SURVEY 的作答與頁碼、QUIZ 的
    答案與筆跡），被整份 state 換掉就無聲消失。 */
 function measuringNow(){
+  /* 要看「現在真的停在那一頁」，不能只看變數在不在。
+     QUIZ 與 SURVEY 離開頁面時刻意保留（讓孩子回來繼續），
+     所以只要他開過前測或問卷沒交就離開，這個分頁往後永久被判為
+     「施測中」：跨分頁更新一律擱置，而 PENDING_FOREIGN 只在離開這三個
+     畫面時才會被洗出去。作答內容現在都有草稿（三支都有），
+     而且 save() 也改成合併了，所以不在那一頁時同步是安全的。 */
+  const rn = (typeof ROUTE !== 'undefined' && ROUTE) ? ROUTE.name : '';
   if (typeof AAL !== 'undefined' && AAL) return 'aal';
-  if (typeof SURVEY !== 'undefined' && SURVEY) return 'survey';
-  if (typeof QUIZ !== 'undefined' && QUIZ) return 'quiz';
+  if (typeof SURVEY !== 'undefined' && SURVEY && rn === 'survey') return 'survey';
+  if (typeof QUIZ !== 'undefined' && QUIZ && rn === 'quiz') return 'quiz';
   return null;
 }
 

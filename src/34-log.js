@@ -41,10 +41,10 @@ function allDialog(){ return DEMO_DIALOG.concat(state.dialog || []); }
    對照組整節課不觸發任何 save()，重整就全沒。歷程序列是依變項之一，
    這個遺失與實驗條件共變，會直接污染四條件的序列分析。
    尾緣節流（不可用前緣：前緣會掉最後一批），滿 20 筆或滿 2 秒就寫。 */
-let _logFlushT = null, _logPending = 0;
+let _logFlushT = null, _logPending = 0, _logFirstAt = 0;
 
 function flushLogs(){
-  clearTimeout(_logFlushT); _logFlushT = null; _logPending = 0;
+  clearTimeout(_logFlushT); _logFlushT = null; _logPending = 0; _logFirstAt = 0;
   save();
 }
 
@@ -53,7 +53,14 @@ function logEvent(o){
   state.logs.push(o);
   _logPending++;
   if (_logPending >= 20){ flushLogs(); return; }
-  clearTimeout(_logFlushT);
+  /* 真正的尾緣節流：計時器從「這一批的第一筆」算起，不每筆重排。
+     原本每一筆都 clearTimeout 再設 2000ms，那是去抖不是節流：
+     只要動作間隔小於兩秒就永遠不落地，只剩「滿 20 筆」一個出口。
+     而逐句往下點正是連續動作，所以隨時可能有最多 19 筆只存在記憶體，
+     斷電就全沒－－而標記是從日誌重建的（見 aalInit）。
+     註解一直寫著「滿 20 筆或滿 2 秒就寫」，實作却不是。 */
+  if (_logFlushT) return;
+  _logFirstAt = Date.now();
   _logFlushT = setTimeout(flushLogs, 2000);
 }
 
@@ -217,7 +224,12 @@ function buildDemoLogs(){
       }
       push('ENTER', null, {});
       // 逐句標記
-      const nSent = splitSentences(it.stem).length;
+      /* 句號要從「文章」抽，不是「題幹」。真正可標記的單位是
+         passageSentences(getText(it.unit))（T1 約 35 句），而題幹只有 1–3 句－－
+         於是 Math.floor(rnd()*nSent) 幾乎恆為 0，所有示範標記全壓在第一句。
+         教師的唯讀重播因此看起來像「全班都只標第一句」，
+         而這份示範資料正是用來讓老師熟悉「閱讀痕跡長什麼樣」的。 */
+      const nSent = passageSentences(getText(it.unit)).length || 1;
       const nMark = 1 + Math.floor(rnd() * Math.min(3, nSent));
       /* textId 一定要帶。真實的 aalMark 帶了，示範產生器沒帶——
          而標記的折疊作用域是文本（foldedMarks 用 textId），
@@ -329,9 +341,16 @@ function splitSentences(text){
 function toSDIS(){
   /* GSEQ 序列檔同樣要走共用取樣（見 behaviorSeq） */
   const L = behaviorSeq(allLogs());
+  /* 依「同一次造訪」切段（visitIndex）。第 7 輪只把這個修正套進站內的
+     lsa() 與 enaLines()，兩個真正交到分析軟體手上的匯出口沒有跟上－－
+     而這兩支才是實際拿去跑 GSEQ 與 rENA 的。
+     黏成一條序列的後果寫在 62-process.js 的 visitIndex 上方：
+     「離開前的最後一個動作」與「十幾分鐘後回來的第一個動作」
+     之間會被記成一次 lag-1 轉移。 */
+  const vi = visitIndex();
   const bySeq = {};
   L.forEach(function(e){
-    const k = e.sid + '|' + e.iid;
+    const k = visitKey(e, vi);
     (bySeq[k] = bySeq[k] || []).push(e);
   });
   const out = ['Event'];
@@ -340,7 +359,8 @@ function toSDIS(){
   Object.keys(bySeq).sort().forEach(function(k){
     const p = k.split('|');
     const evs = bySeq[k].sort(function(a, b){ return a.t - b.t; });
-    out.push('% sid=' + p[0] + ' cond=' + conditionOfStudent(p[0]) + ' item=' + p[1]);
+    out.push('% sid=' + p[0] + ' cond=' + conditionOfStudent(p[0]) +
+             ' item=' + p[1] + ' visit=' + (p[2] || 'v1'));
     out.push(evs.map(function(e){ return sdisCode(e.code); }).join(' ') + ' /');
   });
   return out.join('\n');
@@ -353,10 +373,17 @@ function sdisCode(c){ return SDIS_MAP[c] || 'OTHER'; }
 /* rENA 寬表 CSV：一列一個對話回合／事件，二元編碼欄可直接餵給 ena.accumulate.data() */
 function toENACsv(){
   const rows = [['sid','name','class','grade','condition','lang','assignment','item','item_process',
-                 'turn','speaker','rel_code','utterance',
+                 'turn','speaker','visit','rel_code','utterance',
                  'FR','SI','II','EE','BELOW','AT','ABOVE','POS','NEG','MARK','OPTION','WRITE','CHECK']];
   /* rENA 寬表同樣要走共用取樣（見 behaviorSeq） */
   const logs = behaviorSeq(allLogs()).slice().sort(function(a, b){ return a.t - b.t; });
+  /* 造訪序號也要進匯出：rENA 的 stanza 不可以跨入座。 */
+  const viE = visitIndex();
+  const enaVisit = {};
+  logs.forEach(function(e){
+    enaVisit[e.sid + '|' + e.iid + '|' + e.t] =
+      +String(visitKey(e, viE)).split('|v')[1] || 1;
+  });
   const dial = allDialog();
   const dialKey = {};
   dial.forEach(function(d){ dialKey[d.sid + '|' + d.iid + '|' + d.turn + '|' + d.speaker] = d; });
@@ -367,11 +394,18 @@ function toENACsv(){
     const d = e.turn ? dialKey[e.sid + '|' + e.iid + '|' + e.turn + '|' + (e.type === 'AI' ? 'agent' : 'student')] : null;
     const txt = (d && d.text) || e.text || '';
     const uc = d ? d.ucode : (e.code === 'A' ? (e.proc || '') : '');
-    const rel = e.rel || (e.code === 'Q−' ? 'BELOW' : e.code === 'Q0' ? 'AT' : e.code === 'Q+' ? 'ABOVE' : '');
+    /* rel_code 要的是「相對歷程編碼」（BELOW／AT／ABOVE），
+       而 e.rel 是 aalLog 給每一筆事件的「距這一次入座已經幾毫秒」。
+       `e.rel || …` 於是把毫秒數寫進了這一欄－－匯出檔裡
+       rel_code 實際上全是像 48213 這種數字，只有當 rel 剛好是 0
+       的那一筆才會落到後面的對應。只接字串型的 rel（ASK 事件才有）。 */
+    const relRaw = (typeof e.rel === 'string') ? e.rel : '';
+    const rel = relRaw || (e.code === 'Q−' ? 'BELOW' : e.code === 'Q0' ? 'AT' : e.code === 'Q+' ? 'ABOVE' : '');
     const s = txt ? sentimentOf(txt) : {score:0};
     rows.push([
       e.sid, userName(e.sid), k ? k.name : '', k ? k.grade : '', e.cond, e.lang || 'zh',
       e.aid, e.iid, e.proc || '', e.turn || '', e.type === 'AI' ? 'agent' : (e.code === 'A' ? 'agent' : 'student'),
+      (enaVisit[e.sid + '|' + e.iid + '|' + e.t] || 1),
       rel, txt.replace(/\s+/g, ' '),
       uc === 'FR' ? 1 : 0, uc === 'SI' ? 1 : 0, uc === 'II' ? 1 : 0, uc === 'EE' ? 1 : 0,
       rel === 'BELOW' ? 1 : 0, rel === 'AT' ? 1 : 0, rel === 'ABOVE' ? 1 : 0,
@@ -385,7 +419,22 @@ function toENACsv(){
 }
 
 /* 每位學生每一題的遙測摘要（寬表） */
+/* 這一題屬於哪一篇文章。 */
+function itemUnitOf(iid){ const it = getItem(iid); return it ? it.unit : '_'; }
+
 function toTelemetryCsv(){
+  /* 先以「學生|文本」把標記折疊一次（見下方 r.marks 的說明）。 */
+  const markFoldByText = (function(){
+    const by = {};
+    allLogs().forEach(function(e){
+      if (e.code !== 'M') return;
+      const k = (e.sid || '_') + '|' + (e.textId || itemUnitOf(e.iid));
+      (by[k] = by[k] || []).push(e);
+    });
+    const out = {};
+    Object.keys(by).forEach(function(k){ out[k] = foldToggleLog(by[k], 'M', 'sent').length; });
+    return out;
+  })();
   const rows = [['sid','name','class','condition','item','item_process',
                  'first_key_latency_ms','keystrokes','deletions','long_pauses',
                  'marks','option_clicks','turns','self_checks','dwell_ms','mean_sentiment']];
@@ -416,7 +465,14 @@ function toTelemetryCsv(){
   });
   Object.keys(byKey).forEach(function(k){
     const r = byKey[k], kl = classOfStudent(r.sid), it = getItem(r.iid);
-    r.marks = foldToggleLog(r.mEv, 'M', 'sent').length;
+    /* 標記的折疊作用域是「文本」，不是「題目」。aalMark 寫的是
+       AAL.marks[it.unit]，句號是整篇的全域序號，畫面也明說「換題也不會消失」，
+       同一支檔案上方也已經為此寫了 markScope（用 e.textId）。
+       這一列依 sid|iid 分組之後才折疊，等於把同一篇文章的標記
+       拆到十幾個題目下各折一次：同一句在第 3 題標、第 7 題取消，
+       兩邊各自折成「還開著」與「關起來」，marks 欄因此比實際多。
+       改成以文本為範圍折疊後，再歸到這一列（同一篇文章的各題拿到同一個數）。 */
+    r.marks = markFoldByText[(r.sid || '_') + '|' + itemUnitOf(r.iid)] || 0;
     r.checks = foldToggleLog(r.cEv, 'C', 'idx').length;
     /* 有邊界事件就累加各次造訪；沒有（舊資料）才退回 max−min */
     const spans = r.visits.filter(function(v){ return v.out != null && v.out >= v.in; });

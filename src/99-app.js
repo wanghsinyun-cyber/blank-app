@@ -752,6 +752,14 @@ function bindEvents(){
        「正在想…」、把輸入框交還、寫入語料）一律由 aalSay 自己走完，
        這裡不碰畫面，否則會有兩個地方在改同一塊 DOM。 */
     if (act === 'aal-say-cancel'){
+      /* 不可以先停用自己。按下這顆鈕的當下焦點就在它身上，
+         停用一個握有焦點的元素會把焦點丟回 <body>；緊接著 aalSay 的
+         還原流程又把整個 #aalThinking（連同這顆鈕）移除。
+         而還原段的 focusIsOurs 只認 box 與 sendBtn，所以焦點不會被收回－－
+         用鍵盤的孩子按下〈不等了〉之後，焦點掉到頁首，要再 Tab 穿過
+         三四十顆句子鈕才回得了作答區。先把焦點挑到輸入框再停用。 */
+      const inBox = document.getElementById('aalSay');
+      if (document.activeElement === t && inBox) try { inBox.focus({preventScroll:true}); } catch (e) {}
       t.disabled = true;
       t.textContent = '取消中…';
       if (aalSay._ac) try { aalSay._ac.abort(); } catch (e) {}
@@ -1041,6 +1049,8 @@ function bindEvents(){
       /* 解鎖是一次性的：換完人就鎖回去，孩子坐下來時不會有一個還開著的出口。 */
       if (state.ui) state.ui.deviceUnlock = false;
       clearPads();          // 上一個身分的手寫不能跟過來
+      /* 記憶體裡的作答也不能跟過來。三支都有草稿，換回來時會從草稿還原。 */
+      AAL = null; SURVEY = null; QUIZ = null;
       state.ui.role = e.target.value; save(); renderShell();
       go(isTeacher() ? '#/teacher' : '#/student'); render(); return; }
     if (!t) return;

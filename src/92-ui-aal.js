@@ -471,7 +471,7 @@ function viewAaL(aid){
           'placeholder="先寫你的看法，再寫你是從文章哪一段看出來的">' +
           esc(AAL.texts[it.id] || '') + '</textarea></div>' +
           '<div class="field" style="margin-top:10px">' +
-          '<label for="aalPad-' + esc(it.id) + '">也可以直接手寫（老師評閱時看得到）</label>' +
+          '<label for="aalPad-' + esc(it.id) + '">也可以手寫：先按下面的〈開始手寫〉，再用手指或筆寫（老師評閱時看得到）</label>' +
           '<canvas class="pad" id="aalPad-' + esc(it.id) + '" data-pad="aal-' + esc(it.id) + '" height="240"></canvas>' +
           '<div class="row" style="margin-top:6px">' +
             '<label class="small muted" for="aalPadC-' + esc(it.id) + '">筆色</label>' +
@@ -793,7 +793,7 @@ async function aalSay(){
   /* 必須是第一行。aalSay 是 async，等到 await 之後才擋的話，
      state.dialog 那一筆已經以學生的名義寫進去了。 */
   if (isImpersonating()){ toast('代為檢視時不能替學生跟夥伴說話。'); return; }
-  const box = document.getElementById('aalSay');
+  let box = document.getElementById('aalSay');
   if (!box) return;
   const text = box.value.trim();
   if (!text) return;
@@ -821,8 +821,8 @@ async function aalSay(){
     ucode:codeUtteranceProcess(text), sent:sm.score});
   /* 不重繪整頁：輸入框從頭到尾不被摧毀，焦點就不會掉，
      #aalChat 是 role="log" aria-live="polite"，新訊息會自動被報讀器唸出來。 */
-  const chat = document.getElementById('aalChat');
-  const sendBtn = document.querySelector('[data-act="aal-say"]');
+  let chat = document.getElementById('aalChat');
+  let sendBtn = document.querySelector('[data-act="aal-say"]');
   if (chat) chat.insertAdjacentHTML('beforeend',
     '<div class="msg me"><b class="sr-only">我說的</b>' + esc(text) + '</div>');
   box.value = '';
@@ -935,6 +935,17 @@ async function aalSay(){
   /* 守衛放在資料寫入之後、DOM 更新之前：回覆一定要進 state.dialog
      （那是額度與語料的同一份帳），但學生已經翻頁的話就不碰畫面、不 toast。 */
   if (!AAL || aalItem().id !== myIid) return;
+
+  /* 等待期間可能重繪過（按〈下一題〉再按〈上一題〉回來、調字級、
+     高對比、跨分頁同步…），render() 的 v.innerHTML 會把整塊換掉，
+     送出當下抓的 chat／box／sendBtn 三個節點就都脱離了文件。
+     而上面那道守門只比「還是不是同一題」，所以條件成立：
+     回覆被 append 到一個已經不在畫面上的 chat，孩子永遠看不到小葵的回答；
+     readOnly 也解在舊的 box 上，畫面上那一顆永遠停用－－而額度已經扣了。
+     節點一律重新查一次（#aalThinking 與 #turnLeft 本來就是這樣做的）。 */
+  chat    = document.getElementById('aalChat')    || chat;
+  box     = document.getElementById('aalSay')      || box;
+  sendBtn = document.querySelector('[data-act="aal-say"]') || sendBtn;
 
   /* 拿掉「正在想…」、append 回覆、把輸入框交還給學生 */
   const think = document.getElementById('aalThinking');

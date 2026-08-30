@@ -486,7 +486,14 @@ td.n,th.n{text-align:right; font-family:var(--f-mono); font-variant-numeric:tabu
    滑動視為捲動：前測一頁列 16 題、AaL 在平板上恆為單欄，畫布都落在主捲動
    路徑上，孩子想捲頁時手指落在這裡，頁面不動，他會再滑幾次——每一次都變成
    一條被記下、跟著交卷送出去的假筆畫。改成預設可捲，按〈開始手寫〉才鎖住。 */
-canvas.pad{border:1px solid var(--rule); border-radius:var(--r-m); background:var(--card); touch-action:pan-y; display:block; width:100%; cursor:crosshair}
+/* 高度寫在 CSS 裡並用 rem，讓它跟著字級走（與 #crText 的 min-height:11rem 對齊）。
+   原本由 JS 把算出來的像素值寫進 style.height，而 PADS 跨重繪存活：
+   p.h 只會被「寬度比」縮放，不會因字級改變而重算－－
+   於是同一個字級下的畫布高度會因「之前渲染過什麼」而不同。
+   實測後果：四條件的作答頁在 125～175% 下出現 14～16px 的高度落差，
+   而版面幾何對等是四條件比較的前提。高度交給 CSS，
+   JS 只量實際值來換算筆畫，就不可能再跟渲染歷史有關。 */
+canvas.pad{border:1px solid var(--rule); border-radius:var(--r-m); background:var(--card); touch-action:pan-y; display:block; width:100%; height:11rem; cursor:crosshair}
 canvas.pad.penmode{touch-action:none; border-color:var(--accent); box-shadow:inset 0 0 0 1px var(--accent)}
 /* 評閱端與唯讀重播看到的手寫。currentColor 讓筆跡跟著閱讀者的主題走——
    孩子作答時的主題與老師批改時的主題不一定相同。 */
@@ -2164,10 +2171,10 @@ function allDialog(){ return DEMO_DIALOG.concat(state.dialog || []); }
    對照組整節課不觸發任何 save()，重整就全沒。歷程序列是依變項之一，
    這個遺失與實驗條件共變，會直接污染四條件的序列分析。
    尾緣節流（不可用前緣：前緣會掉最後一批），滿 20 筆或滿 2 秒就寫。 */
-let _logFlushT = null, _logPending = 0;
+let _logFlushT = null, _logPending = 0, _logFirstAt = 0;
 
 function flushLogs(){
-  clearTimeout(_logFlushT); _logFlushT = null; _logPending = 0;
+  clearTimeout(_logFlushT); _logFlushT = null; _logPending = 0; _logFirstAt = 0;
   save();
 }
 
@@ -2176,7 +2183,14 @@ function logEvent(o){
   state.logs.push(o);
   _logPending++;
   if (_logPending >= 20){ flushLogs(); return; }
-  clearTimeout(_logFlushT);
+  /* 真正的尾緣節流：計時器從「這一批的第一筆」算起，不每筆重排。
+     原本每一筆都 clearTimeout 再設 2000ms，那是去抖不是節流：
+     只要動作間隔小於兩秒就永遠不落地，只剩「滿 20 筆」一個出口。
+     而逐句往下點正是連續動作，所以隨時可能有最多 19 筆只存在記憶體，
+     斷電就全沒－－而標記是從日誌重建的（見 aalInit）。
+     註解一直寫著「滿 20 筆或滿 2 秒就寫」，實作却不是。 */
+  if (_logFlushT) return;
+  _logFirstAt = Date.now();
   _logFlushT = setTimeout(flushLogs, 2000);
 }
 
@@ -2340,7 +2354,12 @@ function buildDemoLogs(){
       }
       push('ENTER', null, {});
       // 逐句標記
-      const nSent = splitSentences(it.stem).length;
+      /* 句號要從「文章」抽，不是「題幹」。真正可標記的單位是
+         passageSentences(getText(it.unit))（T1 約 35 句），而題幹只有 1–3 句－－
+         於是 Math.floor(rnd()*nSent) 幾乎恆為 0，所有示範標記全壓在第一句。
+         教師的唯讀重播因此看起來像「全班都只標第一句」，
+         而這份示範資料正是用來讓老師熟悉「閱讀痕跡長什麼樣」的。 */
+      const nSent = passageSentences(getText(it.unit)).length || 1;
       const nMark = 1 + Math.floor(rnd() * Math.min(3, nSent));
       /* textId 一定要帶。真實的 aalMark 帶了，示範產生器沒帶——
          而標記的折疊作用域是文本（foldedMarks 用 textId），
@@ -2452,9 +2471,16 @@ function splitSentences(text){
 function toSDIS(){
   /* GSEQ 序列檔同樣要走共用取樣（見 behaviorSeq） */
   const L = behaviorSeq(allLogs());
+  /* 依「同一次造訪」切段（visitIndex）。第 7 輪只把這個修正套進站內的
+     lsa() 與 enaLines()，兩個真正交到分析軟體手上的匯出口沒有跟上－－
+     而這兩支才是實際拿去跑 GSEQ 與 rENA 的。
+     黏成一條序列的後果寫在 62-process.js 的 visitIndex 上方：
+     「離開前的最後一個動作」與「十幾分鐘後回來的第一個動作」
+     之間會被記成一次 lag-1 轉移。 */
+  const vi = visitIndex();
   const bySeq = {};
   L.forEach(function(e){
-    const k = e.sid + '|' + e.iid;
+    const k = visitKey(e, vi);
     (bySeq[k] = bySeq[k] || []).push(e);
   });
   const out = ['Event'];
@@ -2463,7 +2489,8 @@ function toSDIS(){
   Object.keys(bySeq).sort().forEach(function(k){
     const p = k.split('|');
     const evs = bySeq[k].sort(function(a, b){ return a.t - b.t; });
-    out.push('% sid=' + p[0] + ' cond=' + conditionOfStudent(p[0]) + ' item=' + p[1]);
+    out.push('% sid=' + p[0] + ' cond=' + conditionOfStudent(p[0]) +
+             ' item=' + p[1] + ' visit=' + (p[2] || 'v1'));
     out.push(evs.map(function(e){ return sdisCode(e.code); }).join(' ') + ' /');
   });
   return out.join('\n');
@@ -2476,10 +2503,17 @@ function sdisCode(c){ return SDIS_MAP[c] || 'OTHER'; }
 /* rENA 寬表 CSV：一列一個對話回合／事件，二元編碼欄可直接餵給 ena.accumulate.data() */
 function toENACsv(){
   const rows = [['sid','name','class','grade','condition','lang','assignment','item','item_process',
-                 'turn','speaker','rel_code','utterance',
+                 'turn','speaker','visit','rel_code','utterance',
                  'FR','SI','II','EE','BELOW','AT','ABOVE','POS','NEG','MARK','OPTION','WRITE','CHECK']];
   /* rENA 寬表同樣要走共用取樣（見 behaviorSeq） */
   const logs = behaviorSeq(allLogs()).slice().sort(function(a, b){ return a.t - b.t; });
+  /* 造訪序號也要進匯出：rENA 的 stanza 不可以跨入座。 */
+  const viE = visitIndex();
+  const enaVisit = {};
+  logs.forEach(function(e){
+    enaVisit[e.sid + '|' + e.iid + '|' + e.t] =
+      +String(visitKey(e, viE)).split('|v')[1] || 1;
+  });
   const dial = allDialog();
   const dialKey = {};
   dial.forEach(function(d){ dialKey[d.sid + '|' + d.iid + '|' + d.turn + '|' + d.speaker] = d; });
@@ -2490,11 +2524,18 @@ function toENACsv(){
     const d = e.turn ? dialKey[e.sid + '|' + e.iid + '|' + e.turn + '|' + (e.type === 'AI' ? 'agent' : 'student')] : null;
     const txt = (d && d.text) || e.text || '';
     const uc = d ? d.ucode : (e.code === 'A' ? (e.proc || '') : '');
-    const rel = e.rel || (e.code === 'Q−' ? 'BELOW' : e.code === 'Q0' ? 'AT' : e.code === 'Q+' ? 'ABOVE' : '');
+    /* rel_code 要的是「相對歷程編碼」（BELOW／AT／ABOVE），
+       而 e.rel 是 aalLog 給每一筆事件的「距這一次入座已經幾毫秒」。
+       `e.rel || …` 於是把毫秒數寫進了這一欄－－匯出檔裡
+       rel_code 實際上全是像 48213 這種數字，只有當 rel 剛好是 0
+       的那一筆才會落到後面的對應。只接字串型的 rel（ASK 事件才有）。 */
+    const relRaw = (typeof e.rel === 'string') ? e.rel : '';
+    const rel = relRaw || (e.code === 'Q−' ? 'BELOW' : e.code === 'Q0' ? 'AT' : e.code === 'Q+' ? 'ABOVE' : '');
     const s = txt ? sentimentOf(txt) : {score:0};
     rows.push([
       e.sid, userName(e.sid), k ? k.name : '', k ? k.grade : '', e.cond, e.lang || 'zh',
       e.aid, e.iid, e.proc || '', e.turn || '', e.type === 'AI' ? 'agent' : (e.code === 'A' ? 'agent' : 'student'),
+      (enaVisit[e.sid + '|' + e.iid + '|' + e.t] || 1),
       rel, txt.replace(/\s+/g, ' '),
       uc === 'FR' ? 1 : 0, uc === 'SI' ? 1 : 0, uc === 'II' ? 1 : 0, uc === 'EE' ? 1 : 0,
       rel === 'BELOW' ? 1 : 0, rel === 'AT' ? 1 : 0, rel === 'ABOVE' ? 1 : 0,
@@ -2508,7 +2549,22 @@ function toENACsv(){
 }
 
 /* 每位學生每一題的遙測摘要（寬表） */
+/* 這一題屬於哪一篇文章。 */
+function itemUnitOf(iid){ const it = getItem(iid); return it ? it.unit : '_'; }
+
 function toTelemetryCsv(){
+  /* 先以「學生|文本」把標記折疊一次（見下方 r.marks 的說明）。 */
+  const markFoldByText = (function(){
+    const by = {};
+    allLogs().forEach(function(e){
+      if (e.code !== 'M') return;
+      const k = (e.sid || '_') + '|' + (e.textId || itemUnitOf(e.iid));
+      (by[k] = by[k] || []).push(e);
+    });
+    const out = {};
+    Object.keys(by).forEach(function(k){ out[k] = foldToggleLog(by[k], 'M', 'sent').length; });
+    return out;
+  })();
   const rows = [['sid','name','class','condition','item','item_process',
                  'first_key_latency_ms','keystrokes','deletions','long_pauses',
                  'marks','option_clicks','turns','self_checks','dwell_ms','mean_sentiment']];
@@ -2539,7 +2595,14 @@ function toTelemetryCsv(){
   });
   Object.keys(byKey).forEach(function(k){
     const r = byKey[k], kl = classOfStudent(r.sid), it = getItem(r.iid);
-    r.marks = foldToggleLog(r.mEv, 'M', 'sent').length;
+    /* 標記的折疊作用域是「文本」，不是「題目」。aalMark 寫的是
+       AAL.marks[it.unit]，句號是整篇的全域序號，畫面也明說「換題也不會消失」，
+       同一支檔案上方也已經為此寫了 markScope（用 e.textId）。
+       這一列依 sid|iid 分組之後才折疊，等於把同一篇文章的標記
+       拆到十幾個題目下各折一次：同一句在第 3 題標、第 7 題取消，
+       兩邊各自折成「還開著」與「關起來」，marks 欄因此比實際多。
+       改成以文本為範圍折疊後，再歸到這一列（同一篇文章的各題拿到同一個數）。 */
+    r.marks = markFoldByText[(r.sid || '_') + '|' + itemUnitOf(r.iid)] || 0;
     r.checks = foldToggleLog(r.cEv, 'C', 'idx').length;
     /* 有邊界事件就累加各次造訪；沒有（舊資料）才退回 max−min */
     const spans = r.visits.filter(function(v){ return v.out != null && v.out >= v.in; });
@@ -3043,9 +3106,16 @@ function nextRev(){
    記憶體裡才有的狀態（AAL 的標記與草稿、SURVEY 的作答與頁碼、QUIZ 的
    答案與筆跡），被整份 state 換掉就無聲消失。 */
 function measuringNow(){
+  /* 要看「現在真的停在那一頁」，不能只看變數在不在。
+     QUIZ 與 SURVEY 離開頁面時刻意保留（讓孩子回來繼續），
+     所以只要他開過前測或問卷沒交就離開，這個分頁往後永久被判為
+     「施測中」：跨分頁更新一律擱置，而 PENDING_FOREIGN 只在離開這三個
+     畫面時才會被洗出去。作答內容現在都有草稿（三支都有），
+     而且 save() 也改成合併了，所以不在那一頁時同步是安全的。 */
+  const rn = (typeof ROUTE !== 'undefined' && ROUTE) ? ROUTE.name : '';
   if (typeof AAL !== 'undefined' && AAL) return 'aal';
-  if (typeof SURVEY !== 'undefined' && SURVEY) return 'survey';
-  if (typeof QUIZ !== 'undefined' && QUIZ) return 'quiz';
+  if (typeof SURVEY !== 'undefined' && SURVEY && rn === 'survey') return 'survey';
+  if (typeof QUIZ !== 'undefined' && QUIZ && rn === 'quiz') return 'quiz';
   return null;
 }
 
@@ -7940,8 +8010,12 @@ function viewQuiz(aid){
   const gate = entryGate(aid, me.id);
   if (gate) return gate;
   /* 進來時先把草稿接回來。沒接的話，重載＝整份歸零（見 QUIZ_DRAFT_KEY）。 */
-  if (!QUIZ || QUIZ.aid !== aid){
-    QUIZ = {aid:aid, answers:{}, texts:{}, strokes:{}};
+  /* 還要比對學生。原本只比 aid，而 QUIZ 是模組層全域：
+     換人之後（或跨分頁同步把身分換掉之後），下一個孩子打開同一份前測，
+     條件 QUIZ.aid !== aid 不成立，上一個孩子的答案整份留在畫面上，
+     交卷時就成了他的作答。AAL 那一支早就比了 AAL.me。 */
+  if (!QUIZ || QUIZ.aid !== aid || QUIZ.sid !== me.id){
+    QUIZ = {aid:aid, sid:me.id, answers:{}, texts:{}, strokes:{}};
     const d = quizDraftOf(aid, me.id);
     if (d){
       QUIZ.answers = d.answers || {};
@@ -8039,7 +8113,7 @@ function viewQuiz(aid){
           '<div class="field"><label id="qLbl-' + esc(it.id) + '" for="qText-' + esc(it.id) + '">請寫出你的解題過程與說明</label>' +
           '<textarea id="qText-' + esc(it.id) + '" aria-labelledby="qStem-' + esc(it.id) + ' qLbl-' + esc(it.id) + '" rows="6" style="min-height:9rem" data-act="quiz-text" data-id="' + it.id + '">' + esc(QUIZ.texts[it.id] || '') + '</textarea></div>' +
           '<div class="field" style="margin-top:10px">' +
-          '<label for="qPad-' + esc(it.id) + '">也可以直接手寫（老師評閱時看得到）</label>' +
+          '<label for="qPad-' + esc(it.id) + '">也可以手寫：先按下面的〈開始手寫〉，再用手指或筆寫（老師評閱時看得到）</label>' +
           '<canvas class="pad" id="qPad-' + esc(it.id) + '" data-pad="' + it.id + '" height="240"></canvas>' +
           '<div class="row" style="margin-top:6px">' +
             '<label class="small muted" for="qPadC-' + esc(it.id) + '">筆色</label>' +
@@ -8517,36 +8591,35 @@ function initPads(){
       /* 量不到寬度時什麼都不要做。原本 `cv.clientWidth || 600` 在畫布已經
          脫離文件（交卷、換題、換頁之後）時會退回 600，然後拿它去換算座標，
          把整份筆跡就地乘掉。量不到就是量不到，不是 600。 */
-      if (!cv.isConnected || !cv.clientWidth) return;
+      if (!cv.isConnected || !cv.clientWidth || !cv.clientHeight) return;
       const w = cv.clientWidth;
+      const h = cv.clientHeight;   // 由 CSS 的 11rem 決定，跟著字級走
       const p = PADS[id];
       /* 筆畫是 CSS px 絕對座標。原本 resize 只重設畫布尺寸就直接重畫舊座標，
          平板由橫轉直（約 1024→768）之後，寫在右半邊的字整片落在畫布外——
          資料還在、畫面沒了，而孩子最可能的反應是按〈清空〉整題重寫。
          這裡依新舊寬度比例換算，字跟著縮，不會掉出去。 */
-      if (p && p.w && w && Math.abs(p.w - w) > 0.5){
-        const k = w / p.w;
+      if (p && p.w && p.h && w && h && (Math.abs(p.w - w) > 0.5 || Math.abs(p.h - h) > 0.5)){
+        /* x 與 y 各自照自己那一軸的比例換算。原本兩軸都乘寬度比，
+           而高度永遠是 240：畫布變寬時 y 被推出畫布外。 */
+        const kx = w / p.w, ky = h / p.h;
         p.strokes.forEach(function(s){
-          s.pts.forEach(function(pt){ pt[0] *= k; pt[1] *= k; });
-          s.width = (s.width || 2) * k;
+          s.pts.forEach(function(pt){ pt[0] *= kx; pt[1] *= ky; });
+          s.width = (s.width || 2) * kx;
         });
         /* 高度也要跟著等比放大。原本 x 與 y 都乘 k，實際的畫布高度却永遠是 240：
            畫布變寬（直式寫完轉橫式、或 175% 由雙欄翻成單欄後回來）時 k>1，
            y 被推到 240 以上，畫布上看不見，strokesSvg 的 viewBox 也切掉－－
            評閱端與唯讀重播看到的同樣是殘缺的那一份。
            原註解只推演了 1024→768 的縮小方向。 */
-        p.h = Math.round((p.h || padBaseHeight()) * k);
       }
-      if (p){ p.w = w; p.h = p.h || padBaseHeight(); }
-      const H = (p && p.h) || padBaseHeight();
-      /* height 屬性一起設：canvas 只有 width:100%，顯示高度由內建比例推出來。 */
-      cv.style.height = H + 'px';
-      cv.width = w * dpr; cv.height = H * dpr;
+      if (p){ p.w = w; p.h = h; }
+      cv.width = w * dpr; cv.height = h * dpr;
       const ctx = cv.getContext('2d');
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       redraw(id);
     }
-    PADS[id] = PADS[id] || {strokes:[], color:'ink', width:2, h:padBaseHeight(), cv:cv};
+    PADS[id] = PADS[id] || {strokes:[], color:'ink', width:2, cv:cv};
     PADS[id].cv = cv;
     size();
     /* 舊的監聽器要先拆掉。原本每渲染一次 CR 題就多掛一個 window resize
@@ -8615,6 +8688,21 @@ function padChanged(id){
   if (/^aal-/.test(id)){
     if (typeof AAL !== 'undefined' && AAL && typeof aalSave === 'function') aalSave();
     if (typeof aalClearMissing === 'function') aalClearMissing();
+    /* 手寫也要寫一筆行為事件。'W'（書寫作答）原本只由 #crText 的 input
+       產生，於是只用手寫作答的孩子在整份歷程資料裡完全沒有「作答」這個動作：
+       LSA 的轉移矩陣、ENA 的 REV 判定（往前 3 格有沒有 O／W）、SDIS 序列
+       全部看不到他，而他其實一直在寫。那群孩子正是不會注音打字的那一群，
+       缺漏因此與打字能力共變，不是隨機的。
+       節流與打字那一支同一個做法：連續筆畫不要每一筆都記。 */
+    const iid = String(id).replace(/^aal-/, '');
+    const it = (typeof AAL !== 'undefined' && AAL)
+      ? AAL.items.find(function(x){ return x.id === iid; }) : null;
+    if (it && typeof aalLog === 'function'){
+      if (!padChanged._last || Date.now() - padChanged._last > 4000){
+        padChanged._last = Date.now();
+        aalLog('TYPE', 'W', {len:(PADS[id].strokes || []).length, ink:true}, it);
+      }
+    }
   } else {
     const cv = PADS[id] && PADS[id].cv;
     const card = cv && cv.closest ? cv.closest('.card') : null;
@@ -9610,7 +9698,7 @@ function viewAaL(aid){
           'placeholder="先寫你的看法，再寫你是從文章哪一段看出來的">' +
           esc(AAL.texts[it.id] || '') + '</textarea></div>' +
           '<div class="field" style="margin-top:10px">' +
-          '<label for="aalPad-' + esc(it.id) + '">也可以直接手寫（老師評閱時看得到）</label>' +
+          '<label for="aalPad-' + esc(it.id) + '">也可以手寫：先按下面的〈開始手寫〉，再用手指或筆寫（老師評閱時看得到）</label>' +
           '<canvas class="pad" id="aalPad-' + esc(it.id) + '" data-pad="aal-' + esc(it.id) + '" height="240"></canvas>' +
           '<div class="row" style="margin-top:6px">' +
             '<label class="small muted" for="aalPadC-' + esc(it.id) + '">筆色</label>' +
@@ -9932,7 +10020,7 @@ async function aalSay(){
   /* 必須是第一行。aalSay 是 async，等到 await 之後才擋的話，
      state.dialog 那一筆已經以學生的名義寫進去了。 */
   if (isImpersonating()){ toast('代為檢視時不能替學生跟夥伴說話。'); return; }
-  const box = document.getElementById('aalSay');
+  let box = document.getElementById('aalSay');
   if (!box) return;
   const text = box.value.trim();
   if (!text) return;
@@ -9960,8 +10048,8 @@ async function aalSay(){
     ucode:codeUtteranceProcess(text), sent:sm.score});
   /* 不重繪整頁：輸入框從頭到尾不被摧毀，焦點就不會掉，
      #aalChat 是 role="log" aria-live="polite"，新訊息會自動被報讀器唸出來。 */
-  const chat = document.getElementById('aalChat');
-  const sendBtn = document.querySelector('[data-act="aal-say"]');
+  let chat = document.getElementById('aalChat');
+  let sendBtn = document.querySelector('[data-act="aal-say"]');
   if (chat) chat.insertAdjacentHTML('beforeend',
     '<div class="msg me"><b class="sr-only">我說的</b>' + esc(text) + '</div>');
   box.value = '';
@@ -10074,6 +10162,17 @@ async function aalSay(){
   /* 守衛放在資料寫入之後、DOM 更新之前：回覆一定要進 state.dialog
      （那是額度與語料的同一份帳），但學生已經翻頁的話就不碰畫面、不 toast。 */
   if (!AAL || aalItem().id !== myIid) return;
+
+  /* 等待期間可能重繪過（按〈下一題〉再按〈上一題〉回來、調字級、
+     高對比、跨分頁同步…），render() 的 v.innerHTML 會把整塊換掉，
+     送出當下抓的 chat／box／sendBtn 三個節點就都脱離了文件。
+     而上面那道守門只比「還是不是同一題」，所以條件成立：
+     回覆被 append 到一個已經不在畫面上的 chat，孩子永遠看不到小葵的回答；
+     readOnly 也解在舊的 box 上，畫面上那一顆永遠停用－－而額度已經扣了。
+     節點一律重新查一次（#aalThinking 與 #turnLeft 本來就是這樣做的）。 */
+  chat    = document.getElementById('aalChat')    || chat;
+  box     = document.getElementById('aalSay')      || box;
+  sendBtn = document.querySelector('[data-act="aal-say"]') || sendBtn;
 
   /* 拿掉「正在想…」、append 回覆、把輸入框交還給學生 */
   const think = document.getElementById('aalThinking');
@@ -12346,6 +12445,14 @@ function bindEvents(){
        「正在想…」、把輸入框交還、寫入語料）一律由 aalSay 自己走完，
        這裡不碰畫面，否則會有兩個地方在改同一塊 DOM。 */
     if (act === 'aal-say-cancel'){
+      /* 不可以先停用自己。按下這顆鈕的當下焦點就在它身上，
+         停用一個握有焦點的元素會把焦點丟回 <body>；緊接著 aalSay 的
+         還原流程又把整個 #aalThinking（連同這顆鈕）移除。
+         而還原段的 focusIsOurs 只認 box 與 sendBtn，所以焦點不會被收回－－
+         用鍵盤的孩子按下〈不等了〉之後，焦點掉到頁首，要再 Tab 穿過
+         三四十顆句子鈕才回得了作答區。先把焦點挑到輸入框再停用。 */
+      const inBox = document.getElementById('aalSay');
+      if (document.activeElement === t && inBox) try { inBox.focus({preventScroll:true}); } catch (e) {}
       t.disabled = true;
       t.textContent = '取消中…';
       if (aalSay._ac) try { aalSay._ac.abort(); } catch (e) {}
@@ -12635,6 +12742,8 @@ function bindEvents(){
       /* 解鎖是一次性的：換完人就鎖回去，孩子坐下來時不會有一個還開著的出口。 */
       if (state.ui) state.ui.deviceUnlock = false;
       clearPads();          // 上一個身分的手寫不能跟過來
+      /* 記憶體裡的作答也不能跟過來。三支都有草稿，換回來時會從草稿還原。 */
+      AAL = null; SURVEY = null; QUIZ = null;
       state.ui.role = e.target.value; save(); renderShell();
       go(isTeacher() ? '#/teacher' : '#/student'); render(); return; }
     if (!t) return;

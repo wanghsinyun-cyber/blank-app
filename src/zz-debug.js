@@ -207,10 +207,25 @@ window.diffConditionCopy = function(){
   }
   function shot(sid, hash){
     state.ui.role = sid; renderShell();
-    if (String(hash).indexOf('#/aal/') === 0) clearDraftFor(sid);
+    if (String(hash).indexOf('#/aal/') === 0){
+      clearDraftFor(sid);
+      if (typeof AAL !== 'undefined') AAL = null;
+      if (typeof clearPads === 'function') clearPads();
+    }
     location.hash = hash; render();
     /* 草稿是在 aalInit 時讀的，清掉之後要讓它重新開一次才會落在第 1 題 */
-    if (typeof AAL !== 'undefined' && AAL && AAL.idx){ AAL.idx = 0; render(); }
+    /* 四個條件要停在同一題，而且標記要一樣。
+       被標起來的句子帶 3px 下框線，會改變整篇文章的排版高度；
+       而四位取樣學生的示範標記各不相同（筆數與位置都不同）。
+       窗口窄的時候文章欄不再有 max-height，這個差異就進到總高度裡，
+       實測 125～175% 下四條件差 14～16px－－而那是個別差異，
+       不是條件差異。這一支要驗的是後者，所以把標記歸零再量。 */
+    if (typeof AAL !== 'undefined' && AAL){
+      let need = false;
+      if (AAL.idx){ AAL.idx = 0; need = true; }
+      if (AAL.marks && Object.keys(AAL.marks).length){ AAL.marks = {}; need = true; }
+      if (need) render();
+    }
     const v = document.getElementById('view');
     return {cards: v.querySelectorAll('.card').length,
             chars: v.innerText.replace(/\s/g, '').length,
