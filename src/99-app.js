@@ -162,6 +162,15 @@ function initCanvasDrag(){
   /* 座標存的是 viewBox 單位（100% 字級的 px），畫面上用 rem。 */
   const U = 20;
   function px2unit(v){ return Math.round(v); }
+  /* 指標位移是螢幕 px，座標卻是「單位」。100% 字級時 1rem = 20px、U = 20，
+     兩者恰好相等，所以直接相加看不出問題；把字級調到 175% 之後 1 單位
+     等於 1.75px，手指移 100px 貼文就跑 175px——貼文從手指底下逃走，
+     愈拖愈遠，只能一次一次往回追，而放大字級的正是最需要準確拖曳的孩子。
+     每次按下時量一次現值就夠了：沒有人會在拖曳途中改字級。 */
+  function unitPerPx(){
+    const rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || U;
+    return rem ? U / rem : 1;
+  }
 
   /* 手指一開始捲動，瀏覽器會送 pointercancel 並收回 capture，
      但閉包裡的 drag 仍非 null——接下來的 pointermove/up 會把全班共用的
@@ -181,6 +190,7 @@ function initCanvasDrag(){
     /* 觸控的抖動比滑鼠大得多。曼哈頓距離 4px 會讓「右 3、下 2」的輕點
        就算成拖曳——實測輕點一下貼文位置就變了，而且詳頁沒有打開。 */
     drag = {el:el, n:n, sx:e.clientX, sy:e.clientY, ox:n.x, oy:n.y, moved:false,
+            k: unitPerPx(),
             slop: e.pointerType === 'touch' ? 10 : 4};
     el.setPointerCapture(e.pointerId);
   });
@@ -189,15 +199,15 @@ function initCanvasDrag(){
     const dx = e.clientX - drag.sx, dy = e.clientY - drag.sy;
     if (Math.hypot(dx, dy) > drag.slop) drag.moved = true;
     if (!drag.moved) return;
-    drag.el.style.left = (Math.max(0, drag.ox + dx) / U) + 'rem';
-    drag.el.style.top  = (Math.max(0, drag.oy + dy) / U) + 'rem';
+    drag.el.style.left = (Math.max(0, drag.ox + dx * drag.k) / U) + 'rem';
+    drag.el.style.top  = (Math.max(0, drag.oy + dy * drag.k) / U) + 'rem';
   });
   inner.addEventListener('pointerup', function(e){
     if (!drag) return;
     const d = drag; drag = null;
     if (d.moved){
       const dx = e.clientX - d.sx, dy = e.clientY - d.sy;
-      moveNote(d.n.id, px2unit(Math.max(0, d.ox + dx)), px2unit(Math.max(0, d.oy + dy)));
+      moveNote(d.n.id, px2unit(Math.max(0, d.ox + dx * d.k)), px2unit(Math.max(0, d.oy + dy * d.k)));
       render();
     } else if (KBSEL){
       if (KBPICK[d.n.id]) delete KBPICK[d.n.id]; else KBPICK[d.n.id] = true;
@@ -553,6 +563,15 @@ function bindEvents(){
     if (act === 'aal-mark'){ aalMark(+t.dataset.i); return; }
     if (act === 'aal-pick'){ aalPick(+t.dataset.k); return; }
     if (act === 'aal-say'){ aalSay(); return; }
+    /* 等 AI 回覆時的〈不等了〉。只是中止那一次 fetch——後續還原（拿掉
+       「正在想…」、把輸入框交還、寫入語料）一律由 aalSay 自己走完，
+       這裡不碰畫面，否則會有兩個地方在改同一塊 DOM。 */
+    if (act === 'aal-say-cancel'){
+      t.disabled = true;
+      t.textContent = '取消中…';
+      if (aalSay._ac) try { aalSay._ac.abort(); } catch (e) {}
+      return;
+    }
     /* 換題可能同時換掉左欄的文章（T1 十題、T2 六題）。
        文章無聲換掉會讓學生以為自己的標記不見了，所以要說一聲並把焦點帶過去。 */
     if (act === 'aal-prev' || act === 'aal-next'){
@@ -871,7 +890,7 @@ function bindEvents(){
   });
 
   /* input 事件 */
-  let sdebounce = null;
+  let sdebounce = null, saydebounce = null;
   document.addEventListener('input', function(e){
     const t = e.target.closest('[data-act]');
     if (!t) return;
@@ -883,6 +902,17 @@ function bindEvents(){
         render();
         const box = $('#sq'); if (box){ box.focus(); box.setSelectionRange(box.value.length, box.value.length); }
       }, 380);
+      return; }
+    /* 對話輸入框打到一半的字。只寫進 AAL.says，不寫日誌、不碰額度——
+       它還不是一個對話輪，只是為了讓重繪不要把孩子正在想的話弄掉。
+       存檔用去抖：每一個字都寫 localStorage 會拖慢輸入，而這一段是
+       三個 AI 條件才有的路徑，慢下來就是與條件共變的作答負荷。 */
+    if (act === 'aal-say-draft'){
+      if (!AAL) return;
+      AAL.says = AAL.says || {};
+      AAL.says[aalItem().id] = t.value;
+      clearTimeout(saydebounce);
+      saydebounce = setTimeout(function(){ if (AAL) aalSave(); }, 500);
       return; }
     if (act === 'quiz-text'){
       QUIZ.texts[t.dataset.id] = t.value;

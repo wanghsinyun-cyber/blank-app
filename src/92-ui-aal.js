@@ -47,7 +47,8 @@ function aalSave(){
        state.dialog 推導，見 aalStudentTurns()。 */
     all[aalDraftId()] = {idx:AAL.idx, answers:AAL.answers, texts:AAL.texts, notes:AAL.notes,
                          marks:AAL.marks, checks:AAL.checks,
-                         tele:AAL.tele, drafts:AAL.drafts, savedAt:Date.now()};
+                         tele:AAL.tele, drafts:AAL.drafts, says:AAL.says,
+                         savedAt:Date.now()};
     localStorage.setItem(AAL_DRAFT_KEY, JSON.stringify(all));
     aalSave._fails = 0;
     AAL.dirty = false;
@@ -81,7 +82,7 @@ function aalInit(aid){
     cond: conditionOfStudent(me.id),
     idx: 0,
     items: a.itemIds.map(getItem).filter(Boolean),
-    answers: {}, texts: {}, notes: {}, marks: {}, checks: {},
+    answers: {}, texts: {}, notes: {}, marks: {}, checks: {}, says: {},
     tele: {}, drafts: {}, t0: Date.now()
   };
   /* 還原草稿。t0 一定重設為現在，並補寫一筆 RESUME，
@@ -98,6 +99,7 @@ function aalInit(aid){
       AAL.checks  = d.checks  || {};
       AAL.tele    = d.tele    || {};
       AAL.drafts  = d.drafts  || {};
+      AAL.says    = d.says    || {};
       /* 每一題的 enter 重設為現在。不重設的話，離線的那幾個小時會被
          算進 firstKeyLatency，產生沒有意義的離群值。
          但只對「還沒下過筆」的題目重設——已經量到 firstKeyLatency 的題目
@@ -201,7 +203,14 @@ function viewAaL(aid){
   if (!a) return '<div class="empty"><h3>找不到這個評量事件</h3><a class="btn" href="#/student">回我的作業</a></div>';
   if (me.role !== 'student') return '<div class="empty"><h3>請切換成學生身分</h3>' +
     '<p>評量即學習事件是學生端的畫面。用右上角的身分選單換成班上任何一位同學，就會看到他被分派到的條件。</p></div>';
-  if (submitted(aid, me.id)) { go('#/result/' + aid); return ''; }
+  /* 交完卷再走回評量事件頁：與 viewQuiz 同一個形狀，也要同一個修法。
+     原本用 go()，於是成績頁按〈上一頁〉回到 #/aal/a-post，又被 push 回
+     成績頁——兩頁之間原地打轉，而〈上一頁〉正是孩子最直覺的動作；
+     回傳 '' 還會讓外層 render() 先閃一次空白。 */
+  if (submitted(aid, me.id)){
+    rerouteInRender('#/result/' + aid);
+    return viewResult(aid);
+  }
   if (!AAL || AAL.aid !== aid || AAL.me !== me.id) aalInit(aid);
 
   const it = aalItem();
@@ -386,7 +395,14 @@ function aalDialogPane(it, cond, turns, used, maxT){
     /* 代為檢視時輸入框也要鎖上。只在送出時擋的話，老師會打完一整段才被拒絕。 */
     '<label class="sr-only" for="aalSay">對夥伴說一句話</label>' +
     '<div class="row pane-bar" style="margin-top:10px;gap:6px">' +
-      '<input type="text" id="aalSay" placeholder="' +
+      /* 打到一半還沒送出的那句話要留著。v.innerHTML 一換這顆 input 就重建，
+         值歸零——而重繪的來源不只換題：頂端的字級與高對比按鈕、另一個分頁
+         寫入觸發的 adoptForeignState、以及任何走 render() 的操作都會。
+         孩子只是把字放大一級，正在斟酌的那句話就沒了，而他不會知道是什麼
+         弄掉的。存進草稿的 says（不是 turns——額度絕不進 localStorage），
+         換題也各存各的：回到上一題時他原本要說的話還在。 */
+      '<input type="text" id="aalSay" data-act="aal-say-draft"' +
+      ' value="' + esc((AAL.says || {})[it.id] || '') + '" placeholder="' +
         (isImpersonating() ? '代為檢視中，不能替學生說話'
                            : (left > 0 ? '說說你現在的想法…' : '這一題已經聊完了')) +
       '"' + (left > 0 && !isImpersonating() ? '' : ' disabled') + ' style="flex:1">' +
@@ -652,6 +668,9 @@ async function aalSay(){
   const sendBtn = document.querySelector('[data-act="aal-say"]');
   if (chat) chat.insertAdjacentHTML('beforeend', '<div class="msg me">' + esc(text) + '</div>');
   box.value = '';
+  /* 送出去了就不再是草稿。少了這一行，重繪會把已經說過的那句話再填回
+     輸入框，孩子很自然會再按一次送出——同一句話扣掉兩次額度。 */
+  if (AAL){ AAL.says = AAL.says || {}; AAL.says[myIid] = ''; }
   /* 等待期間用 readOnly，不用 disabled。停用一個正握有焦點的元素會讓焦點
      掉到 body——LLM 引擎下等待可達數秒，學生回過神時要從整頁最上面重新
      Tab、穿過三四十顆句子按鈕才回得到作答區。readonly 一樣擋住所有輸入。 */
@@ -661,9 +680,20 @@ async function aalSay(){
     if (document.activeElement === sendBtn) box.focus();
     sendBtn.disabled = true;
   }
+  /* 外部模型引擎才有非同步等待，也才需要取消。llmChat 自己有 20 秒逾時，
+     但逾時只保證「不會永遠卡住」，不保證孩子願意等到那一刻——施測現場
+     等待的那幾秒他只會重按、或以為自己弄壞了。給一個明確的出口：
+     取消之後走與連線失敗完全相同的退路（內建規則引擎），額度不白扣、
+     語料照樣留一筆，engine 欄位也還是分得出來（帶 fallback 字串）。
+     內建引擎是同步的，不掛這顆鈕——多一顆按不到的鈕反而是雜訊。 */
+  const useLlm = aiEngine() === 'llm';
+  const ac = (useLlm && typeof AbortController !== 'undefined') ? new AbortController() : null;
+  aalSay._ac = ac;
   if (chat){
     chat.insertAdjacentHTML('beforeend',
-      '<div class="msg agent" id="aalThinking">' + esc(condition(AAL.cond).name) + '正在想…</div>');
+      '<div class="msg agent" id="aalThinking">' + esc(condition(AAL.cond).name) + '正在想…' +
+      (ac ? ' <button class="btn sm quiet" data-act="aal-say-cancel">不等了</button>' : '') +
+      '</div>');
     chat.scrollTop = chat.scrollHeight;
   }
   aalSave();
@@ -678,12 +708,12 @@ async function aalSay(){
   let reply;
   const qfnNow = TURN_SCHEDULE[Math.min(used, TURN_SCHEDULE.length - 1)];
   try {
-    if (aiEngine() === 'llm'){
+    if (useLlm){
       try {
         const raw = await llmChat([
-          {role:'system', content: composePrompt(AAL.cond, it.process || 'FR', qfnNow)},
+          {role:'system', content: composePrompt(ctx.cond, it.process || 'FR', qfnNow)},
           {role:'user', content:'【題目】' + it.stem + '\n【學生剛剛說】' + text}
-        ], {max_tokens:200, temperature:0.7});
+        ], {max_tokens:200, temperature:0.7, signal: ac ? ac.signal : undefined});
         const g = leakGuard(raw, it);
         reply = {text:g.text, qfn:qfnNow,
                  sub:null, engine:'llm', blocked:g.blocked, hits:g.hits};
@@ -702,6 +732,7 @@ async function aalSay(){
     reply = {text:'我剛剛沒聽清楚，你可以再說一次嗎？', qfn:null, sub:null,
              engine:'error', error: String((err && err.message) || err)};
   }
+  if (aalSay._ac === ac) aalSay._ac = null;
 
   /* 一律走快照，不走 AAL：await 之後 AAL 可能已經是 null，
      而 aalLog 沒有 itemArg 時會用 aalItem()——學生翻頁的話，
@@ -1288,7 +1319,15 @@ function surveySubmit(phase){
     };
     return;
   }
-  surveySubmitCommit(phase);
+  /* 全部填完的那一條路徑原本沒有確認框：最後一段最後一題選完，手指還停在
+     量尺附近，〈送出問卷〉就在正下方，一個誤觸就直接落地——而 surveySubmitCommit
+     擋掉所有重送，改不回來。缺答時反而有確認框，等於「填得越完整越危險」。
+     交卷（aalSubmit）與前測（submitQuiz）兩支在全填時都會問一次，這裡補齊。 */
+  confirmModal({
+    title: '要送出問卷了嗎？',
+    body: '送出之後就不能再改。',
+    yes: '送出', no: '先不要'
+  }, function(){ surveySubmitCommit(phase); });
 }
 
 /* 問卷確認之後真正落地的那一段（理由同 aalSubmitCommit） */

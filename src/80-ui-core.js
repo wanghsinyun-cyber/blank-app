@@ -22,6 +22,20 @@ function replaceHash(hash){
     location.replace(location.pathname + location.search + hash);
   }
 }
+/* 在 render() 內部發現「這一頁已經不成立」時的轉址。三種寫法只有這一種對：
+   go() 會把作廢的那一頁疊進歷史，按〈上一頁〉又被送回來，兩頁之間原地打轉；
+   replaceHash() 會自己先 render 一次，等這個 view 函式回傳之後，外層 render()
+   再把畫面清空，而 replaceState 不觸發 hashchange，沒有東西會把它補回來，
+   結果是一片空白。這裡只換網址、把 ROUTE 對齊，實際要畫什麼由呼叫端
+   在同一次 render 裡直接回傳（例如 return viewResult(aid)）。 */
+function rerouteInRender(hash){
+  if (location.hash === hash) return;
+  if (!(window.history && history.replaceState)) return;
+  try {
+    history.replaceState(null, '', hash);
+    if (typeof parseRoute === 'function') ROUTE = parseRoute();
+  } catch (e) {}
+}
 /* 已知路由白名單。逐條抄自 99-app.js 的 render() switch；
    新增 case 時這裡要同步，否則新路由會被當成未知而不重繪。
    有這道白名單，頁內錨點（#stage、#anything）就不會把畫面打成 404。 */

@@ -14,31 +14,66 @@ function cacheGet(kind, id){ return state.aiCache[cacheKey(kind, id)]; }
 function cacheSet(kind, id, val){ state.aiCache[cacheKey(kind, id)] = val; save(); }
 
 /* --- 外部模型呼叫 --- */
+/* 學生端等待的上限。定得比教師端的分析請求短：教師在辦公室多等十秒沒事，
+   一個十歲孩子在施測當下盯著「正在想…」十秒就會開始重按、或以為自己弄壞了。 */
+const LLM_TIMEOUT_MS = 20000;
 async function llmChat(messages, o){
   o = o || {};
   const s = state.settings;
   if (!s.apiKey) throw new Error('尚未填入 API key。請到「系統設定」頁設定，或改用內建引擎。');
   const url = String(s.baseUrl || '').replace(/\/+$/, '') + '/chat/completions';
-  let res;
+  /* fetch 沒有內建逾時。端點被學校防火牆或 Proxy 黑洞掉時它不會 reject、
+     也不會 resolve——這支 Promise 永遠不 settle，等它的 aalSay 就永遠停在
+     await 那一行：「小葵正在想…」留在畫面上、輸入框永遠 readonly、送出鈕
+     永遠 disabled，而那一輪的對話額度已經先扣掉了。孩子沒有任何出路，
+     畫面上也沒有一句話說明發生什麼事。所以逾時與取消都要由這裡提供。
+     串流讀取（res.text／res.json）同樣會卡住，計時器要撐到讀完才清掉。 */
+  const ms = o.timeout || (s.llmTimeoutMs || LLM_TIMEOUT_MS);
+  const ac = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+  let timer = null, timedOut = false;
+  function onOuterAbort(){ if (ac) try { ac.abort(); } catch (e) {} }
+  if (ac){
+    timer = setTimeout(function(){ timedOut = true; onOuterAbort(); }, ms);
+    if (o.signal){
+      if (o.signal.aborted) onOuterAbort();
+      else o.signal.addEventListener('abort', onOuterAbort);
+    }
+  }
+  function abortReason(){
+    if (timedOut) return new Error('等太久了（超過 ' + Math.round(ms / 1000) + ' 秒還沒有回應）。');
+    if (o.signal && o.signal.aborted) return new Error('已取消等待。');
+    return null;
+  }
   try {
-    res = await fetch(url, {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer ' + s.apiKey},
-      body: JSON.stringify({model: s.model, messages: messages,
-        temperature: o.temperature === undefined ? 0.4 : o.temperature,
-        max_tokens: o.max_tokens || 1400})
-    });
-  } catch (e) {
-    throw new Error('連不到 ' + url + '。線上發布版受安全政策限制無法連外部網址；請把本檔下載到電腦上開啟，或改用內建引擎。');
+    let res;
+    try {
+      res = await fetch(url, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer ' + s.apiKey},
+        body: JSON.stringify({model: s.model, messages: messages,
+          temperature: o.temperature === undefined ? 0.4 : o.temperature,
+          max_tokens: o.max_tokens || 1400}),
+        signal: ac ? ac.signal : undefined
+      });
+    } catch (e) {
+      const r = abortReason();
+      if (r) throw r;
+      throw new Error('連不到 ' + url + '。線上發布版受安全政策限制無法連外部網址；請把本檔下載到電腦上開啟，或改用內建引擎。');
+    }
+    if (!res.ok){
+      const t = await res.text().catch(function(){ return ''; });
+      throw new Error('呼叫失敗（HTTP ' + res.status + '）' + (t ? '：' + t.slice(0, 200) : ''));
+    }
+    let j;
+    try { j = await res.json(); }
+    catch (e){ const r = abortReason(); if (r) throw r; throw e; }
+    const txt = j && j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content;
+    if (!txt) throw new Error('沒有回傳內容，請確認模型名稱與端點正確。');
+    return txt;
+  } finally {
+    if (timer) clearTimeout(timer);
+    if (o.signal && o.signal.removeEventListener) o.signal.removeEventListener('abort', onOuterAbort);
   }
-  if (!res.ok){
-    const t = await res.text().catch(function(){ return ''; });
-    throw new Error('呼叫失敗（HTTP ' + res.status + '）' + (t ? '：' + t.slice(0, 200) : ''));
-  }
-  const j = await res.json();
-  const txt = j && j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content;
-  if (!txt) throw new Error('沒有回傳內容，請確認模型名稱與端點正確。');
-  return txt;
 }
 
 const SYS_TEACHER = '你是資深國小閱讀教學研究者，熟悉 PIRLS 四項理解歷程、KIDMAP 四象限診斷與 Rasch 測量。' +

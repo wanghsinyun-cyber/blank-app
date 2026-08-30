@@ -202,20 +202,10 @@ function viewQuiz(aid){
   const a = getAssignment(aid);
   const me = currentUser();
   if (!a) return '<div class="empty"><h3>找不到這份作業</h3><a class="btn" href="#/student">回我的作業</a></div>';
-  /* 交完卷再走回作答頁：用 go() 會把 #/quiz/aid 疊進歷史，成績頁按〈上一頁〉
-     回到這裡又被送回去，兩頁之間原地打轉，孩子出不去。
-     但也不能改叫 replaceHash()——它自己會 render 一次，等這個函式回傳 ''
-     之後外層的 render() 又把畫面清空，而 replaceState 不觸發 hashchange，
-     沒有任何東西會再把它補回來，結果是一片空白。
-     只換網址、順手把 ROUTE 對齊，然後在同一次 render 裡直接回傳成績頁。 */
+  /* 交完卷再走回作答頁：轉去成績頁，而且要用 rerouteInRender()。
+     為什麼不能用 go() 或 replaceHash()，見該函式上方的註解。 */
   if (submitted(aid, me.id)){
-    const want = '#/result/' + aid;
-    if (location.hash !== want && window.history && history.replaceState){
-      try {
-        history.replaceState(null, '', want);
-        if (typeof parseRoute === 'function') ROUTE = parseRoute();
-      } catch (e) {}
-    }
+    rerouteInRender('#/result/' + aid);
     return viewResult(aid);
   }
   if (!QUIZ || QUIZ.aid !== aid) QUIZ = {aid:aid, answers:{}, texts:{}, strokes:{}};
@@ -277,25 +267,41 @@ function viewQuiz(aid){
           '<b>第 ' + (idx + 1) + ' 題　非選題</b>' +
           '<span class="row">' + itemPillsStudent(it) + '</span></div>' +
           '<div class="stem">' + esc(it.stem) + '</div>' +
-          '<div class="field"><label>請寫出你的解題過程與說明</label>' +
-          '<textarea rows="6" style="min-height:9rem" data-act="quiz-text" data-id="' + it.id + '">' + esc(QUIZ.texts[it.id] || '') + '</textarea></div>' +
-          '<div class="field" style="margin-top:10px"><label>也可以直接手寫（老師評閱時看得到）</label>' +
-          '<canvas class="pad" data-pad="' + it.id + '" height="240"></canvas>' +
+          /* label 要有 for、控制項要有 id。原本七個 label 全是裸的：
+             報讀器唸到輸入框只說「編輯，空白」，唸到色票只說「色彩選擇器」，
+             孩子不知道那一格要放什麼。前測是 ANCOVA 的共變數，這裡量到的
+             差異會被當成起點能力帶進整個分析。
+             同一頁有兩題非選，id 一律綴上題號，否則兩題的 label 會同時
+             指向第一題的控制項——點第二題的「筆寬」會跳到第一題去。
+             後測（92-ui-aal.js 的 cr 分支）已經是這個形狀，這裡補齊。 */
+          '<div class="field"><label for="qText-' + esc(it.id) + '">請寫出你的解題過程與說明</label>' +
+          '<textarea id="qText-' + esc(it.id) + '" rows="6" style="min-height:9rem" data-act="quiz-text" data-id="' + it.id + '">' + esc(QUIZ.texts[it.id] || '') + '</textarea></div>' +
+          '<div class="field" style="margin-top:10px">' +
+          '<label for="qPad-' + esc(it.id) + '">也可以直接手寫（老師評閱時看得到）</label>' +
+          '<canvas class="pad" id="qPad-' + esc(it.id) + '" data-pad="' + it.id + '" height="240"></canvas>' +
           '<div class="row" style="margin-top:6px">' +
-            '<label class="small muted">筆色</label><input type="color" value="#12161c" data-act="pad-color" data-id="' + it.id + '" style="width:44px;padding:2px">' +
-            '<label class="small muted">筆寬</label><input type="range" min="1" max="8" value="2" data-act="pad-width" data-id="' + it.id + '" style="width:100px">' +
+            '<label class="small muted" for="qPadC-' + esc(it.id) + '">筆色</label>' +
+            '<input id="qPadC-' + esc(it.id) + '" type="color" value="#12161c" data-act="pad-color" data-id="' + it.id + '" style="width:2.2rem;padding:2px">' +
+            '<label class="small muted" for="qPadW-' + esc(it.id) + '">筆寬</label>' +
+            '<input id="qPadW-' + esc(it.id) + '" type="range" min="1" max="8" value="2" data-act="pad-width" data-id="' + it.id + '" style="width:5rem">' +
             '<button class="btn sm" data-act="pad-undo" data-id="' + it.id + '">復原</button>' +
             '<button class="btn sm" data-act="pad-clear" data-id="' + it.id + '">清空</button>' +
           '</div></div>' +
           '</div></div>';
       }
       const chosen = QUIZ.answers[it.id];
+      /* 一組單選要有群組名。原本只是一個裸的 <div class="opts">：
+         報讀器唸「單選按鈕，一之四」，題幹在群組外面，沒有任何東西把
+         題目與選項綁在一起——用報讀器作答的孩子必須先把題幹背下來，
+         再進到選項裡。這是作答負荷，不是閱讀理解負荷，而它會直接算進
+         前測 θ。問卷（surveyGate 那一頁）早就是 radiogroup，這裡補齊。 */
+      const sid = 'qs-' + esc(it.id);
       return '<div class="card"><div class="card-p">' +
         '<div class="row" style="justify-content:space-between;margin-bottom:6px">' +
         '<b>第 ' + (idx + 1) + ' 題</b>' +
         '<span class="row">' + itemPillsStudent(it) + '</span></div>' +
-        '<div class="stem">' + esc(it.stem) + '</div>' +
-        '<div class="opts">' + it.options.map(function(o, k){
+        '<div class="stem" id="' + sid + '">' + esc(it.stem) + '</div>' +
+        '<div class="opts" role="radiogroup" aria-labelledby="' + sid + '">' + it.options.map(function(o, k){
           return '<label class="opt' + (chosen === k ? ' chosen' : '') + '">' +
             '<input type="radio" name="q-' + it.id + '" data-act="quiz-pick" data-id="' + it.id + '" data-k="' + k + '"' +
             (chosen === k ? ' checked' : '') + '>' +
@@ -543,9 +549,12 @@ async function showSimilar(iid, force){
             (x.inUse && x.inUse.length ? '　·　目前用於：' + esc(x.inUse.join('、')) : '')
           : '參考題 ' + (i + 1)) + '</div>' +
         '<div class="stem">' + esc(x.stem) + '</div>' +
+        /* 這幾顆原本是沒有內含控制項的 <label>：不在 Tab 序上、Enter 也不會
+           觸發，只用鍵盤的人完全點不到參考題。label 本來就要有 for 或內含
+           控制項才有意義，這裡兩者都沒有，所以直接改成 button。 */
         '<div class="opts">' + x.options.map(function(o, k){
-          return '<label class="opt" data-act="sim-pick" data-i="' + i + '" data-k="' + k + '" data-ans="' + x.answer +
-            '" data-iid="' + iid + '"><b>' + String.fromCharCode(65 + k) + '</b><span>' + esc(o) + '</span></label>';
+          return '<button type="button" class="opt" data-act="sim-pick" data-i="' + i + '" data-k="' + k + '" data-ans="' + x.answer +
+            '" data-iid="' + iid + '"><b>' + String.fromCharCode(65 + k) + '</b><span>' + esc(o) + '</span></button>';
         }).join('') + '</div>' +
         '<div class="small muted" id="simfb-' + iid + '-' + i + '" style="margin-top:6px"></div>' +
         '<details style="margin-top:6px"><summary class="small muted" style="cursor:pointer">命題備註</summary>' +

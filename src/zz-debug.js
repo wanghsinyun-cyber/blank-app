@@ -146,7 +146,16 @@
     catch (e){ log('   ERROR: ' + (e && e.message) + ' | ' + String(e && e.stack).split('\n').slice(0, 3).join(' << ')); }
     setTimeout(step, 20);
   }
-  setTimeout(step, 500);
+  /* 這一輪整趟要跑三分鐘以上（toENACsv 一支就吐 3.6MB），而它一路上會改
+     state.ui.role、直接把 HTML 灌進 #view、換掉 DTAB／RTAB。原本一載入就
+     自動開跑，於是任何在同一頁做的驗證都在跟它搶同一份 state 與同一塊 DOM：
+     實測「學生看到系統設定」「身分自己跳成 u-s75」「#aalSay 憑空消失」
+     三個假故障都是它造成的，而每一個都要花時間才排除得掉——
+     驗證工具自己製造假陽性，比沒有工具更糟。
+     改成明講才跑：網址加 ?smoke，或在 console 打 runSmoke()。 */
+  window.runSmoke = function(){ i = 0; setTimeout(step, 0); };
+  if (/[?&]smoke(\b|=)/.test(location.search)) setTimeout(step, 500);
+  else log('自動巡檢未啟動（網址加 ?smoke 或執行 runSmoke()）');
 })();
 
 /* ==========================================================================

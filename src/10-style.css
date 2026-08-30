@@ -320,7 +320,9 @@ td.n,th.n{text-align:right; font-family:var(--f-mono); font-variant-numeric:tabu
    min-inline-size 一定要一併歸零：fieldset 的 UA 預設是 min-content，
    長選項會讓它在窄欄裡拒絕縮小。legend 已經是 .sr-only，不佔版面。 */
 .opts{display:grid; gap:6px; border:0; margin:0; padding:0; min-inline-size:0}
-.opt{display:flex; gap:9px; align-items:flex-start; padding:6px 10px; border:1px solid var(--rule-soft); border-radius:var(--r-m); cursor:pointer; background:var(--card)}
+/* font/text-align/width 是給 <button> 版的 .opt 用的（參考題）：
+   按鈕預設置中、字體不繼承，不設就會與同一份清單裡的其他選項對不齊。 */
+.opt{display:flex; gap:9px; align-items:flex-start; padding:6px 10px; border:1px solid var(--rule-soft); border-radius:var(--r-m); cursor:pointer; background:var(--card); font:inherit; color:inherit; text-align:left; width:100%}
 .opt:hover{background:var(--shade)}
 .opt input{margin-top:4px; accent-color:var(--accent)}
 .opt b{font-family:var(--f-mono); color:var(--ink-3)}
@@ -570,6 +572,13 @@ input[type=checkbox],input[type=radio]{ width:1.15em; height:1.15em; accent-colo
    是 100（175% 時 209），題號與題幹整個在頂列後面（WCAG 2.4.11），
    而那正是孩子換題後要讀的第一樣東西，16 題每題至少一次。 */
 [tabindex="-1"], .likert, .modal{ scroll-margin-top: calc(var(--sticky-top) + 12px) }
+/* 上面那一行只涵蓋三種選擇器，而 Tab 鍵每一站都會自動捲動：捲的是這個
+   頁面捲動容器，所以真正的修法是在容器上留出頂列的高度。少了它，用 Tab
+   往下走時被聚焦的按鈕、連結、輸入框一律停在頂列後面——看得到焦點框
+   的下緣、看不到那顆按鈕是什麼（WCAG 2.4.11 焦點不被遮蔽）。
+   頁內錨點與 scrollIntoView 也一併吃到。--sticky-top 由 syncTopbar 依實際
+   高度寫入，所以 175% 字級下頂列長高時這條線會跟著走。 */
+html{ scroll-padding-top: calc(var(--sticky-top) + 12px) }
 .msg{max-width:88%; padding:8px 12px; border-radius:12px; font-size:1rem; line-height:1.6}
 .msg b{display:block; font-size:0.8rem; letter-spacing:.04em; color:var(--ink-4); font-weight:600; margin-bottom:2px}
 .msg.agent{align-self:flex-start; background:var(--shade); border:1px solid var(--rule-soft); border-bottom-left-radius:3px}
@@ -676,7 +685,9 @@ pre.prompt{
    會取代整個選取集合，平板觸控的孩子一點就把自己從作者裡刪掉。 */
 .authpick{ display:flex; flex-wrap:wrap; gap:6px; max-height:9rem; overflow-y:auto;
   border:1px solid var(--rule); border-radius:var(--r-m); padding:8px }
-.authpick .opt{ flex:0 0 auto; padding:4px 10px; margin:0 }
+/* width:auto 要留著：.opt 為了 <button> 版設了 width:100%，
+   在這一列橫排的核取方塊上會讓每一顆都撐滿整列。 */
+.authpick .opt{ flex:0 0 auto; padding:4px 10px; margin:0; width:auto }
 .field .lbl{ display:block; font-size:0.85rem; color:var(--ink-3); margin-bottom:2px }
 
 /* 四條件的版面幾何必須與文案字數解耦。
