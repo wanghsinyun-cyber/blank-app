@@ -10838,8 +10838,18 @@ function render(){
   const key = ROUTE.name + '/' + a.join('/');
   const samePage = (key === LAST_ROUTE_KEY);
   /* 換頁時關掉還開著的彈窗。留著的話，aria-modal 與焦點陷阱會掛在
-     一個屬於別頁的對話框上——Tab 被鎖在裡面，而它談的東西已經不在畫面上。 */
-  if (!samePage && $('#modalRoot').firstChild){ closeModal(); EDIT = null; }
+     一個屬於別頁的對話框上——Tab 被鎖在裡面，而它談的東西已經不在畫面上。
+     這裡要先把「被取消」的回呼拆掉：換頁是離開，不是按了〈取消〉。
+     忘了拆的話，孩子在缺答提醒開著的時候點側欄〈我的作業〉，
+     closeModal 會去跑問卷的救援閉包，它 go() 回問卷第 pg 段並標紅——
+     畫面先畫出〈我的作業〉又被拉回問卷，第一次點什麼都沒用，
+     十歲的孩子讀到的是「這一頁不讓我走」；而且 SURVEY.page 會被改寫成
+     第一段缺答的頁碼並存進草稿，他原本停在第 11 段的位置也一起丟掉。
+     （這是第 6 輪讓 Esc／點背景也走救援時一起帶進來的。） */
+  if (!samePage && $('#modalRoot').firstChild){
+    modal._onDismiss = null;
+    closeModal(); EDIT = null;
+  }
   /* 離開知識建構空間就把選取模式與搜尋清掉。進 #/note、#/synth 再回來時
      殘留的狀態會與畫面脫節。 */
   if (ROUTE.name !== 'kb' && KBSEL){ KBSEL = null; KBPICK = {}; }
