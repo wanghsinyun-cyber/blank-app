@@ -16,8 +16,9 @@
    只要動到 options／answer／why，版號一定要跟著加，否則舊瀏覽器會拿
    舊索引去對新答案鍵，而且不會報錯——只會靜靜地把診斷對到錯的失誤碼。
    第 6 版：R03／R10／R11／R12 重排選項以平衡正解位置。
-   第 7 版：派題的題目順序改成依文本分組（見 allIds）。 */
-const STATE_VERSION = 7;
+   第 7 版：派題的題目順序改成依文本分組（見 allIds）。
+   第 8 版：改寫 13 題的誘答字長（正解原本是唯一最長的選項）。 */
+const STATE_VERSION = 8;
 
 /* --- 固定種子亂數（mulberry32），確保示範資料可重現 --- */
 function mulberry32(a){
@@ -97,7 +98,7 @@ const ITEMS = [
   /* ---------- T1 會走路的樹（敘事） ---------- */
   {id:'R01', unit:'T1', no:1, process:'FR', sub:'FR-4', type:'mc', diff:'基礎',
    stem:'小昀第一次發現柚子樹位置不對，是在什麼時候？',
-   options:['搬來的第三天早上','搬來的第一天晚上','一個星期後的星期六','入冬那天'], answer:0,
+   options:['搬來的第三天早上','搬來的第一天晚上','一個星期後的星期六','入冬的那一天早上'], answer:0,
    answerPara:0, answerSent:0,
    why:{1:'E2', 2:'E2', 3:'E2'},
    note:'直接提取：故事場景中的時間，第一段第一句明確寫出。',
@@ -105,15 +106,18 @@ const ITEMS = [
 
   {id:'R02', unit:'T1', no:2, process:'FR', sub:'FR-2', type:'mc', diff:'基礎',
    stem:'小昀用什麼方法記錄柚子樹每天的位置？',
-   options:['用手機拍照','在筆記本上畫巷子的地圖','請鄰居幫忙看','在樹上綁繩子做記號'], answer:1,
+   options:['用手機每天拍一張照片','在筆記本上畫巷子的地圖','每天請鄰居幫忙看一下','在樹幹上綁繩子做記號'], answer:1,
    answerPara:2, answerSent:2,
    why:{0:'E1', 2:'E1', 3:'E7'},
-   note:'直接提取：文中明確敘述的行動。選項 D 取自樹幹上的舊疤，屬於找錯位置。',
+   /* 註解原本寫「屬於找錯位置」，但 why[3] 標的是 E7。文中確實提過繩子
+      （樹幹上那道疤是被繩子綁久了留下的），選 D 的孩子是把「綁繩子」這個
+      生活經驗接到文本片段上，而不是停在錯的段落——標記是對的，註解錯了。 */
+   note:'直接提取：文中明確敘述的行動。選項 D 借用文中「繩子」的片段，屬於以經驗代替文本。',
    tags:['細節']},
 
   {id:'R03', unit:'T1', no:3, process:'FR', sub:'FR-5', type:'mc', diff:'中等',
    stem:'小昀畫了一個星期的地圖之後，發現了什麼規律？',
-   options:['樹每天都往前走一點','樹一直繞著電線桿轉','樹只在星期六移動','樹總是待在巷子裡最亮的地方'], answer:3,
+   options:['樹每天都固定往前走一小段','樹每天都繞著電線桿轉圈','樹只有在星期六才會移動','樹總是待在巷子最亮的地方'], answer:3,
    answerPara:2, answerSent:3,
    why:{0:'E3', 1:'E2', 2:'E2'},
    note:'直接提取：明確陳述的主要發現，位於第三段末句。',
@@ -121,8 +125,8 @@ const ITEMS = [
 
   {id:'R04', unit:'T1', no:4, process:'SI', sub:'SI-1', type:'mc', diff:'中等',
    stem:'老先生每天把柚子樹搬到有太陽的地方，最主要的原因是什麼？',
-   options:['他想讓巷子看起來比較整齊','他相信曬夠太陽柚子才會甜，想讓太太回來時有柚子吃',
-            '他怕樹擋住鄰居的門','醫生建議他每天多運動'], answer:1,
+   options:['他想讓巷子看起來整齊，不要擋到人','太太說柚子曬夠太陽才會甜，他想讓她吃到',
+            '他怕那棵樹會擋住鄰居家的門，被人家抱怨','醫生建議他每天多運動，所以推板車'], answer:1,
    answerPara:6, answerSent:2,
    why:{0:'E1', 2:'E4', 3:'E4'},
    note:'直接推論：把「太太說柚子要曬夠太陽」與「想讓她回來時有柚子吃」兩處線索連起來。',
@@ -131,7 +135,7 @@ const ITEMS = [
   {id:'R05', unit:'T1', no:5, process:'SI', sub:'SI-5', type:'mc', diff:'中等',
    stem:'從故事後半段可以看出小昀和老先生之間變成什麼樣的關係？',
    options:['她成了每天早上幫忙搬樹的夥伴','她變成他的學生，跟他學種樹',
-            '她只是遠遠看著，沒有再接觸','她幫他去醫院照顧阿嬤'], answer:0,
+            '她只是遠遠看著，沒有再接觸','她代替他到醫院去照顧阿嬤'], answer:0,
    answerPara:9, answerSent:1,
    why:{1:'E4', 2:'E2', 3:'E4'},
    note:'直接推論：由「每天早上六點下樓、幫忙扶著陶盆」推論兩人的關係。',
@@ -139,8 +143,8 @@ const ITEMS = [
 
   {id:'R06', unit:'T1', no:6, process:'II', sub:'II-4', type:'mc', diff:'中等',
    stem:'老先生說「她在醫院」之前停頓了一下，還先摸了摸樹幹上的疤。這樣寫最主要是讓讀者感覺到什麼？',
-   options:['他年紀大了，動作比較慢','他不太喜歡別人問他問題',
-            '他心裡很掛念，不容易把這件事說出口','他想讓小昀注意到那道疤'], answer:2,
+   options:['他年紀大了，做什麼都比較慢','他不太喜歡別人問他家裡的事',
+            '他心裡掛念，這件事不容易說出口','他想讓小昀注意到樹幹上的那道疤'], answer:2,
    answerPara:8, answerSent:0,
    why:{0:'E3', 1:'E4', 3:'E2'},
    note:'詮釋整合：從停頓與動作推測人物情緒，屬於語氣與情緒的詮釋。',
@@ -148,8 +152,8 @@ const ITEMS = [
 
   {id:'R07', unit:'T1', no:7, process:'II', sub:'II-1', type:'mc', diff:'進階',
    stem:'如果用一句話說這個故事想告訴我們什麼，下面哪一句最接近？',
-   options:['觀察久了就能發現生活中的規律','有些看起來奇怪的事，背後可能藏著一份很深的心意',
-            '種柚子需要很多陽光才會甜','老人家做事情比較慢，需要別人幫忙'], answer:1,
+   options:['只要觀察久了，就能發現生活中的規律','有些看起來奇怪的事，背後藏著很深的心意',
+            '柚子要曬很多太陽，結出來的果子才會甜','老人家做事情比較慢，需要有人幫忙才行'], answer:1,
    answerPara:11, answerSent:0,
    why:{0:'E3', 2:'E3', 3:'E6'},
    note:'詮釋整合：辨識全文主題。A、C 都是文中出現過的細節，但不是主題。',
@@ -157,8 +161,8 @@ const ITEMS = [
 
   {id:'R08', unit:'T1', no:8, process:'EE', sub:'EE-2', type:'mc', diff:'進階',
    stem:'故事最後說那棵樹「正好站在紅色鐵門旁邊——她當年種下它的地方」。作者在前面埋了哪一個線索，讓這個結尾成立？',
-   options:['第一段提到樹本來就靠在紅色鐵門旁邊','老先生的頭髮全白',
-            '陶盆很重，底下沒有輪子','小昀搬了張小凳子坐在陽台上'], answer:0,
+   options:['開頭提到樹本來就靠在紅色鐵門旁邊','開頭提到老先生頭髮全白、動作很慢',
+            '開頭提到陶盆很重，底下沒有輪子','開頭提到小昀搬凳子坐在陽台上'], answer:0,
    answerPara:0, answerSent:1,
    why:{1:'E1', 2:'E2', 3:'E2'},
    note:'比較評估：辨認作者為結尾預埋的伏筆。',
@@ -166,9 +170,9 @@ const ITEMS = [
 
   {id:'R09', unit:'T1', no:9, process:'EE', sub:'EE-1', type:'mc', diff:'進階',
    stem:'有人說：「一個老人家每天推板車搬那麼重的陶盆，這在真實生活裡不可能發生。」根據文章，最能回應這個質疑的是哪一點？',
-   options:['文章說他推得很慢，每走幾步就停下來喘氣，並沒有把他寫得很輕鬆',
-            '文章說他頭髮全白，所以體力應該很好','文章說板車是舊的，舊的板車比較好推',
-            '文章沒有提到重量，所以不能討論'], answer:0,
+   options:['文章寫他推得很慢，每走幾步就要停下來喘氣',
+            '文章寫他頭髮全白，所以體力一定還很好','文章寫板車是舊的，舊的板車推起來比較省力',
+            '文章沒有提到陶盆多重，所以沒辦法討論'], answer:0,
    answerPara:4, answerSent:2,
    why:{1:'E4', 2:'E4', 3:'E1'},
    note:'比較評估：評估所述事件真實發生的可能性，並要求以文本證據支持。',
@@ -177,8 +181,8 @@ const ITEMS = [
   /* ---------- T2 為什麼有些種子要坐飛機？（說明） ---------- */
   {id:'R10', unit:'T2', no:10, process:'FR', sub:'FR-3', type:'mc', diff:'基礎',
    stem:'文章裡「傳播」這個詞指的是什麼？',
-   options:['種子發芽長成幼苗的過程','風把樹葉吹落的過程',
-            '植物開花結果的過程','種子離開母株、散布到別處的過程'], answer:3,
+   options:['種子發芽並且長大成為幼苗的過程','風把樹上的葉子吹下來的過程',
+            '植物開花並且結出果實來的過程','種子離開母株、散到別處的過程'], answer:3,
    answerPara:1, answerSent:2,
    why:{0:'E2', 1:'E1', 2:'E2'},
    note:'直接提取：文中明確給出的定義。',
@@ -186,7 +190,7 @@ const ITEMS = [
 
   {id:'R11', unit:'T2', no:11, process:'FR', sub:'FR-2', type:'mc', diff:'基礎',
    stem:'根據文章，楓樹的種子為什麼會旋轉？',
-   options:['因為種子很重','因為外殼中間有空氣','因為長了一片薄薄的翅膀','因為表面長滿小鉤子'], answer:2,
+   options:['因為楓樹的種子比較重','因為外殼中間有一層空氣','因為長了一片薄薄的翅膀','因為表面長滿了小鉤子'], answer:2,
    answerPara:2, answerSent:3,
    why:{0:'E1', 1:'E2', 3:'E2'},
    note:'直接提取：明確寫出的訊息。B、D 取自文中其他傳播方式，屬找錯位置；A 與文中「很輕」相反，屬未回到文本。',
@@ -194,8 +198,8 @@ const ITEMS = [
 
   {id:'R12', unit:'T2', no:12, process:'SI', sub:'SI-2', type:'mc', diff:'中等',
    stem:'文章講了風、動物、水、自己彈射四種方法，還說了它們各自的代價。把這些合起來看，作者想說的重點是什麼？',
-   options:['靠風傳播是最好的方法','植物應該多學幾種傳播方法',
-            '種子越輕，傳得越遠','每一種傳播方法都有它的長處和代價，沒有哪一種絕對比較好'], answer:3,
+   options:['靠風傳播是所有方法裡面最好用的一種方法','植物應該要多學幾種傳播方法才會安全',
+            '種子只要做得越輕，就一定傳得越遠','每種方法都有長處也有代價，沒有哪種最好'], answer:3,
    answerPara:6, answerSent:0,
    why:{0:'E6', 1:'E4', 2:'E6'},
    note:'直接推論：在一串論點之後歸納重點。A、C 都是把單一例子當成通則。',
@@ -203,9 +207,9 @@ const ITEMS = [
 
   {id:'R13', unit:'T2', no:13, process:'SI', sub:'SI-4', type:'mc', diff:'中等',
    stem:'下面哪一句是文章中「通常都會這樣」的概括陳述，而不是講某一種植物？',
-   options:['椰子的外殼又厚又輕，中間有空氣','蒲公英的種子上長著一叢細細的白毛',
-            '如果所有的種子都掉在母株的正下方，擠在一起的幼苗長不大，最後多半會死掉',
-            '鳳仙花的果莢輕輕一碰就會裂開'], answer:2,
+   options:['椰子的外殼又厚又輕，中間還有一層空氣','蒲公英的種子上長著一叢細細的白毛',
+            '擠在一起的幼苗長不大，最後多半會死掉',
+            '鳳仙花的果莢只要輕輕一碰就會裂開'], answer:2,
    answerPara:1, answerSent:1,
    why:{0:'E3', 1:'E3', 3:'E3'},
    note:'直接推論：辨認文中的概括陳述，需區分通則與個例。',
@@ -213,8 +217,8 @@ const ITEMS = [
 
   {id:'R14', unit:'T2', no:14, process:'II', sub:'II-5', type:'mc', diff:'進階',
    stem:'如果你在自己家附近的空地上看到一整片長得又高又壯的蒲公英，用文章裡的道理最能解釋的是什麼？',
-   options:['那塊空地的土特別肥','那些種子被風帶到有空間、有陽光的地方，才長得起來',
-            '蒲公英不需要陽光也能長大','一定是有人特地種下去的'], answer:1,
+   options:['那塊空地的泥土一定比別的地方肥沃','種子被風帶到有空間有陽光的地方才長得好',
+            '蒲公英這種植物不需要陽光也能長大','一定是有人特地跑到那塊空地上去種下來的'], answer:1,
    answerPara:1, answerSent:2,
    why:{0:'E7', 2:'E4', 3:'E7'},
    note:'詮釋整合：把文中訊息應用到真實世界的情境。',
@@ -235,6 +239,58 @@ const ITEMS = [
    note:'非選題：評斷文中訊息的完整性或清晰度。評閱重點在能否指出文本的具體空缺，而非泛泛的好奇。',
    tags:['完整性','提問']}
 ];
+
+/* ==========================================================================
+   題庫品質：選項字長
+   第 8 輪的效度車道量出來：14 題選擇題有 13 題的正解是「唯一最長的選項」，
+   正解平均 19.2 字、誘答平均 10.7 字——一律選最長的可以拿 13/14，
+   完全不必讀文章。誘答之所以短，是因為只有正解那一格帶了理由子句。
+   前後測是同一份題本，孩子只要在前測看出來，策略會整份帶到後測，
+   Δθ 量到的是「他哪一節課想通了排版規則」；而四班共用同一次校準，
+   這些反應會把 δ 整體推平，污染的是全部 96 人的量尺原點。
+   第 6 輪修掉的是正解「位置」偏斜（A/B/C/D 已是 4/4/3/3），長度偏斜
+   當時完全沒有動到——所以這一支要一直留著：換題就看得見。
+   兩個門檻：同一題的四個選項字數要落在彼此 ±25% 內；「正解是唯一最長」
+   的題數不可以明顯超過機率水準（四選一，14 題的期望值是 3.5）。
+   ========================================================================== */
+function itemBankLengthAudit(){
+  const mc = ITEMS.filter(function(i){ return i.type === 'mc' && i.options && i.options.length; });
+  const rows = mc.map(function(i){
+    const L = i.options.map(function(o){ return String(o).length; });
+    const mx = Math.max.apply(null, L), mn = Math.min.apply(null, L);
+    const uniqueLongest = L[i.answer] === mx && L.filter(function(x){ return x === mx; }).length === 1;
+    return {iid:i.id, lens:L, answer:i.answer, ratio: mn ? mx / mn : Infinity,
+            uniqueLongest:uniqueLongest};
+  });
+  const ansLens = rows.map(function(r){ return r.lens[r.answer]; });
+  const disLens = rows.reduce(function(a, r){
+    return a.concat(r.lens.filter(function(_, k){ return k !== r.answer; })); }, []);
+  const avg = function(a){ return a.length ? a.reduce(function(s, x){ return s + x; }, 0) / a.length : 0; };
+  const wide = rows.filter(function(r){ return r.ratio > 1.25; });
+  const longest = rows.filter(function(r){ return r.uniqueLongest; });
+  return {
+    n: rows.length, rows: rows,
+    answerMean: avg(ansLens), distractorMean: avg(disLens),
+    wide: wide, uniqueLongest: longest,
+    expectedLongest: rows.length / 4,
+    pass: wide.length === 0 && longest.length <= Math.ceil(rows.length / 4) + 1
+  };
+}
+/* 載入期就講出來。命題的人不會去翻程式碼，但 console 的紅字看得到，
+   研究者頁的「題庫品質」也會亮出同一組數字。 */
+(function(){
+  try {
+    const a = itemBankLengthAudit();
+    if (!a.pass && typeof console !== 'undefined' && console.error){
+      console.error('[KAIROS] 題庫選項字長偏斜：正解平均 ' + a.answerMean.toFixed(1) +
+        ' 字、誘答平均 ' + a.distractorMean.toFixed(1) + ' 字；' +
+        '四選項字數落差超過 25% 的有 ' + a.wide.length + ' 題（' +
+        a.wide.map(function(r){ return r.iid; }).join('、') + '），' +
+        '正解為唯一最長的有 ' + a.uniqueLongest.length + ' 題（期望值 ' +
+        a.expectedLongest.toFixed(1) + '）。一律選最長的就答得出來的題目，量到的不是理解。');
+    }
+  } catch (e) {}
+})();
 
 /* --- 知識建構支架（Knowledge Forum scaffolds，理論建構組） --- */
 const SCAFFOLDS = [

@@ -599,6 +599,35 @@ function rExport(){
   '每次載入結果一致，可重現，但<strong>不得當成實徵結果引用</strong>。' +
   '你自己在平台上操作產生的事件會存進 localStorage 並一起匯出。</p></div></div>' +
 
+  /* 題庫品質。第 8 輪量出 13/14 題的正解是唯一最長的選項，而那是一個
+     不必讀文章就能用的作答規則——把數字印在這裡，換題就看得見。 */
+  (function(){
+    const a = itemBankLengthAudit();
+    return '<div class="card" style="margin-top:16px;border-left:3px solid ' +
+      (a.pass ? 'var(--ok)' : 'var(--crit)') + '">' +
+    '<div class="card-h"><h3>題庫品質：選項字長</h3>' +
+    '<span class="pill ' + (a.pass ? 'q1' : 'q2') + '"><span class="dot"></span>' +
+      (a.pass ? '沒有可利用的長度線索' : '有長度線索') + '</span></div>' +
+    '<div class="card-p">' +
+    '<div class="grid g4" style="margin-bottom:12px">' +
+      statCard('正解平均字長', a.answerMean.toFixed(1), '字') +
+      statCard('誘答平均字長', a.distractorMean.toFixed(1), '字') +
+      statCard('正解為唯一最長', a.uniqueLongest.length + ' / ' + a.n,
+        '四選一的期望值 ' + a.expectedLongest.toFixed(1) + ' 題',
+        a.uniqueLongest.length > Math.ceil(a.n / 4) + 1 ? 'crit' : 'good') +
+      statCard('四選項落差 >25%', a.wide.length + ' / ' + a.n,
+        a.wide.length ? a.wide.map(function(r){ return r.iid; }).join('、') : '全部在帶內',
+        a.wide.length ? 'crit' : 'good') +
+    '</div>' +
+    '<p class="small" style="max-width:70ch">如果每一題的正解都比誘答長，「一律選最長的」就是一個' +
+    '<strong>不必讀文章</strong>的作答規則。前後測是同一份題本，孩子只要在前測看出來，策略會整份帶到後測——' +
+    'Δθ 量到的就不是理解的改變。而四個班共用同一次校準，這些反應會把 δ 整體推平，' +
+    '污染的是全部受試者的量尺原點。</p>' +
+    '<p class="muted small">換題本之後回來看這一格：兩個平均值要接近，' +
+    '「正解為唯一最長」的題數要落在機率水準附近。</p>' +
+    '</div></div>';
+  })() +
+
   /* 合併其他平板的資料。沒有這一條，「四班共用同一次 Rasch 校準」在
      一人一台平板的部署形態下永遠做不到——本機只有自己那一筆。 */
   (function(){
