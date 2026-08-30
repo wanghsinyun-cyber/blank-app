@@ -254,14 +254,22 @@ function viewAaL(aid){
     /* 一篇文章有 30–40 句，每一句都是可聚焦的按鈕。沒有這顆跳躍鈕，
        鍵盤使用者要按幾十次 Tab 才走得到作答區（WCAG 2.4.1）。 */
     '<div class="aal-text card">' +
-      '<button class="skip" data-act="skip-passage" type="button">跳過文章，直接作答</button>' +
+      /* 標籤講「動作」不講「目的」。這顆鈕實際上只是把焦點移到作答區，
+         並沒有跳過任何東西——而「跳過文章，直接作答」擺在標題之上、
+         用的是全站最重的按鈕樣式，等於在一個閱讀理解研究裡，
+         文章卡上最顯眼的一句話是叫孩子不要讀。 */
+      '<button class="skip quiet" data-act="skip-passage" type="button">跳到題目 ↓</button>' +
       '<div class="card-h"><h3 id="passageTitle" tabindex="-1">' + esc(text.title) + '</h3>' +
       '<span class="pill">' + esc(text.genre) + '</span>' +
       '<span class="pill" id="markCount"' + (marks.length ? '' : ' hidden') + '>已標記 ' +
       '<span id="markCountN">' + marks.length + '</span> 句</span></div>' +
       '<div class="card-p">' +
       /* 隱私要講實話：老師在唯讀重播裡看得到學生標了哪幾句。 */
-      '<p class="muted small" id="passageHelp">點一下任何一句，把它標記起來。' +
+      /* text.intro（「請先讀完整篇故事，再回答後面的問題。」）本來是死碼——
+         全庫沒有讀取點。那是這一篇的作業指示，應該排在標記說明之前。 */
+      '<p class="muted small" id="passageHelp">' +
+      (text.intro ? '<strong>' + esc(text.intro) + '</strong> ' : '') +
+      '點一下任何一句，把它標記起來。' +
       '標記不會影響你的分數，換題也不會消失；每一篇文章的標記分開記。' +
       '老師之後可以看到你標了哪幾句，這是為了知道你怎麼讀。</p>' +
       '<div class="passage" role="group" aria-labelledby="passageTitle" aria-describedby="passageHelp">' +
@@ -307,7 +315,7 @@ function viewAaL(aid){
           '<p class="muted small" style="margin-top:6px">直接點你要的答案就可以。' +
           '用鍵盤的話，上下方向鍵移動、空白鍵選起來。</p>'
         : '<div class="field"><label for="crText">寫出你的答案，並說明你的理由</label>' +
-          '<textarea id="crText" data-act="aal-text" style="min-height:160px" ' +
+          '<textarea id="crText" data-act="aal-text" rows="7" style="min-height:11rem" ' +
           'placeholder="先寫你的看法，再寫你是從文章哪一段看出來的">' +
           esc(AAL.texts[it.id] || '') + '</textarea></div>') +
       '</div></div>' +
@@ -325,7 +333,7 @@ function viewAaL(aid){
            從最後一個自我檢核回到〈下一題〉要按 54 次 Shift+Tab，
            中途逐顆停在句子鈕上——順手按 Enter 就寫一筆 MARK 事件，
            汙染閱讀歷程資料。 */
-        '<button class="skip" data-act="back-to-passage" type="button">回到文章</button>' +
+        '<button class="skip quiet" data-act="back-to-passage" type="button">↑ 回到文章</button>' +
         '<button class="skip" data-act="back-to-nav" type="button">回到題目導覽</button>' +
       '</div></div>' +
     '</div></div>';
@@ -335,7 +343,14 @@ function aalDialogPane(it, cond, turns, used, maxT){
   const left = maxT - used;
   return '<div class="card aal-chat"><div class="card-h">' +
     '<h3>我的夥伴：' + esc(cond.name) + '</h3>' +
-    '<span class="pill">還可以說 <span id="turnLeft">' + Math.max(0, left) + '</span> 次</span></div>' +
+    /* 剩餘額度要是「狀態訊息」。原本只是一顆靜態的 pill：
+       aalSay 用 textContent 就地更新它（那是對的，不重繪整個面板），
+       但沒有 role="status"，報讀器不會播報——只用報讀器的孩子
+       一路盲飛到被鎖住，然後輸入框忽然不能打字，而畫面上沒有任何解釋
+       （WCAG 4.1.3 狀態訊息）。
+       role="status" 的 aria-live 是 polite，不會打斷他正在唸的內容。 */
+    '<span class="pill" role="status" aria-live="polite">還可以說 <span id="turnLeft">' +
+      Math.max(0, left) + '</span> 次</span></div>' +
     '<div class="card-p">' +
     /* role="log" + aria-live：AI 的回覆是非同步送達的，
        沒有這兩個屬性，報讀器使用者永遠不知道夥伴回話了。 */
@@ -789,29 +804,48 @@ function aalSubmit(){
      安全網卻只裝在他走不到的分支上。
      不可逆那句提到兩支共用的前置，並把畫面上真的存在的第三條路
      （〈先離開（進度會保留）〉）寫進去。 */
+  /* 改用站內的 confirmModal：原生 confirm 不吃 --fs 也不吃高對比，
+     而缺答清單正是要孩子讀完再決定的東西（見 80-ui-core.js 的說明）。
+     它是回呼式的，所以「取消」的行為與「確定之後的整段流程」
+     都要搬進回呼裡。 */
   const FINAL = '交出去之後就不能再修改。';
-  if (missIdx.length){
-    const nos = missIdx.map(function(idx){ return '第 ' + (idx + 1) + ' 題'; }).join('、');
-    if (!confirm(FINAL + '\n\n還有 ' + missIdx.length + ' 題沒寫完：' + nos +
-                 '。\n\n按「確定」直接交卷；按「取消」回去把它寫完，' +
-                 '或用上面的〈先離開（進度會保留）〉，寫過的都會留著。')){
-      /* 取消不是什麼都不做——把他帶到第一題沒寫完的地方 */
-      AAL.idx = missIdx[0];
-      aalSave();
-      render();
-      const ans = document.getElementById('aalAnswer');
-      if (ans){
-        ans.classList.add('missing');
-        ans.focus({preventScroll:true});
-        ans.scrollIntoView({block:'start'});
-      }
-      toast('帶你回到第 ' + (missIdx[0] + 1) + ' 題。');
-      return;
+  function onCancelMissing(){
+    /* 取消不是什麼都不做——把他帶到第一題沒寫完的地方 */
+    if (!AAL) return;
+    AAL.idx = missIdx[0];
+    aalSave();
+    render();
+    const ans = document.getElementById('aalAnswer');
+    if (ans){
+      ans.classList.add('missing');
+      ans.focus({preventScroll:true});
+      ans.scrollIntoView({block:'start'});
     }
-  } else if (!confirm(FINAL + '\n\n要交卷了嗎？')){
+    toast('帶你回到第 ' + (missIdx[0] + 1) + ' 題。');
+  }
+  if (missIdx.length){
+    confirmModal({
+      title: '要交卷了嗎？',
+      body: FINAL + '還有 ' + missIdx.length + ' 題沒寫完：',
+      list: missIdx.map(function(idx){ return '第 ' + (idx + 1) + ' 題'; }),
+      note: '按〈回去寫完〉會帶你到第一題沒寫完的地方；' +
+            '也可以用上面的〈先離開（進度會保留）〉，寫過的都會留著。',
+      yes: '還是要交卷', no: '回去寫完'
+    }, aalSubmitCommit);
+    /* 取消時要走 onCancelMissing，而 confirmModal 的取消只會關閉彈窗——
+       把它掛在關閉之後由這裡自己接手。 */
+    confirmModal._onNo = onCancelMissing;
     return;
   }
+  confirmModal({title:'要交卷了嗎？', body: FINAL, yes:'交卷', no:'先不要'}, aalSubmitCommit);
+  return;
+}
 
+/* 交卷確認之後真正落地的那一段。從 aalSubmit 切出來，
+   因為確認框改成回呼式之後這一段不能再留在同一個同步流程裡。 */
+function aalSubmitCommit(){
+  if (!AAL) return;
+  const me = currentUser();
   AAL.items.forEach(function(it){
     state.responses = state.responses.filter(function(r){
       return !(r.aid === AAL.aid && r.sid === me.id && r.iid === it.id); });
@@ -1174,8 +1208,15 @@ function surveySubmit(phase){
     const secs = surveySections(phase, cond);
     const pre = miss[0].replace(/_\d+$/, '');
     const pg = Math.max(1, secs.findIndex(function(s){ return s.key === pre; }) + 1);
-    if (!confirm('還有 ' + miss.length + ' 題沒作答。\n\n' +
-                 '按「確定」直接送出，按「取消」回去把它填完。')){
+    /* 同 aalSubmit：改用站內確認框（原生 confirm 不吃字級與高對比）。 */
+    confirmModal({
+      title: '還有題目沒有選',
+      body: '這份問卷還有 ' + miss.length + ' 題沒有選。',
+      note: '按〈回去填完〉會帶你到第一段還沒填的地方，並把沒選的題目標出來。',
+      yes: '還是要送出', no: '回去填完'
+    }, function(){ surveySubmitCommit(phase); });
+    confirmModal._onNo = function(){
+      if (!SURVEY) return;
       SURVEY.page = pg;
       surveyDraftSave();
       go('#/survey/' + phase + '/' + pg);
@@ -1201,9 +1242,17 @@ function surveySubmit(phase){
         }
         if (first){ first.focus(); first.scrollIntoView({block:'center'}); }
       }, 0);
-      return;
-    }
+    };
+    return;
   }
+  surveySubmitCommit(phase);
+}
+
+/* 問卷確認之後真正落地的那一段（理由同 aalSubmitCommit） */
+function surveySubmitCommit(phase){
+  if (!SURVEY) return;
+  const me = currentUser();
+  const cond = conditionOfStudent(me.id);
 
   /* 第二道門：畫面那一層擋不到直接呼叫的路徑（例如舊分頁上的按鈕），
      而這裡是唯一會覆寫紀錄的地方。 */

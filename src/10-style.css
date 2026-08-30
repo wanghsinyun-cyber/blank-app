@@ -204,7 +204,22 @@ input[type=text],input[type=email],input[type=password],input[type=number],input
   width:100%; padding:7px 10px; border:1px solid var(--rule); border-radius:var(--r-m);
   background:var(--card); color:var(--ink);
 }
-textarea{resize:vertical; min-height:80px; line-height:1.7}
+textarea{resize:vertical; min-height:5rem; line-height:1.7}
+/* 停用／唯讀／忙碌要看得出來。上面那兩條作者層規則（font/color:inherit 與
+   background/color 指定）會蓋掉瀏覽器對 disabled 表單控制項的預設灰化，
+   而全站唯一的停用態樣式是 .btn:disabled{opacity:.45}——
+   沒有 input:disabled、沒有 [readonly]、沒有 [aria-busy]、也沒有 ::placeholder。
+   於是等 AI 回覆時輸入框被設成 readOnly + aria-busy，畫面上一點變化都沒有：
+   孩子照打，字一個都進不去，而他不知道為什麼。
+   額度用完時輸入框被 disabled，看起來也和平常一樣。 */
+input:disabled, select:disabled, textarea:disabled,
+input[readonly], textarea[readonly]{
+  background:var(--shade); color:var(--ink-3); border-color:var(--rule); cursor:not-allowed;
+}
+input[aria-busy="true"], textarea[aria-busy="true"]{
+  background:var(--shade); border-style:dashed; cursor:progress;
+}
+::placeholder{ color:var(--ink-4); opacity:1 }
 /* 焦點樣式統一由 :focus-visible 提供（3px），這裡只處理邊框顏色，
    不要再宣告 outline，否則會蓋掉全域規則並讓滑鼠點擊也出現外框。 */
 input:focus-visible,select:focus-visible,textarea:focus-visible{border-color:transparent}
@@ -331,7 +346,14 @@ td.n,th.n{text-align:right; font-family:var(--f-mono); font-variant-numeric:tabu
   box-shadow:var(--shadow); user-select:none;
 }
 .note:active{cursor:grabbing}
-.note.sel{outline:2px solid var(--focus); outline-offset:1px}
+/* 「已選取」不可以佔用 outline 語彙。原本是 outline:2px solid var(--focus)，
+   特異度 (0,2,0) 勝過全域 :focus-visible 的 (0,1,0)，而且用同一個 --focus 色：
+   於是「已選取且正握有焦點」與「已選取但沒有焦點」畫面完全相同，
+   鍵盤焦點在選取狀態下等於隱形。而躍升要先選五、六則貼文，
+   那正是鍵盤使用者最需要知道自己停在哪的時候。
+   改用 inset 陰影：.note 本來就有 border-left:4px，不會位移版面，
+   也不會與 :focus-visible 的 3px 外框互相取代——兩種狀態可以同時看見。 */
+.note.sel{background:var(--q4-bg); box-shadow:var(--shadow), inset 4px 0 0 var(--focus)}
 .note .nt{font-weight:600; font-size:0.9rem; line-height:1.45; margin-bottom:3px; font-family:var(--f-display)}
 .note .nb{font-size:0.8rem; color:var(--ink-3); line-height:1.55; max-height:3.4em; overflow:hidden}
 .note .nf{display:flex; gap:7px; align-items:center; margin-top:7px; font-size:0.8rem; color:var(--ink-4); font-family:var(--f-mono); flex-wrap:wrap}
@@ -434,6 +456,15 @@ input[type=checkbox],input[type=radio]{ width:1.15em; height:1.15em; accent-colo
 .skip:focus{ top:8px }
 /* 作答頁內的兩顆跳躍鈕跟著卡片走，不用絕對定位 */
 .aal .skip{ position:static; top:auto; display:block; margin:0 0 10px }
+/* 但它們不該是全頁最重的控制項。.skip 的實心 accent 底色 + 600 字重
+   是給「略過導覽」那種一閃而過的隱藏連結用的；擺在文章卡最上面、
+   標題之上，會把視線先帶到「不要讀」。降成安靜的文字控制項——
+   仍然可見、仍然可聚焦、仍然是 44px 以上的觸控目標。 */
+.aal .skip.quiet{
+  background:none; color:var(--ink-3); font-weight:400; font-size:0.8rem;
+  padding:6px 2px; text-decoration:underline; text-underline-offset:3px;
+}
+.aal .skip.quiet:hover{ color:var(--ink) }
 /* 這兩顆鈕（跳過文章、回到文章）是版面內的正式導覽控制項，不是隱藏式
    skip link。原本沿用了 .skip 的 :not(:focus) 絕對定位到 -9999px，於是
    平板觸控與滑鼠的四年級學生——本研究的主要受試方式——完全看不到它們，
@@ -470,18 +501,33 @@ input[type=checkbox],input[type=radio]{ width:1.15em; height:1.15em; accent-colo
   padding:0 1px; margin:0; cursor:pointer; border-radius:2px;
 }
 .passage .sent:hover{ background:var(--shade) }
+/* 標記態不可以改變盒模型。原本同時把 font-weight 改成 600 並用 ::after
+   插入「　▍」（全形空白＋方塊，約兩個字寬）——字重改變會改掉該句每一個字的
+   advance width，插入字元又加約兩個字，兩者都會讓整段重新斷行。
+   aalMark 刻意不呼叫 render() 就是為了不讓孩子被彈回文章開頭，
+   結果標一句話，底下的句子自己位移了。
+   顏色以外的線索改由邊框粗細（1px dashed → 3px solid）承載，
+   仍然滿足 1.4.1；記號改成每一句都預留同寬，只切換可見與否。 */
 .passage .sent.on{
-  background:var(--q4-bg); border-bottom:3px solid var(--q4); color:var(--ink); font-weight:600;
+  background:var(--q4-bg); border-bottom:3px solid var(--q4); color:var(--ink);
 }
-/* 標記狀態不只靠顏色：加一個記號（1.4.1） */
-.passage .sent.on::after{ content:"　▍"; color:var(--q4); font-weight:700 }
+.passage .sent::after{ content:"▍"; color:transparent; font-weight:700 }
+.passage .sent.on::after{ color:var(--q4) }
 
 /* ---------- 評量即學習事件 ----------
    四條件共用同一份版面幾何：對照組只是把對話卡換成同尺寸的筆記卡，
    使外在認知負荷、捲動深度與畫面留白在條件之間保持一致。 */
 /* 四條件共用同一份版面幾何。--pane-h 讓對話區與筆記區等高——
    對照組矮一截的話，介面差異會以條件為單位打進外在認知負荷這個依變項。 */
-.aal{display:grid; grid-template-columns:minmax(0,1.05fr) minmax(16.5rem,.95fr); gap:16px; align-items:start;
+/* 兩欄都要有下限。原本文章欄是 minmax(0,1.05fr)——下限 0，
+   而對話／筆記欄是 minmax(16.5rem,.95fr)——下限 330px。
+   結果可用寬度不足時，被壓縮的永遠是文章那一欄：
+   教室平板橫放 1024px、字級 100% 落在斷點外仍走雙欄，
+   1024 − 側欄 13.6rem − .wrap 左右內距 − gap 之後剩約 692px，
+   對話欄先吃掉 330，文章欄只剩三百多，再扣卡片內距——
+   一篇要精讀的文章被壓成每行十幾個字。
+   這是閱讀理解研究：閱讀欄位的可讀寬度不是美觀問題。 */
+.aal{display:grid; grid-template-columns:minmax(24rem,1.15fr) minmax(16.5rem,.85fr); gap:16px; align-items:start;
   --pane-h:15rem}
 /* 左欄文章：sticky 但要有自己的捲動區，否則文章比視窗高時後半段永遠捲不到。
    card-h（標題與「已標記 N 句」）不捲，只捲 card-p。 */
@@ -574,7 +620,7 @@ pre.prompt{
         flex-flow:row wrap; overflow-x:visible; border-right:0;
         border-bottom:1px solid var(--rule); padding:8px 10px; gap:6px}
   .stage{min-height:0}
-  .rail-group{display:inline-flex; align-items:center; padding:0 8px; font-size:0.7rem; opacity:.6}
+  .rail-group{display:inline-flex; align-items:center; padding:0 8px; font-size:0.8rem; color:var(--ink-3)}
   .rail a{white-space:nowrap}
   .rail .badge{display:none}
   .wrap{padding:16px 14px 60px}
@@ -590,7 +636,7 @@ pre.prompt{
       flex-flow:row wrap; overflow-x:visible; border-right:0;
       border-bottom:1px solid var(--rule); padding:8px 10px; gap:6px}
 :root[data-narrow] .stage{min-height:0}
-:root[data-narrow] .rail-group{display:inline-flex; align-items:center; padding:0 8px; font-size:0.7rem; opacity:.6}
+:root[data-narrow] .rail-group{display:inline-flex; align-items:center; padding:0 8px; font-size:0.8rem; color:var(--ink-3)}
 :root[data-narrow] .rail a{white-space:nowrap}
 :root[data-narrow] .rail .badge{display:none}
 :root[data-narrow] .wrap{padding:16px 14px 60px}

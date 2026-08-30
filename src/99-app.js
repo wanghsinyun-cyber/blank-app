@@ -413,6 +413,17 @@ function bindEvents(){
 
     if (act === 'modal-back' && e.target === t){ closeModal(); EDIT = null; return; }
     if (act === 'close-modal'){ closeModal(); EDIT = null; return; }
+    /* 站內確認框。取消就只是關掉；確定交給 confirmModal 存下來的回呼。 */
+    if (act === 'confirm-no'){
+      closeModal();
+      confirmModal._yes = null;
+      const no = confirmModal._onNo; confirmModal._onNo = null;
+      if (no) no();
+      return; }
+    if (act === 'confirm-yes'){
+      const fn = confirmModal._yes; confirmModal._yes = null;
+      if (fn) fn(); else closeModal();
+      return; }
     /* 代為檢視：記住真實身分，畫面上方常駐一條有出口的橫幅，且全程唯讀。 */
     if (act === 'asrole'){
       e.preventDefault();
@@ -949,7 +960,11 @@ function applyA11y(){
    這個屬性讓 CSS 的 :root[data-narrow] 區塊接手。 */
 function syncNarrow(){
   const fs = ((state && state.settings && state.settings.a11y) || {}).fontScale || 1;
-  document.documentElement.toggleAttribute('data-narrow', (window.innerWidth / fs) < 900);
+  /* 門檻由 900 提到 1100。作答頁的兩欄現在各有下限（文章 24rem、對話 16.5rem，
+     相加 40.5rem＝810px，再加側欄、內距與間隔）——1024px 的平板橫放
+     若還走雙欄，兩個下限相加會超過可用寬度而讓 grid 溢出。
+     教室用的正是 1024px 橫放，所以它必須落在單欄側。 */
+  document.documentElement.toggleAttribute('data-narrow', (window.innerWidth / fs) < 1100);
 }
 
 /* 兩個變數，不能共用一個：

@@ -579,7 +579,7 @@ function tabCR(diag){
         '</span></div>' +
         '<div class="ai-out" style="white-space:pre-wrap;font-family:var(--f-mono);font-size:0.78rem">' + esc(r.text || '（未作答）') + '</div>' +
         '<div class="field" style="margin-top:8px"><label for="' + noteId + '">給學生的評語</label>' +
-        '<textarea style="min-height:56px" id="' + noteId +
+        '<textarea rows="3" style="min-height:4.5rem" id="' + noteId +
         '" aria-label="給 ' + esc(userName(r.sid)) + ' 的評語" data-act="cr-comment" data-sid="' + r.sid + '" data-iid="' + it.id +
         '" data-aid="' + diag.assignment.id + '" placeholder="可留空">' + esc(r.comment || '') + '</textarea></div>' +
         '</div>';

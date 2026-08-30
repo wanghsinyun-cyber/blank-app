@@ -41,6 +41,15 @@ function adoptForeignState(next){
   try {
     if (typeof renderShell === 'function') renderShell();
     if (typeof render === 'function'){ location.hash = hash; render(); }
+    /* 字級、高對比與外觀都存在被整批取代的那份 state 裡
+       （settings.a11y 與 ui.theme），但 renderShell()／render() 都不會
+       重新把它們套到 DOM 上——--fs、data-contrast、data-theme 與 #fsSel
+       會停在舊分頁的值。低視力的孩子在另一台裝置上調了字級，
+       這一頁同步了資料卻沒同步字級，畫面等於沒變。
+       順序與 boot() 一致；applyA11y 內部會同步 #fsSel、#contrastBtn
+       並呼叫 syncNarrow 與 syncTopbarHeight。 */
+    if (typeof applyTheme === 'function') applyTheme();
+    if (typeof applyA11y === 'function') applyA11y();
     if (typeof toast === 'function') toast('另一個分頁更新了資料，這一頁已經同步。');
   } catch (e) { /* 還沒開始渲染就收到事件：資料已換好，等首次 render 即可 */ }
 }

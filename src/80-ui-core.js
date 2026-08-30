@@ -107,6 +107,40 @@ function modal(html, opts){
     document.addEventListener('keydown', modal._trap, true);
   }
 }
+/* 站內的確認對話框。
+   學生端唯一不可逆的決定（交卷、送出問卷）原本走原生 confirm()——
+   而原生對話框由瀏覽器 UI 繪製，完全不吃 :root 的 --fs，也不吃
+   [data-contrast="high"]。也就是說：平台為低視力孩子準備的 175% 字級與
+   高對比模式，在整個流程裡最需要看清楚的那一個畫面上完全失效，
+   而缺答清單（「還有 5 題沒寫完：第 3 題、第 7 題…」）正是要他讀完再決定的。
+   modal() 會隨 --fs 與高對比一起變，已經有焦點陷阱與捲動偏移。
+   confirm 是同步的，這一支是回呼式的——呼叫端要把後續流程搬進 onYes。
+   初始焦點放在〈取消〉：這是不可逆的動作，預設不該停在「確定」上。 */
+function confirmModal(opts, onYes){
+  const o = opts || {};
+  const listHtml = (o.list && o.list.length)
+    ? '<ul style="margin:10px 0 0 1.2em">' +
+        o.list.map(function(x){ return '<li>' + esc(x) + '</li>'; }).join('') + '</ul>'
+    : '';
+  confirmModal._onNo = null;
+  confirmModal._yes = function(){
+    closeModal();
+    confirmModal._onNo = null;
+    try { onYes(); } catch (e) {
+      if (typeof console !== 'undefined' && console.error) console.error(e);
+    }
+  };
+  modal('<div class="modal-h"><h3>' + esc(o.title || '請確認') + '</h3></div>' +
+    '<div class="modal-b"><p style="margin:0;max-width:60ch">' + esc(o.body || '') + '</p>' +
+    listHtml +
+    (o.note ? '<p class="muted small" style="margin-top:10px;max-width:60ch">' + esc(o.note) + '</p>' : '') +
+    '</div>' +
+    '<div class="modal-f">' +
+    '<button class="btn" data-act="confirm-no">' + esc(o.no || '取消') + '</button>' +
+    '<button class="btn primary" data-act="confirm-yes">' + esc(o.yes || '確定') + '</button>' +
+    '</div>', {focus:'[data-act="confirm-no"]'});
+}
+
 function closeModal(){
   $('#modalRoot').innerHTML = '';
   if (modal._trap){ document.removeEventListener('keydown', modal._trap, true); modal._trap = null; }

@@ -232,7 +232,7 @@ function viewQuiz(aid){
           '<span class="row">' + itemPillsStudent(it) + '</span></div>' +
           '<div class="stem">' + esc(it.stem) + '</div>' +
           '<div class="field"><label>請寫出你的解題過程與說明</label>' +
-          '<textarea style="min-height:120px" data-act="quiz-text" data-id="' + it.id + '">' + esc(QUIZ.texts[it.id] || '') + '</textarea></div>' +
+          '<textarea rows="6" style="min-height:9rem" data-act="quiz-text" data-id="' + it.id + '">' + esc(QUIZ.texts[it.id] || '') + '</textarea></div>' +
           '<div class="field" style="margin-top:10px"><label>也可以直接手寫（老師評閱時看得到）</label>' +
           '<canvas class="pad" data-pad="' + it.id + '" height="240"></canvas>' +
           '<div class="row" style="margin-top:6px">' +
@@ -371,13 +371,21 @@ function viewResult(aid){
        孩子會以為壞掉了。 */
     (keyLocked ? '<div class="card-p"><p class="small" style="max-width:70ch;margin:0">' +
       (function(){
+        const tail = '現在先看上面的閱讀地圖——它已經告訴你哪幾題值得回去重讀。';
+        /* 三種鎖定原因要講清楚是哪一種。原本一律說「這一節課上完之後」，
+           而作答不到門檻的孩子課已經上完了、也沒有補答路徑——
+           那句話對他永遠是假的，畫面卻一直承諾它會打開。 */
+        const total = (getAssignment(aid) || {itemIds:[]}).itemIds.length;
+        const ratio = (state.settings && state.settings.keyUnlockRatio != null)
+          ? state.settings.keyUnlockRatio : 0.5;
+        if (total && answeredCount(aid, me.id) / total < ratio)
+          return '這一次作答的題目不到一半，所以逐題的答案沒有打開。' +
+            '想看的話，跟老師說一聲。' + tail;
         const pend = classKeyPending(aid, me.id);
         if (pend > 0) return '班上還有 ' + pend + ' 位同學在寫。等大家都交完，' +
-          '這裡就會打開，讓你看到每一題的四個選項、正確答案和你當時選的。' +
-          '現在先看上面的閱讀地圖——它已經告訴你哪幾題值得回去重讀。';
+          '這裡就會打開，讓你看到每一題的四個選項、正確答案和你當時選的。' + tail;
         return '等課後那一份也做完，這裡就會打開，' +
-          '讓你看到每一題的四個選項、正確答案和你當時選的。' +
-          '現在先看上面的閱讀地圖——它已經告訴你哪幾題值得回去重讀。';
+          '讓你看到每一題的四個選項、正確答案和你當時選的。' + tail;
       })() + '</p></div>' : '') +
     '<div class="card-p col">' + a.itemIds.map(getItem).filter(function(i){ return i && i.type === 'mc'; }).map(function(it){
       const r = mine.find(function(x){ return x.iid === it.id; });
@@ -419,9 +427,14 @@ function crResultBlock(aid, sid, keyLocked){
       return '<div class="note-full"><b>' + itemLabel(aid, it.id) + '</b>' +
         '<div class="stem">' + esc(it.stem) + '</div>' +
         /* 前測與後測是同兩題建構反應題。在後測交卷前把自己前測寫的整段
-           作文讀回來，等於直接抄一次——兩題的 Δ 會歸零。 */
-        (keyLocked
-          ? '<p class="muted small" style="margin-top:6px">這一節課上完之後，這裡會打開，' +
+           作文讀回來，等於直接抄一次——兩題的 Δ 會歸零。
+           但那個理由只適用於**前測**。孩子自己寫的字不是答案卡，
+           所以不該跟著答案卡的班級釋出門檻一起鎖——同學還沒交完，
+           跟他能不能讀回自己寫過的東西沒有關係。
+           原本兩者共用 keyLocked，於是「答不到一半」或「全班還沒交完」時，
+           他連自己的作文都讀不回來。 */
+        ((aid === 'a-pre' && !submitted('a-post', sid))
+          ? '<p class="muted small" style="margin-top:6px">等課後那一份也做完，這裡會打開，' +
             '讓你看到自己當時寫了什麼。</p>'
           : '<div class="ai-out" style="white-space:pre-wrap">' + esc((r && r.text) || '（未作答）') + '</div>') +
         '<div class="row" style="margin-top:8px">' +
