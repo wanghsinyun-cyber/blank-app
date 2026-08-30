@@ -10,6 +10,12 @@ set -e
 cd "$(dirname "$0")"
 mkdir -p dist
 
+# 建置前先擋掉「單引號字串跨行」。這一類錯誤發生過兩次：用指令碼把多行中文
+# 塞進 JS 字串時換行留在引號裡，整份 dist 變成 SyntaxError，而瀏覽器只說
+# 「Invalid or unexpected token」、不指行號，全站函式一起消失——
+# 表面症狀是「所有測試都在報 xxx is not defined」，很容易被誤判成別的問題。
+perl tools/lint-strings.pl src/*.js
+
 emit_body(){
   cat src/00-head.html
   echo '<style>'; cat src/10-style.css; echo '</style>'

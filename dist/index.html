@@ -1603,7 +1603,12 @@ function buildSeedState(){
          （三道守門的解鎖條件都是 isTeacher()，而它讀的是「目前選到的身分」）——
          現場唯一解法會變成清瀏覽器資料，那會連同這孩子唯一一份作答
          與 kairos-draft 一起銷毀。研究者可以在系統設定頁改掉它。 */
-      teacherCode: '1234',
+      /* 空字串：代碼在清場（goLiveCommit）時才產生，一台裝置一組。
+         原本寫死 '1234'，而且沒有任何 UI 改得動－－四個班 96 台平板
+         同一組碼，而 1234 是十歲孩子第一個會試的四位數。 */
+      teacherCode: '',
+      /* 解鎖嘗試的紀錄（次數與下一次可以試的時間），用來做退避。 */
+      unlockTries: 0, unlockLockedUntil: 0,
       /* 教師按下的答案卡釋出開關（每份派題一個鍵）。
          一人一台平板時，這是唯一真的會成立的釋出路徑。 */
       keyReleased: {},
@@ -3086,6 +3091,16 @@ function adoptForeignState(next){
   if (!next || typeof next !== 'object') return;
   STATE_REV = next.rev || 0;
   const hash = location.hash;
+  /* 換身分就要清手寫板。全庫有四條會改變 state.ui.role 的路徑，clearPads()
+     原本只掛在其中三條（換身分下拉、施測前清場、再走一次），第四條就是這裡。
+     PADS 不在 state 裡，所以整份 state 被換掉時它原封不動留著：
+     老師在前景分頁把裝置交給下一個孩子，背景分頁收到 storage 事件換成新身分，
+     上一個孩子寫在 aal-C01 的筆跡還在——新孩子一進作答頁，initPads 的
+     `PADS[id] = PADS[id] || {…}` 會沿用舊物件，別人的字直接畫在他的答案格裡；
+     padHasInk 為真所以缺答救援不會攔，交卷時寫進他的 responses[].strokes。
+     兩個孩子的建構反應題資料同時作廢，而評閱端看不出那不是他寫的。 */
+  const roleChanged = !!(next.ui && state && state.ui && next.ui.role !== state.ui.role);
+  if (roleChanged && typeof clearPads === 'function'){ try { clearPads(); } catch (e) {} }
   state = next;
   try {
     if (typeof renderShell === 'function') renderShell();
@@ -3142,12 +3157,71 @@ if (typeof window !== 'undefined' && window.addEventListener){
   });
 }
 
+/* 一列資料的識別。用來判斷「磁碟上那一份有沒有這一筆」。 */
+function rowKey(kind, r){
+  if (kind === 'logs')        return [r.t, r.sid, r.type, r.code, r.iid, r.turn].join('|');
+  if (kind === 'dialog')      return [r.t, r.sid, r.iid, r.turn, r.speaker].join('|');
+  if (kind === 'responses')   return [r.aid, r.sid, r.iid].join('|');
+  if (kind === 'submissions') return [r.aid, r.sid].join('|');
+  if (kind === 'surveys')     return [r.sid, r.phase].join('|');
+  return r.id != null ? String(r.id) : JSON.stringify(r);
+}
+
+/* 把「我們手上有、但磁碟那一份沒有」的列補回磁碟那一份上。
+   施測中的分頁依設計拒絕同步外部更新（見 measuringNow），手上永遠是進入
+   作答那一刻的舊 state；而 save() 原本無條件把它整份寫回去——
+   rev/writer 只擋「無聲被換掉」，完全不擋「無聲蓋掉別人」。
+   兩個分頁都停在作答頁時：A 分頁交卷（responses／submissions／dialog 落地），
+   B 分頁兩秒後的 flushLogs 就把不含這些東西的舊 state 整份寫回去。
+   孩子看到「已交卷」、草稿也被刪了，但磁碟上 submitted() 是 false——
+   16 題作答、整段對話、整節課的歷程事件一起消失，而且畫面沒有任何訊號。
+   同一個機制也會把已經扣掉的對話額度倒回去（第 7 輪只補了讀那一半）。
+   這裡改成：磁碟比我們新時，以磁碟為底、只把我們自己多出來的列補上去。
+   五個集合都是附加型或以鍵唯一，所以這個合併是安全的；
+   ui 保留我們自己的（身分與路由是本機的事），settings 以磁碟為準
+   （老師在另一個分頁按的答案卡開關不可以被學生分頁蓋掉），
+   只有 a11y 例外——那是本機的呈現設定。 */
+function mergeOntoDisk(disk){
+  const out = disk;
+  ['logs', 'dialog', 'responses', 'submissions', 'surveys', 'notes', 'views'].forEach(function(kind){
+    const mine = state[kind];
+    if (!Array.isArray(mine)) return;
+    const theirs = Array.isArray(out[kind]) ? out[kind] : [];
+    const seen = {};
+    theirs.forEach(function(r){ seen[rowKey(kind, r)] = true; });
+    let added = 0;
+    mine.forEach(function(r){
+      const k = rowKey(kind, r);
+      if (!seen[k]){ theirs.push(r); seen[k] = true; added++; }
+    });
+    out[kind] = theirs;
+    if (added && typeof console !== 'undefined' && console.info)
+      console.info('[KAIROS] 合併：' + kind + ' 補回 ' + added + ' 列');
+  });
+  out.ui = state.ui;
+  if (out.settings && state.settings) out.settings.a11y = state.settings.a11y;
+  return out;
+}
+
 function save(){
   if (isImpersonating() && !save._allowUiWrite){
     if (typeof console !== 'undefined' && console.warn)
       console.warn('[KAIROS] 代為檢視期間的落地被擋下', new Error().stack);
     return true;   // 刻意不落地，不是失敗
   }
+  /* 別的分頁在我們這一份之後寫過東西時，不要整份蓋回去（見 mergeOntoDisk）。
+     合併結果同時套回記憶體，否則這個分頁會一直拿著舊的那一份，
+     下一次存檔又把剛補回去的東西再蓋掉一次。 */
+  try {
+    const raw = localStorage.getItem(STORE_KEY);
+    if (raw){
+      const disk = JSON.parse(raw);
+      if (disk && (disk.rev || 0) > STATE_REV && disk.writer !== TAB_ID){
+        state = mergeOntoDisk(disk);
+        STATE_REV = disk.rev || 0;
+      }
+    }
+  } catch (e) { /* 讀不回來就照原本的路徑寫，不要因此掉資料 */ }
   /* 版次要在序列化之前掛上去，兩個分支寫出的物件才都帶得到 */
   state.rev = nextRev();
   state.writer = TAB_ID;
@@ -5261,7 +5335,7 @@ function rerouteInRender(hash){
    有這道白名單，頁內錨點（#stage、#anything）就不會把畫面打成 404。 */
 const KNOWN_ROUTES = {teacher:1, create:1, assign:1, kb:1, note:1, synth:1, dash:1,
   bank:1, settings:1, about:1, research:1, aal:1, inspect:1, survey:1,
-  student:1, quiz:1, result:1, mygrowth:1};
+  student:1, quiz:1, result:1, mygrowth:1, unlock:1};
 
 function parseRoute(){
   const h = (location.hash || '#/teacher').replace(/^#\/?/, '');
@@ -5503,7 +5577,6 @@ function renderShell(){
      用自己的裝置，本來就不需要切換身分。 */
   const liveRun = state.demoSeed === false;
   const whoWrap = $('#whoWrap');
-  if (whoWrap) whoWrap.style.display = (liveRun && !isTeacher()) ? 'none' : '';
   /* 「示範資料（模擬班級）」是靜態節點，清場之後還掛在每一頁的頂列——
      真的孩子在真的施測時，每一頁都被告知這是模擬班級，
      與知情同意的文案互相矛盾。 */
@@ -5539,7 +5612,7 @@ function renderShell(){
      這台裝置永遠回不到教師端：老師把平板交給下一個孩子、或一開始選錯人，
      現場唯一解法是清瀏覽器資料，那會連同這孩子唯一一份作答與草稿一起銷毀，
      而且代為檢視、評閱、答案卡開關也全部做不到。
-     多一顆〈換人〉，用 state.settings.teacherCode 開鎖（deviceUnlock）。 */
+     出口在 #/unlock（見下方），不在頂列。 */
   const unlocked = !!(state.ui && state.ui.deviceUnlock);
   if (liveRun && !isTeacher() && !unlocked){
     const meNow = currentUser();
@@ -5548,26 +5621,21 @@ function renderShell(){
   } else {
     sel.disabled = false;
   }
-  /* 這顆鈕只在「施測狀態 + 目前是學生」時出現，所以四個條件的孩子都看得到
-     同一顆，版面幾何不因條件而異；它需要代碼才有作用。 */
-  let sw = document.getElementById('switchWho');
-  if (liveRun && !isTeacher()){
-    if (!sw){
-      sw = document.createElement('button');
-      sw.id = 'switchWho';
-      sw.className = 'btn sm ghost';
-      sw.type = 'button';
-      sw.dataset.act = 'device-unlock';
-      const wrap = $('#whoWrap');
-      if (wrap && wrap.parentNode) wrap.parentNode.insertBefore(sw, wrap.nextSibling);
-      else document.querySelector('.topbar').appendChild(sw);
-    }
-    sw.textContent = unlocked ? '換人（已解鎖）' : '換人';
-    sw.style.display = '';
-    if (whoWrap) whoWrap.style.display = unlocked ? '' : 'none';
-  } else if (sw){
-    sw.style.display = 'none';
-  }
+  /* 這顆鈕已經拿掉。上一輪為了給老師一個出口，在施測狀態下對每一位學生的
+     每一頁都長出一顆〈換人〉——那是把出口做成了入口：
+       · 剩十分鐘沒事做的孩子最先按的就是與自己名字並排的那顆新鈕
+       · 代碼硬編碼成 '1234'，四個班 96 台平板同一組，而且沒有任何 UI 改得動它
+       · 輸錯只 toast，沒有次數上限、沒有延遲、不留任何紀錄
+       · 猜中之後身分下拉整份攤開：切成別班同學＝當場看到另一個條件的夥伴
+         （受試者間設計對兩個孩子同時失效）；切成研究者＝拿得到題庫正解、
+         同學的唯讀重播、答案卡開關與〈清場〉
+     出口還是要有，但不能長在孩子眼前。改成一條不會被亂按到的路由
+     #/unlock（老師知道就好），代碼在清場時產生、可在設定頁看與換，
+     連續輸錯會鎖住並加長等待，每一次嘗試都寫進日誌。
+     解鎖之後身分下拉才打開。 */
+  if (whoWrap) whoWrap.style.display = (liveRun && !isTeacher() && !unlocked) ? 'none' : '';
+  const sw = document.getElementById('switchWho');
+  if (sw) sw.remove();
 
   /* 教師視角的班級選擇器（學生看不到） */
   const cw = $('#classWrap');
@@ -7580,8 +7648,13 @@ function quizSave(){
     const strokes = {};
     (getAssignment(QUIZ.aid) || {itemIds:[]}).itemIds.map(getItem).filter(Boolean)
       .forEach(function(i){ if (i.type === 'cr'){ const p = padPayload(i.id); if (p) strokes[i.id] = p; } });
-    all[QUIZ.aid + '|' + me.id] = {answers:QUIZ.answers, texts:QUIZ.texts,
-                                   strokes:strokes, savedAt:Date.now()};
+    /* 理由同 aalSave：兩個分頁會把對方寫過的題洗掉。 */
+    const qk = QUIZ.aid + '|' + me.id;
+    const merged = mergeDraftMaps(all[qk] || {},
+      {answers:QUIZ.answers, texts:QUIZ.texts, strokes:strokes},
+      ['answers','texts','strokes']);
+    merged.savedAt = Date.now();
+    all[qk] = merged;
     localStorage.setItem(QUIZ_DRAFT_KEY, JSON.stringify(all));
     QUIZ.dirty = false;
   } catch (e) {
@@ -8711,6 +8784,21 @@ function viewSettings(){
       '<strong>一人一台平板時請用這顆開關</strong>——每台裝置只看得到自己那一筆交卷紀錄，' +
       '「全班都交完」在那個情境下永遠不會成立。</span></div>' +
     '</div></div>' +
+    /* 教師代碼。30-data.js 的註解原本說「研究者可以在系統設定頁改掉它」，
+       而這一頁從來沒有這個欄位－－一句死註解配一個寫死的 '1234'。 */
+    '<div class="card" style="margin-bottom:14px"><div class="card-h"><h3>教師代碼</h3>' +
+      '<span class="muted small">施測中要把這台平板交給下一位同學時用</span></div>' +
+      '<div class="card-p col">' +
+      '<div class="row" style="justify-content:space-between;gap:10px">' +
+      '<span class="num" style="font-size:1.4rem;letter-spacing:.18em">' +
+        (s.teacherCode ? esc(s.teacherCode) : '（還沒有，清場時會產生）') + '</span>' +
+      '<button class="btn sm" data-act="regen-code">換一組</button></div>' +
+      '<p class="muted small" style="margin:0">老師在網址列打 <code>#/unlock</code> 並輸入這組碼，' +
+      '就可以把裝置交給下一位同學。這條路徑故意不放在頂列：' +
+      '剩十分鐘沒事做的孩子最先按的就是眼前的新按鈕。' +
+      '連續輸錯會鎖住並加長等待，每一次嘗試（成功與否）都會寫進歷程日誌，' +
+      '事後標記得出哪一台裝置被動過。</p>' +
+    '</div></div>' +
     '<div class="card"><div class="card-h"><h3>AI 引擎</h3></div><div class="card-p col">' +
       '<div class="field"><label for="eng">目前使用</label><select id="eng" data-act="set-engine">' +
       '<option value="builtin"' + (s.engine === 'builtin' ? ' selected' : '') + '>內建規則引擎（離線、可重現）</option>' +
@@ -9002,6 +9090,52 @@ function viewAbout(){
   '</div>';
 }
 
+/* ==========================================================================
+   #/unlock — 施測狀態下把裝置交給下一位同學
+   上一輪把這個出口做成頂列上一顆對每個學生都可見的〈換人〉，代碼還寫死
+   '1234'——那是把出口做成了入口（見 80-ui-core.js 的說明）。
+   現在它是一條要自己打網址才到得了的路由：老師知道就好，而剩十分鐘沒事做
+   的孩子不會憑空打出 #/unlock。代碼在清場時產生、可在設定頁看與換，
+   連續輸錯會鎖住並加長等待，每一次嘗試都寫進 state.logs（type:'UNLOCK'）。
+   ========================================================================== */
+function viewUnlock(){
+  const live = state.demoSeed === false;
+  const s = state.settings || {};
+  const unlocked = !!(state.ui && state.ui.deviceUnlock);
+  if (!live){
+    return '<div class="empty"><h3>這台平板還在示範模式</h3>' +
+      '<p style="max-width:60ch">示範模式本來就可以直接用右上角的選單換人，不需要代碼。</p>' +
+      '<a class="btn primary" href="#/student">回我的作業</a></div>';
+  }
+  if (unlocked){
+    return '<div class="empty"><h3>已經解鎖了</h3>' +
+      '<p style="max-width:60ch">用右上角的選單換成下一位同學就可以。換完之後會自動鎖回去。</p>' +
+      '<div class="row" style="justify-content:center;margin-top:12px">' +
+      '<button class="btn" data-act="device-relock">現在就鎖回去</button>' +
+      '<a class="btn primary" href="#/student">回我的作業</a></div></div>';
+  }
+  const now = Date.now();
+  const locked = s.unlockLockedUntil && now < s.unlockLockedUntil;
+  return sectionHead('換一位同學使用這台平板', '這是老師的動作',
+      '<a class="btn" href="#/student">← 回我的作業</a>') +
+    '<div class="card" style="max-width:34rem"><div class="card-p col">' +
+    '<p class="small" style="margin:0">請老師輸入這台平板的教師代碼。' +
+    '解鎖之前，系統會先把目前這位同學寫到一半的作答、筆跡與問卷全部存起來。</p>' +
+    (locked
+      ? '<p class="small" role="alert" style="color:var(--crit);font-weight:600">' +
+        '輸錯太多次了，請等 ' + Math.ceil((s.unlockLockedUntil - now) / 1000) + ' 秒再試。</p>'
+      : '') +
+    '<div class="field"><label for="unlockCode">教師代碼</label>' +
+    '<input type="password" id="unlockCode" inputmode="numeric" autocomplete="off"' +
+    (locked ? ' disabled' : '') + '></div>' +
+    '<div class="row"><button class="btn primary" data-act="device-unlock"' +
+    (locked ? ' disabled' : '') + '>解鎖</button>' +
+    '<a class="btn" href="#/student">取消</a></div>' +
+    '<p class="muted small" style="margin:0">代碼在《清空示範資料，準備施測》時產生，' +
+    '可以在研究控制台的系統設定頁看到或換掉。每一次嘗試都會記錄下來。</p>' +
+    '</div></div>';
+}
+
 /* ===== src/92-ui-aal.js ===== */
 /* ==========================================================================
    92-ui-aal.js — 評量即學習事件的作答介面
@@ -9084,6 +9218,27 @@ function aalPadsRestore(saved){
   });
 }
 
+/* 草稿也要防跨分頁互相覆蓋。三支草稿 key 完全沒有版次與監聽
+   （那一整套只做在 STORE_KEY 上），而 draftId 只由 aid 與 sid 組成，
+   兩個分頁必然撞同一格。同一個孩子誤開兩個分頁停在同一份後測時，
+   任一邊的一次存檔（打字去抖尾緣、選項、〈先離開〉、換題）
+   就把另一邊寫的所有題整批洗掉，並且來回互洗。
+   草稿是全站唯一保護學生作答的機制（重載＝整份歸零），
+   在最容易發生的「誤開兩個分頁」下反而變成資料銷毀器。
+   合併規則：以磁碟那一份為底，逐題疊上我們的（我們正在編輯）－－
+   另一邊寫過、我們沒碰過的題因此保留下來。 */
+function mergeDraftMaps(prev, mine, keys){
+  const out = {};
+  keys.forEach(function(k){
+    const a = (prev && prev[k]) || {}, b = (mine && mine[k]) || {};
+    const m = {};
+    Object.keys(a).forEach(function(x){ m[x] = a[x]; });
+    Object.keys(b).forEach(function(x){ m[x] = b[x]; });
+    out[k] = m;
+  });
+  return out;
+}
+
 function aalSave(){
   if (isImpersonating()) return;
   if (!AAL) return;
@@ -9093,10 +9248,15 @@ function aalSave(){
        對話回合是三個 AI 條件的劑量控制，放進 localStorage 等於把劑量
        交給學生的瀏覽器：清掉網站資料就能重新領 6 次。額度改由已落地的
        state.dialog 推導，見 aalStudentTurns()。 */
-    all[aalDraftId()] = {idx:AAL.idx, answers:AAL.answers, texts:AAL.texts, notes:AAL.notes,
-                         marks:AAL.marks, checks:AAL.checks,
-                         tele:AAL.tele, drafts:AAL.drafts, says:AAL.says,
-                         strokes:aalPadsSnapshot(), savedAt:Date.now()};
+    const prev = all[aalDraftId()] || {};
+    const mine = {answers:AAL.answers, texts:AAL.texts, notes:AAL.notes,
+                  marks:AAL.marks, checks:AAL.checks, tele:AAL.tele,
+                  drafts:AAL.drafts, says:AAL.says, strokes:aalPadsSnapshot()};
+    const merged = mergeDraftMaps(prev, mine,
+      ['answers','texts','notes','marks','checks','tele','drafts','says','strokes']);
+    merged.idx = AAL.idx;
+    merged.savedAt = Date.now();
+    all[aalDraftId()] = merged;
     localStorage.setItem(AAL_DRAFT_KEY, JSON.stringify(all));
     aalSave._fails = 0;
     AAL.dirty = false;
@@ -9620,6 +9780,16 @@ function aalClearMissing(){
 
 function aalPick(k){
   const it = aalItem();
+  /* 重選同一個答案不算一次「更改選項」。這一支綁在 click 上（前測的
+     quiz-pick 綁在 change），而 click 在重點已經選起來的那一顆時照樣觸發，
+     於是會寫一筆 type:'OPTION' code:'O' changed:true 並改寫 drafts.final。
+     enaLines() 把「往前 3 格內出現過 A（AI 回覆）的 O 事件」編成 REV
+     ＝「對話之後更改選項」，而只有三個 AI 條件會產生 A——對照組結構上
+     不可能產生這種假 REV。而平板上第一次作答的孩子最自然的動作就是
+     「跟小葵講完話，回頭再點一下自己的答案確認它還在」：那會在主要歷程
+     依變項上憑空造出一筆與操弄同向的紀錄，changed:true 還讓事後清資料
+     也分不出真假。畫面該有的即時回饋照走，只是不記事件。 */
+  if (AAL.answers[it.id] === k) return;
   AAL.answers[it.id] = k;
 
   /* 畫面立刻回應（不等去抖），使用者才知道焦點停在哪 */
@@ -10259,7 +10429,13 @@ function surveyDraftSave(){
   if (!SURVEY) return;
   try {
     const all = JSON.parse(localStorage.getItem(SURVEY_DRAFT_KEY) || '{}');
-    all[SURVEY.sid + '|' + SURVEY.phase] = {resp:SURVEY.resp, page:SURVEY.page, savedAt:Date.now()};
+    /* 理由同 aalSave：兩個分頁會把對方填過的題洗掉。 */
+    const pk = SURVEY.sid + '|' + SURVEY.phase;
+    const prevSv = all[pk] || {};
+    const respMerged = {};
+    Object.keys(prevSv.resp || {}).forEach(function(x){ respMerged[x] = prevSv.resp[x]; });
+    Object.keys(SURVEY.resp || {}).forEach(function(x){ respMerged[x] = SURVEY.resp[x]; });
+    all[pk] = {resp:respMerged, page:SURVEY.page, savedAt:Date.now()};
     localStorage.setItem(SURVEY_DRAFT_KEY, JSON.stringify(all));
     surveyDraftSave._fails = 0;
     SURVEY.dirty = false;
@@ -11486,6 +11662,7 @@ function render(){
     case 'bank':      html = viewBank(); break;
     case 'settings':  html = viewSettings(); break;
     case 'about':     html = viewAbout(); break;
+    case 'unlock':    html = viewUnlock(); break;
     case 'research':  html = viewResearch(); break;
     case 'aal':       html = viewAaL(a[0]); break;
     case 'inspect':   html = viewInspect(a[0], a[1]); break;
@@ -12094,28 +12271,50 @@ function bindEvents(){
     /* 施測狀態下的〈換人〉。要代碼才解得開，解開之後強制把待處理的
        選項、日誌與手寫全部結清並清掉——不然下一個坐下來的孩子會接到
        上一個人的筆跡與尚未落地的事件。解鎖是一次性的：換完人就再鎖回去。 */
+    /* 解鎖與鎖回去。入口在 #/unlock 路由（見 viewUnlock），不在頂列。 */
+    if (act === 'device-relock'){
+      if (state.ui) state.ui.deviceUnlock = false;
+      saveUiOnly(); renderShell(); render();
+      toast('已經鎖回去了。'); return; }
     if (act === 'device-unlock'){
-      if (state.ui && state.ui.deviceUnlock){
-        state.ui.deviceUnlock = false; saveUiOnly(); renderShell();
-        toast('已經鎖回去了。'); return; }
-      promptModal({
-        title: '要換一位同學使用這台平板嗎？',
-        body: '這是老師的動作。',
-        label: '教師代碼', password: true, inputmode: 'numeric',
-        note: '換人之前系統會先把目前這位同學寫到一半的東西存起來。',
-        yes: '解鎖', no: '取消'
-      }, function(code){
-        if (String(code || '').trim() !== String((state.settings || {}).teacherCode || '')){
-          toast('代碼不對。'); return; }
-        try { if (typeof AAL !== 'undefined' && AAL){ flushPendingPicks(); flushLogs(); aalSave(); } } catch (e) {}
-        try { quizSaveFlush(); } catch (e) {}
-        try { if (typeof SURVEY !== 'undefined' && SURVEY) surveyDraftSave(); } catch (e) {}
-        try { clearPads(); } catch (e) {}
-        AAL = null; SURVEY = null; QUIZ = null;
-        state.ui.deviceUnlock = true; saveUiOnly(); renderShell();
-        go('#/student'); render();
-        toast('可以用右上角的選單換人了。換完之後請再按一次〈換人〉鎖回去。');
-      });
+      const box = document.getElementById('unlockCode');
+      const code = box ? String(box.value || '').trim() : '';
+      const s0 = state.settings || {};
+      const now = Date.now();
+      /* 退避：連續輸錯就鎖住並加長等待。不然這一頁就是一台無限次的
+         四位數猜測機，而四位數只有一萬種。 */
+      if (s0.unlockLockedUntil && now < s0.unlockLockedUntil){
+        const left = Math.ceil((s0.unlockLockedUntil - now) / 1000);
+        toast('輸錯太多次了，請等 ' + left + ' 秒再試。'); return; }
+      const want = String(s0.teacherCode || '');
+      if (!want){
+        alertModal({title:'這台裝置還沒有教師代碼',
+          body:'教師代碼在《清空示範資料，準備施測》時產生。',
+          note:'這台平板還在示範模式，本來就可以直接換人。'});
+        return; }
+      /* 每一次嘗試都寫進日誌：事後才標記得出哪一台裝置被動過。 */
+      const okCode = (code === want);
+      state.logs = state.logs || [];
+      state.logs.push({t:now, sid:state.ui.role, cid:null, cond:null, lang:'zh',
+        aid:null, iid:null, type:'UNLOCK', code:okCode ? 'U+' : 'U-', ok:okCode});
+      if (!okCode){
+        s0.unlockTries = (s0.unlockTries || 0) + 1;
+        if (s0.unlockTries >= 3){
+          s0.unlockLockedUntil = now + Math.min(15 * 60000, 30000 * Math.pow(2, s0.unlockTries - 3));
+        }
+        save(); render();
+        toast('代碼不對。'); return; }
+      s0.unlockTries = 0; s0.unlockLockedUntil = 0;
+      /* 解鎖前先把這位同學寫到一半的東西全部結清並清掉手寫，
+         不然下一個坐下來的孩子會接到上一個人的筆跡與尚未落地的事件。 */
+      try { if (typeof AAL !== 'undefined' && AAL){ flushPendingPicks(); flushLogs(); aalSave(); } } catch (e) {}
+      try { quizSaveFlush(); } catch (e) {}
+      try { if (typeof SURVEY !== 'undefined' && SURVEY) surveyDraftSave(); } catch (e) {}
+      try { clearPads(); } catch (e) {}
+      AAL = null; SURVEY = null; QUIZ = null;
+      state.ui.deviceUnlock = true; save(); renderShell();
+      go('#/student'); render();
+      toast('可以用右上角的選單換人了。換完之後會自動鎖回去。');
       return; }
     /* 答案卡釋出開關。這一段原本寫在 change 監聽器裡－－而它是一顆
        <button>，永遠不會觸發 change。也就是說這顆開關從來沒有生效過：
@@ -12132,6 +12331,12 @@ function bindEvents(){
       save(); render();
       toast(now ? '已開放這份的答案卡。' : '已收回這份的答案卡。');
       return; }
+    if (act === 'regen-code'){
+      if (!isResearcher()) return;
+      state.settings.teacherCode = String(Math.floor(100000 + Math.random() * 900000));
+      state.settings.unlockTries = 0; state.settings.unlockLockedUntil = 0;
+      save(); render();
+      toast('已產生新的教師代碼。'); return; }
     if (act === 'toast-close'){
       clearTimeout(toast._t);
       const tr = $('#toastRoot'); if (tr) tr.innerHTML = '';
@@ -12357,6 +12562,11 @@ function bindEvents(){
     /* 確認之後真正執行的那一段（切法與 aalSubmitCommit 相同）。 */
     function goLiveCommit(){
       state.demoSeed  = false;
+      /* 這台裝置的教師代碼在這裡產生，不再寫死。六位數、一台一組：
+         原本四個班 96 台平板共用 '1234'，一個孩子試出來全班就都有了。 */
+      state.settings.teacherCode = String(Math.floor(100000 + Math.random() * 900000));
+      state.settings.unlockTries = 0;
+      state.settings.unlockLockedUntil = 0;
       state.surveys   = (state.surveys || []).filter(function(s){ return !s.demo; });
       state.submissions = [];
       state.responses   = [];
@@ -12392,7 +12602,11 @@ function bindEvents(){
          在自己的答案格裡，而交卷時它會被寫進他的 responses。 */
       clearPads();
       save(); renderShell(); render();
-      toast('已清空前後測示範作答、示範問卷、歷程事件與作答草稿，可以施測了。');
+      alertModal({title:'已經可以施測了',
+        body:'已清空前後測的示範作答、示範問卷、歷程事件與作答草稿。',
+        strong:'這台平板的教師代碼：' + state.settings.teacherCode,
+        note:'把它記下來。施測中要把平板交給下一位同學時，在網址列打 #/unlock 並輸入它。' +
+             '代碼也可以在系統設定頁看到或換掉。'});
       return;
     }
   });

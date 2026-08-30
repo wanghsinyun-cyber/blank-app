@@ -46,8 +46,13 @@ function quizSave(){
     const strokes = {};
     (getAssignment(QUIZ.aid) || {itemIds:[]}).itemIds.map(getItem).filter(Boolean)
       .forEach(function(i){ if (i.type === 'cr'){ const p = padPayload(i.id); if (p) strokes[i.id] = p; } });
-    all[QUIZ.aid + '|' + me.id] = {answers:QUIZ.answers, texts:QUIZ.texts,
-                                   strokes:strokes, savedAt:Date.now()};
+    /* 理由同 aalSave：兩個分頁會把對方寫過的題洗掉。 */
+    const qk = QUIZ.aid + '|' + me.id;
+    const merged = mergeDraftMaps(all[qk] || {},
+      {answers:QUIZ.answers, texts:QUIZ.texts, strokes:strokes},
+      ['answers','texts','strokes']);
+    merged.savedAt = Date.now();
+    all[qk] = merged;
     localStorage.setItem(QUIZ_DRAFT_KEY, JSON.stringify(all));
     QUIZ.dirty = false;
   } catch (e) {

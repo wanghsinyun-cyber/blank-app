@@ -68,6 +68,7 @@ function render(){
     case 'bank':      html = viewBank(); break;
     case 'settings':  html = viewSettings(); break;
     case 'about':     html = viewAbout(); break;
+    case 'unlock':    html = viewUnlock(); break;
     case 'research':  html = viewResearch(); break;
     case 'aal':       html = viewAaL(a[0]); break;
     case 'inspect':   html = viewInspect(a[0], a[1]); break;
@@ -676,28 +677,50 @@ function bindEvents(){
     /* 施測狀態下的〈換人〉。要代碼才解得開，解開之後強制把待處理的
        選項、日誌與手寫全部結清並清掉——不然下一個坐下來的孩子會接到
        上一個人的筆跡與尚未落地的事件。解鎖是一次性的：換完人就再鎖回去。 */
+    /* 解鎖與鎖回去。入口在 #/unlock 路由（見 viewUnlock），不在頂列。 */
+    if (act === 'device-relock'){
+      if (state.ui) state.ui.deviceUnlock = false;
+      saveUiOnly(); renderShell(); render();
+      toast('已經鎖回去了。'); return; }
     if (act === 'device-unlock'){
-      if (state.ui && state.ui.deviceUnlock){
-        state.ui.deviceUnlock = false; saveUiOnly(); renderShell();
-        toast('已經鎖回去了。'); return; }
-      promptModal({
-        title: '要換一位同學使用這台平板嗎？',
-        body: '這是老師的動作。',
-        label: '教師代碼', password: true, inputmode: 'numeric',
-        note: '換人之前系統會先把目前這位同學寫到一半的東西存起來。',
-        yes: '解鎖', no: '取消'
-      }, function(code){
-        if (String(code || '').trim() !== String((state.settings || {}).teacherCode || '')){
-          toast('代碼不對。'); return; }
-        try { if (typeof AAL !== 'undefined' && AAL){ flushPendingPicks(); flushLogs(); aalSave(); } } catch (e) {}
-        try { quizSaveFlush(); } catch (e) {}
-        try { if (typeof SURVEY !== 'undefined' && SURVEY) surveyDraftSave(); } catch (e) {}
-        try { clearPads(); } catch (e) {}
-        AAL = null; SURVEY = null; QUIZ = null;
-        state.ui.deviceUnlock = true; saveUiOnly(); renderShell();
-        go('#/student'); render();
-        toast('可以用右上角的選單換人了。換完之後請再按一次〈換人〉鎖回去。');
-      });
+      const box = document.getElementById('unlockCode');
+      const code = box ? String(box.value || '').trim() : '';
+      const s0 = state.settings || {};
+      const now = Date.now();
+      /* 退避：連續輸錯就鎖住並加長等待。不然這一頁就是一台無限次的
+         四位數猜測機，而四位數只有一萬種。 */
+      if (s0.unlockLockedUntil && now < s0.unlockLockedUntil){
+        const left = Math.ceil((s0.unlockLockedUntil - now) / 1000);
+        toast('輸錯太多次了，請等 ' + left + ' 秒再試。'); return; }
+      const want = String(s0.teacherCode || '');
+      if (!want){
+        alertModal({title:'這台裝置還沒有教師代碼',
+          body:'教師代碼在《清空示範資料，準備施測》時產生。',
+          note:'這台平板還在示範模式，本來就可以直接換人。'});
+        return; }
+      /* 每一次嘗試都寫進日誌：事後才標記得出哪一台裝置被動過。 */
+      const okCode = (code === want);
+      state.logs = state.logs || [];
+      state.logs.push({t:now, sid:state.ui.role, cid:null, cond:null, lang:'zh',
+        aid:null, iid:null, type:'UNLOCK', code:okCode ? 'U+' : 'U-', ok:okCode});
+      if (!okCode){
+        s0.unlockTries = (s0.unlockTries || 0) + 1;
+        if (s0.unlockTries >= 3){
+          s0.unlockLockedUntil = now + Math.min(15 * 60000, 30000 * Math.pow(2, s0.unlockTries - 3));
+        }
+        save(); render();
+        toast('代碼不對。'); return; }
+      s0.unlockTries = 0; s0.unlockLockedUntil = 0;
+      /* 解鎖前先把這位同學寫到一半的東西全部結清並清掉手寫，
+         不然下一個坐下來的孩子會接到上一個人的筆跡與尚未落地的事件。 */
+      try { if (typeof AAL !== 'undefined' && AAL){ flushPendingPicks(); flushLogs(); aalSave(); } } catch (e) {}
+      try { quizSaveFlush(); } catch (e) {}
+      try { if (typeof SURVEY !== 'undefined' && SURVEY) surveyDraftSave(); } catch (e) {}
+      try { clearPads(); } catch (e) {}
+      AAL = null; SURVEY = null; QUIZ = null;
+      state.ui.deviceUnlock = true; save(); renderShell();
+      go('#/student'); render();
+      toast('可以用右上角的選單換人了。換完之後會自動鎖回去。');
       return; }
     /* 答案卡釋出開關。這一段原本寫在 change 監聽器裡－－而它是一顆
        <button>，永遠不會觸發 change。也就是說這顆開關從來沒有生效過：
@@ -714,6 +737,12 @@ function bindEvents(){
       save(); render();
       toast(now ? '已開放這份的答案卡。' : '已收回這份的答案卡。');
       return; }
+    if (act === 'regen-code'){
+      if (!isResearcher()) return;
+      state.settings.teacherCode = String(Math.floor(100000 + Math.random() * 900000));
+      state.settings.unlockTries = 0; state.settings.unlockLockedUntil = 0;
+      save(); render();
+      toast('已產生新的教師代碼。'); return; }
     if (act === 'toast-close'){
       clearTimeout(toast._t);
       const tr = $('#toastRoot'); if (tr) tr.innerHTML = '';
@@ -939,6 +968,11 @@ function bindEvents(){
     /* 確認之後真正執行的那一段（切法與 aalSubmitCommit 相同）。 */
     function goLiveCommit(){
       state.demoSeed  = false;
+      /* 這台裝置的教師代碼在這裡產生，不再寫死。六位數、一台一組：
+         原本四個班 96 台平板共用 '1234'，一個孩子試出來全班就都有了。 */
+      state.settings.teacherCode = String(Math.floor(100000 + Math.random() * 900000));
+      state.settings.unlockTries = 0;
+      state.settings.unlockLockedUntil = 0;
       state.surveys   = (state.surveys || []).filter(function(s){ return !s.demo; });
       state.submissions = [];
       state.responses   = [];
@@ -974,7 +1008,11 @@ function bindEvents(){
          在自己的答案格裡，而交卷時它會被寫進他的 responses。 */
       clearPads();
       save(); renderShell(); render();
-      toast('已清空前後測示範作答、示範問卷、歷程事件與作答草稿，可以施測了。');
+      alertModal({title:'已經可以施測了',
+        body:'已清空前後測的示範作答、示範問卷、歷程事件與作答草稿。',
+        strong:'這台平板的教師代碼：' + state.settings.teacherCode,
+        note:'把它記下來。施測中要把平板交給下一位同學時，在網址列打 #/unlock 並輸入它。' +
+             '代碼也可以在系統設定頁看到或換掉。'});
       return;
     }
   });

@@ -146,6 +146,21 @@ function viewSettings(){
       '<strong>一人一台平板時請用這顆開關</strong>——每台裝置只看得到自己那一筆交卷紀錄，' +
       '「全班都交完」在那個情境下永遠不會成立。</span></div>' +
     '</div></div>' +
+    /* 教師代碼。30-data.js 的註解原本說「研究者可以在系統設定頁改掉它」，
+       而這一頁從來沒有這個欄位－－一句死註解配一個寫死的 '1234'。 */
+    '<div class="card" style="margin-bottom:14px"><div class="card-h"><h3>教師代碼</h3>' +
+      '<span class="muted small">施測中要把這台平板交給下一位同學時用</span></div>' +
+      '<div class="card-p col">' +
+      '<div class="row" style="justify-content:space-between;gap:10px">' +
+      '<span class="num" style="font-size:1.4rem;letter-spacing:.18em">' +
+        (s.teacherCode ? esc(s.teacherCode) : '（還沒有，清場時會產生）') + '</span>' +
+      '<button class="btn sm" data-act="regen-code">換一組</button></div>' +
+      '<p class="muted small" style="margin:0">老師在網址列打 <code>#/unlock</code> 並輸入這組碼，' +
+      '就可以把裝置交給下一位同學。這條路徑故意不放在頂列：' +
+      '剩十分鐘沒事做的孩子最先按的就是眼前的新按鈕。' +
+      '連續輸錯會鎖住並加長等待，每一次嘗試（成功與否）都會寫進歷程日誌，' +
+      '事後標記得出哪一台裝置被動過。</p>' +
+    '</div></div>' +
     '<div class="card"><div class="card-h"><h3>AI 引擎</h3></div><div class="card-p col">' +
       '<div class="field"><label for="eng">目前使用</label><select id="eng" data-act="set-engine">' +
       '<option value="builtin"' + (s.engine === 'builtin' ? ' selected' : '') + '>內建規則引擎（離線、可重現）</option>' +
@@ -435,4 +450,50 @@ function viewAbout(){
     '</ul>' +
     '<p class="muted small" style="margin-top:10px">KAIROS 是研究用的整合原型，與上述任何平台或機構均無隸屬關係。</p>' +
   '</div>';
+}
+
+/* ==========================================================================
+   #/unlock — 施測狀態下把裝置交給下一位同學
+   上一輪把這個出口做成頂列上一顆對每個學生都可見的〈換人〉，代碼還寫死
+   '1234'——那是把出口做成了入口（見 80-ui-core.js 的說明）。
+   現在它是一條要自己打網址才到得了的路由：老師知道就好，而剩十分鐘沒事做
+   的孩子不會憑空打出 #/unlock。代碼在清場時產生、可在設定頁看與換，
+   連續輸錯會鎖住並加長等待，每一次嘗試都寫進 state.logs（type:'UNLOCK'）。
+   ========================================================================== */
+function viewUnlock(){
+  const live = state.demoSeed === false;
+  const s = state.settings || {};
+  const unlocked = !!(state.ui && state.ui.deviceUnlock);
+  if (!live){
+    return '<div class="empty"><h3>這台平板還在示範模式</h3>' +
+      '<p style="max-width:60ch">示範模式本來就可以直接用右上角的選單換人，不需要代碼。</p>' +
+      '<a class="btn primary" href="#/student">回我的作業</a></div>';
+  }
+  if (unlocked){
+    return '<div class="empty"><h3>已經解鎖了</h3>' +
+      '<p style="max-width:60ch">用右上角的選單換成下一位同學就可以。換完之後會自動鎖回去。</p>' +
+      '<div class="row" style="justify-content:center;margin-top:12px">' +
+      '<button class="btn" data-act="device-relock">現在就鎖回去</button>' +
+      '<a class="btn primary" href="#/student">回我的作業</a></div></div>';
+  }
+  const now = Date.now();
+  const locked = s.unlockLockedUntil && now < s.unlockLockedUntil;
+  return sectionHead('換一位同學使用這台平板', '這是老師的動作',
+      '<a class="btn" href="#/student">← 回我的作業</a>') +
+    '<div class="card" style="max-width:34rem"><div class="card-p col">' +
+    '<p class="small" style="margin:0">請老師輸入這台平板的教師代碼。' +
+    '解鎖之前，系統會先把目前這位同學寫到一半的作答、筆跡與問卷全部存起來。</p>' +
+    (locked
+      ? '<p class="small" role="alert" style="color:var(--crit);font-weight:600">' +
+        '輸錯太多次了，請等 ' + Math.ceil((s.unlockLockedUntil - now) / 1000) + ' 秒再試。</p>'
+      : '') +
+    '<div class="field"><label for="unlockCode">教師代碼</label>' +
+    '<input type="password" id="unlockCode" inputmode="numeric" autocomplete="off"' +
+    (locked ? ' disabled' : '') + '></div>' +
+    '<div class="row"><button class="btn primary" data-act="device-unlock"' +
+    (locked ? ' disabled' : '') + '>解鎖</button>' +
+    '<a class="btn" href="#/student">取消</a></div>' +
+    '<p class="muted small" style="margin:0">代碼在《清空示範資料，準備施測》時產生，' +
+    '可以在研究控制台的系統設定頁看到或換掉。每一次嘗試都會記錄下來。</p>' +
+    '</div></div>';
 }

@@ -41,7 +41,7 @@ function rerouteInRender(hash){
    有這道白名單，頁內錨點（#stage、#anything）就不會把畫面打成 404。 */
 const KNOWN_ROUTES = {teacher:1, create:1, assign:1, kb:1, note:1, synth:1, dash:1,
   bank:1, settings:1, about:1, research:1, aal:1, inspect:1, survey:1,
-  student:1, quiz:1, result:1, mygrowth:1};
+  student:1, quiz:1, result:1, mygrowth:1, unlock:1};
 
 function parseRoute(){
   const h = (location.hash || '#/teacher').replace(/^#\/?/, '');
@@ -283,7 +283,6 @@ function renderShell(){
      用自己的裝置，本來就不需要切換身分。 */
   const liveRun = state.demoSeed === false;
   const whoWrap = $('#whoWrap');
-  if (whoWrap) whoWrap.style.display = (liveRun && !isTeacher()) ? 'none' : '';
   /* 「示範資料（模擬班級）」是靜態節點，清場之後還掛在每一頁的頂列——
      真的孩子在真的施測時，每一頁都被告知這是模擬班級，
      與知情同意的文案互相矛盾。 */
@@ -319,7 +318,7 @@ function renderShell(){
      這台裝置永遠回不到教師端：老師把平板交給下一個孩子、或一開始選錯人，
      現場唯一解法是清瀏覽器資料，那會連同這孩子唯一一份作答與草稿一起銷毀，
      而且代為檢視、評閱、答案卡開關也全部做不到。
-     多一顆〈換人〉，用 state.settings.teacherCode 開鎖（deviceUnlock）。 */
+     出口在 #/unlock（見下方），不在頂列。 */
   const unlocked = !!(state.ui && state.ui.deviceUnlock);
   if (liveRun && !isTeacher() && !unlocked){
     const meNow = currentUser();
@@ -328,26 +327,21 @@ function renderShell(){
   } else {
     sel.disabled = false;
   }
-  /* 這顆鈕只在「施測狀態 + 目前是學生」時出現，所以四個條件的孩子都看得到
-     同一顆，版面幾何不因條件而異；它需要代碼才有作用。 */
-  let sw = document.getElementById('switchWho');
-  if (liveRun && !isTeacher()){
-    if (!sw){
-      sw = document.createElement('button');
-      sw.id = 'switchWho';
-      sw.className = 'btn sm ghost';
-      sw.type = 'button';
-      sw.dataset.act = 'device-unlock';
-      const wrap = $('#whoWrap');
-      if (wrap && wrap.parentNode) wrap.parentNode.insertBefore(sw, wrap.nextSibling);
-      else document.querySelector('.topbar').appendChild(sw);
-    }
-    sw.textContent = unlocked ? '換人（已解鎖）' : '換人';
-    sw.style.display = '';
-    if (whoWrap) whoWrap.style.display = unlocked ? '' : 'none';
-  } else if (sw){
-    sw.style.display = 'none';
-  }
+  /* 這顆鈕已經拿掉。上一輪為了給老師一個出口，在施測狀態下對每一位學生的
+     每一頁都長出一顆〈換人〉——那是把出口做成了入口：
+       · 剩十分鐘沒事做的孩子最先按的就是與自己名字並排的那顆新鈕
+       · 代碼硬編碼成 '1234'，四個班 96 台平板同一組，而且沒有任何 UI 改得動它
+       · 輸錯只 toast，沒有次數上限、沒有延遲、不留任何紀錄
+       · 猜中之後身分下拉整份攤開：切成別班同學＝當場看到另一個條件的夥伴
+         （受試者間設計對兩個孩子同時失效）；切成研究者＝拿得到題庫正解、
+         同學的唯讀重播、答案卡開關與〈清場〉
+     出口還是要有，但不能長在孩子眼前。改成一條不會被亂按到的路由
+     #/unlock（老師知道就好），代碼在清場時產生、可在設定頁看與換，
+     連續輸錯會鎖住並加長等待，每一次嘗試都寫進日誌。
+     解鎖之後身分下拉才打開。 */
+  if (whoWrap) whoWrap.style.display = (liveRun && !isTeacher() && !unlocked) ? 'none' : '';
+  const sw = document.getElementById('switchWho');
+  if (sw) sw.remove();
 
   /* 教師視角的班級選擇器（學生看不到） */
   const cw = $('#classWrap');

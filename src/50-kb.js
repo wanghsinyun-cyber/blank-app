@@ -85,6 +85,16 @@ function adoptForeignState(next){
   if (!next || typeof next !== 'object') return;
   STATE_REV = next.rev || 0;
   const hash = location.hash;
+  /* 換身分就要清手寫板。全庫有四條會改變 state.ui.role 的路徑，clearPads()
+     原本只掛在其中三條（換身分下拉、施測前清場、再走一次），第四條就是這裡。
+     PADS 不在 state 裡，所以整份 state 被換掉時它原封不動留著：
+     老師在前景分頁把裝置交給下一個孩子，背景分頁收到 storage 事件換成新身分，
+     上一個孩子寫在 aal-C01 的筆跡還在——新孩子一進作答頁，initPads 的
+     `PADS[id] = PADS[id] || {…}` 會沿用舊物件，別人的字直接畫在他的答案格裡；
+     padHasInk 為真所以缺答救援不會攔，交卷時寫進他的 responses[].strokes。
+     兩個孩子的建構反應題資料同時作廢，而評閱端看不出那不是他寫的。 */
+  const roleChanged = !!(next.ui && state && state.ui && next.ui.role !== state.ui.role);
+  if (roleChanged && typeof clearPads === 'function'){ try { clearPads(); } catch (e) {} }
   state = next;
   try {
     if (typeof renderShell === 'function') renderShell();
@@ -141,12 +151,71 @@ if (typeof window !== 'undefined' && window.addEventListener){
   });
 }
 
+/* 一列資料的識別。用來判斷「磁碟上那一份有沒有這一筆」。 */
+function rowKey(kind, r){
+  if (kind === 'logs')        return [r.t, r.sid, r.type, r.code, r.iid, r.turn].join('|');
+  if (kind === 'dialog')      return [r.t, r.sid, r.iid, r.turn, r.speaker].join('|');
+  if (kind === 'responses')   return [r.aid, r.sid, r.iid].join('|');
+  if (kind === 'submissions') return [r.aid, r.sid].join('|');
+  if (kind === 'surveys')     return [r.sid, r.phase].join('|');
+  return r.id != null ? String(r.id) : JSON.stringify(r);
+}
+
+/* 把「我們手上有、但磁碟那一份沒有」的列補回磁碟那一份上。
+   施測中的分頁依設計拒絕同步外部更新（見 measuringNow），手上永遠是進入
+   作答那一刻的舊 state；而 save() 原本無條件把它整份寫回去——
+   rev/writer 只擋「無聲被換掉」，完全不擋「無聲蓋掉別人」。
+   兩個分頁都停在作答頁時：A 分頁交卷（responses／submissions／dialog 落地），
+   B 分頁兩秒後的 flushLogs 就把不含這些東西的舊 state 整份寫回去。
+   孩子看到「已交卷」、草稿也被刪了，但磁碟上 submitted() 是 false——
+   16 題作答、整段對話、整節課的歷程事件一起消失，而且畫面沒有任何訊號。
+   同一個機制也會把已經扣掉的對話額度倒回去（第 7 輪只補了讀那一半）。
+   這裡改成：磁碟比我們新時，以磁碟為底、只把我們自己多出來的列補上去。
+   五個集合都是附加型或以鍵唯一，所以這個合併是安全的；
+   ui 保留我們自己的（身分與路由是本機的事），settings 以磁碟為準
+   （老師在另一個分頁按的答案卡開關不可以被學生分頁蓋掉），
+   只有 a11y 例外——那是本機的呈現設定。 */
+function mergeOntoDisk(disk){
+  const out = disk;
+  ['logs', 'dialog', 'responses', 'submissions', 'surveys', 'notes', 'views'].forEach(function(kind){
+    const mine = state[kind];
+    if (!Array.isArray(mine)) return;
+    const theirs = Array.isArray(out[kind]) ? out[kind] : [];
+    const seen = {};
+    theirs.forEach(function(r){ seen[rowKey(kind, r)] = true; });
+    let added = 0;
+    mine.forEach(function(r){
+      const k = rowKey(kind, r);
+      if (!seen[k]){ theirs.push(r); seen[k] = true; added++; }
+    });
+    out[kind] = theirs;
+    if (added && typeof console !== 'undefined' && console.info)
+      console.info('[KAIROS] 合併：' + kind + ' 補回 ' + added + ' 列');
+  });
+  out.ui = state.ui;
+  if (out.settings && state.settings) out.settings.a11y = state.settings.a11y;
+  return out;
+}
+
 function save(){
   if (isImpersonating() && !save._allowUiWrite){
     if (typeof console !== 'undefined' && console.warn)
       console.warn('[KAIROS] 代為檢視期間的落地被擋下', new Error().stack);
     return true;   // 刻意不落地，不是失敗
   }
+  /* 別的分頁在我們這一份之後寫過東西時，不要整份蓋回去（見 mergeOntoDisk）。
+     合併結果同時套回記憶體，否則這個分頁會一直拿著舊的那一份，
+     下一次存檔又把剛補回去的東西再蓋掉一次。 */
+  try {
+    const raw = localStorage.getItem(STORE_KEY);
+    if (raw){
+      const disk = JSON.parse(raw);
+      if (disk && (disk.rev || 0) > STATE_REV && disk.writer !== TAB_ID){
+        state = mergeOntoDisk(disk);
+        STATE_REV = disk.rev || 0;
+      }
+    }
+  } catch (e) { /* 讀不回來就照原本的路徑寫，不要因此掉資料 */ }
   /* 版次要在序列化之前掛上去，兩個分支寫出的物件才都帶得到 */
   state.rev = nextRev();
   state.writer = TAB_ID;

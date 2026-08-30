@@ -79,6 +79,27 @@ function aalPadsRestore(saved){
   });
 }
 
+/* 草稿也要防跨分頁互相覆蓋。三支草稿 key 完全沒有版次與監聽
+   （那一整套只做在 STORE_KEY 上），而 draftId 只由 aid 與 sid 組成，
+   兩個分頁必然撞同一格。同一個孩子誤開兩個分頁停在同一份後測時，
+   任一邊的一次存檔（打字去抖尾緣、選項、〈先離開〉、換題）
+   就把另一邊寫的所有題整批洗掉，並且來回互洗。
+   草稿是全站唯一保護學生作答的機制（重載＝整份歸零），
+   在最容易發生的「誤開兩個分頁」下反而變成資料銷毀器。
+   合併規則：以磁碟那一份為底，逐題疊上我們的（我們正在編輯）－－
+   另一邊寫過、我們沒碰過的題因此保留下來。 */
+function mergeDraftMaps(prev, mine, keys){
+  const out = {};
+  keys.forEach(function(k){
+    const a = (prev && prev[k]) || {}, b = (mine && mine[k]) || {};
+    const m = {};
+    Object.keys(a).forEach(function(x){ m[x] = a[x]; });
+    Object.keys(b).forEach(function(x){ m[x] = b[x]; });
+    out[k] = m;
+  });
+  return out;
+}
+
 function aalSave(){
   if (isImpersonating()) return;
   if (!AAL) return;
@@ -88,10 +109,15 @@ function aalSave(){
        對話回合是三個 AI 條件的劑量控制，放進 localStorage 等於把劑量
        交給學生的瀏覽器：清掉網站資料就能重新領 6 次。額度改由已落地的
        state.dialog 推導，見 aalStudentTurns()。 */
-    all[aalDraftId()] = {idx:AAL.idx, answers:AAL.answers, texts:AAL.texts, notes:AAL.notes,
-                         marks:AAL.marks, checks:AAL.checks,
-                         tele:AAL.tele, drafts:AAL.drafts, says:AAL.says,
-                         strokes:aalPadsSnapshot(), savedAt:Date.now()};
+    const prev = all[aalDraftId()] || {};
+    const mine = {answers:AAL.answers, texts:AAL.texts, notes:AAL.notes,
+                  marks:AAL.marks, checks:AAL.checks, tele:AAL.tele,
+                  drafts:AAL.drafts, says:AAL.says, strokes:aalPadsSnapshot()};
+    const merged = mergeDraftMaps(prev, mine,
+      ['answers','texts','notes','marks','checks','tele','drafts','says','strokes']);
+    merged.idx = AAL.idx;
+    merged.savedAt = Date.now();
+    all[aalDraftId()] = merged;
     localStorage.setItem(AAL_DRAFT_KEY, JSON.stringify(all));
     aalSave._fails = 0;
     AAL.dirty = false;
@@ -615,6 +641,16 @@ function aalClearMissing(){
 
 function aalPick(k){
   const it = aalItem();
+  /* 重選同一個答案不算一次「更改選項」。這一支綁在 click 上（前測的
+     quiz-pick 綁在 change），而 click 在重點已經選起來的那一顆時照樣觸發，
+     於是會寫一筆 type:'OPTION' code:'O' changed:true 並改寫 drafts.final。
+     enaLines() 把「往前 3 格內出現過 A（AI 回覆）的 O 事件」編成 REV
+     ＝「對話之後更改選項」，而只有三個 AI 條件會產生 A——對照組結構上
+     不可能產生這種假 REV。而平板上第一次作答的孩子最自然的動作就是
+     「跟小葵講完話，回頭再點一下自己的答案確認它還在」：那會在主要歷程
+     依變項上憑空造出一筆與操弄同向的紀錄，changed:true 還讓事後清資料
+     也分不出真假。畫面該有的即時回饋照走，只是不記事件。 */
+  if (AAL.answers[it.id] === k) return;
   AAL.answers[it.id] = k;
 
   /* 畫面立刻回應（不等去抖），使用者才知道焦點停在哪 */
@@ -1254,7 +1290,13 @@ function surveyDraftSave(){
   if (!SURVEY) return;
   try {
     const all = JSON.parse(localStorage.getItem(SURVEY_DRAFT_KEY) || '{}');
-    all[SURVEY.sid + '|' + SURVEY.phase] = {resp:SURVEY.resp, page:SURVEY.page, savedAt:Date.now()};
+    /* 理由同 aalSave：兩個分頁會把對方填過的題洗掉。 */
+    const pk = SURVEY.sid + '|' + SURVEY.phase;
+    const prevSv = all[pk] || {};
+    const respMerged = {};
+    Object.keys(prevSv.resp || {}).forEach(function(x){ respMerged[x] = prevSv.resp[x]; });
+    Object.keys(SURVEY.resp || {}).forEach(function(x){ respMerged[x] = SURVEY.resp[x]; });
+    all[pk] = {resp:respMerged, page:SURVEY.page, savedAt:Date.now()};
     localStorage.setItem(SURVEY_DRAFT_KEY, JSON.stringify(all));
     surveyDraftSave._fails = 0;
     SURVEY.dirty = false;

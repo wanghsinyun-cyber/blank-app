@@ -595,3 +595,67 @@ window.assertNoRollback = function(){
   console.log('[assertNoRollback]', r);
   return r;
 };
+
+/* ==========================================================================
+   兩個分頁不可以互相蓋掉對方的資料
+   施測中的分頁依設計拒絕同步外部更新，手上是舊 state；save() 原本無條件
+   整份寫回去，於是 A 分頁交卷之後，B 分頁兩秒後的 flushLogs 就把
+   responses／submissions／dialog／logs 一起抹掉——孩子看到「已交卷」、
+   草稿也刪了，磁碟上卻是 false。這一支模擬那個時序：
+     1. 兩邊都持有同一份基準
+     2. 「A 分頁」直接寫磁碟（模擬另一個分頁交卷）
+     3. 這一頁（B）在不同步的情況下 save()
+     4. 磁碟上 A 的交卷紀錄必須還在，B 自己的東西也要在
+   console 一行：assertNoClobber()
+   ========================================================================== */
+window.assertNoClobber = function(){
+  const realRole = state.ui.role, realImp = state.ui.impersonate, realHash = location.hash;
+  const fails = [];
+
+  state = buildSeedState(); save();
+  const A = state.classes[0].studentIds[0];
+  const B = state.classes[1].studentIds[0];
+
+  /* 這一頁（B 分頁）手上的基準 */
+  state.ui.role = B; state.ui.impersonate = null;
+  save();
+  const baseRev = STATE_REV;
+
+  /* 模擬另一個分頁：直接寫磁碟，帶更高的版次與別的 writer */
+  const other = JSON.parse(localStorage.getItem(STORE_KEY));
+  other.submissions = other.submissions.filter(function(s){ return !(s.aid === 'a-post' && s.sid === A); });
+  other.submissions.push({aid:'a-post', sid:A, at:Date.now()});
+  other.responses = other.responses.filter(function(r){ return !(r.aid === 'a-post' && r.sid === A); });
+  other.responses.push({aid:'a-post', sid:A, iid:'R01', choice:1, correct:false, text:'', strokes:null});
+  other.dialog = (other.dialog || []).concat([{t:Date.now(), sid:A, aid:'a-post', iid:'R01',
+    turn:1, speaker:'student', text:'A 分頁講的話'}]);
+  other.rev = baseRev + 1;
+  other.writer = 'tab-other';
+  localStorage.setItem(STORE_KEY, JSON.stringify(other));
+  localStorage.setItem(REV_KEY, String(other.rev));
+
+  /* B 分頁在不同步的情況下寫入自己的東西 */
+  state.logs = state.logs || [];
+  state.logs.push({t:Date.now(), sid:B, cid:'c-2', cond:'tutee', aid:'a-post', iid:'R02',
+                   proc:'FR', type:'MARK', code:'M', sent:0, on:true});
+  save();
+
+  const after = JSON.parse(localStorage.getItem(STORE_KEY));
+  if (!after.submissions.some(function(s){ return s.aid === 'a-post' && s.sid === A; }))
+    fails.push('另一個分頁的交卷紀錄被蓋掉了');
+  if (!after.responses.some(function(r){ return r.aid === 'a-post' && r.sid === A && r.iid === 'R01'; }))
+    fails.push('另一個分頁的 responses 被蓋掉了');
+  if (!(after.dialog || []).some(function(d){ return d.sid === A && d.text === 'A 分頁講的話'; }))
+    fails.push('另一個分頁的 dialog 被蓋掉了');
+  if (!(after.logs || []).some(function(e){ return e.sid === B && e.iid === 'R02' && e.code === 'M'; }))
+    fails.push('本頁自己寫的事件沒有落地');
+  if (!after.ui || after.ui.role !== B)
+    fails.push('合併之後 ui.role 不是本機的');
+
+  state = buildSeedState(); save();
+  state.ui.role = realRole; state.ui.impersonate = realImp; renderShell();
+  location.hash = realHash || '#/teacher'; render();
+  const r = {pass: fails.length === 0, fails: fails};
+  console.log('[assertNoClobber]', r);
+  return r;
+};
