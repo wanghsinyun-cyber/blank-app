@@ -8,6 +8,32 @@
 /* ==========================================================================
    延宕序列分析
    ========================================================================== */
+/* 同一題的「第幾次坐下來」。lsa() 與 enaLines() 原本都以 sid|iid 切段，
+   而 ENTER／EXIT 的 code 是 null、會被 behaviorSeq() 濾掉，所以同一題的
+   多次造訪被黏成一段。於是：
+     · LSA 會在「離開這一題前的最後一個動作」與「十幾分鐘後回來的
+       第一個動作」之間記一次 lag-1 轉移
+     · ENA 的 REV 判定是「往前 3 格裡有 A 或 Q 就算對話之後的修正」，
+       孩子跟夥伴講完話、翻去別題、十幾分鐘後回來改選項，
+       那個 OPTION 的前 3 格仍是離開前的 A／Q，於是被編成 REV。
+   而只有三個 AI 條件會產生 'A' 與 'Q…'（對照組只有 'N'），
+   這種假 REV 在結構上不可能出現在對照組，產生方向與操弄同向－－
+   而「對話帶動修正」正是三個 AI 條件的核心宣稱。
+   dwell 已經改用 ENTER→EXIT 累加，序列這一側要跟上。 */
+function visitIndex(){
+  const seen = {}, out = {};
+  allLogs().slice().sort(function(a, b){ return a.t - b.t; }).forEach(function(e){
+    const k = (e.sid || '_') + '|' + (e.iid || '_');
+    if (e.type === 'ENTER') seen[k] = (seen[k] || 0) + 1;
+    out[e.t + '|' + k] = seen[k] || 1;
+  });
+  return out;
+}
+function visitKey(e, vi){
+  const k = (e.sid || '_') + '|' + (e.iid || '_');
+  return k + '|v' + (vi[e.t + '|' + k] || 1);
+}
+
 function lsa(opts){
   opts = opts || {};
   const codes = BEHAVIOR_ORDER;
@@ -15,13 +41,14 @@ function lsa(opts){
   const n = codes.length;
   const F = codes.map(function(){ return new Array(n).fill(0); });
 
-  // 依「同一位學生、同一題」切段，段與段之間不計轉移
+  // 依「同一位學生、同一題、同一次造訪」切段（見 visitIndex）
   const seqs = {};
+  const vi = visitIndex();
   /* 共用取樣：只留真正的行為碼並排掉「取消」。原本只檢查 e.code 有沒有值，
      於是取消標記／取消檢核與 RESUME 都被當成一次完整動作進入轉移矩陣。 */
   behaviorSeq(allLogs()).forEach(function(e){
     if (opts.cond && e.cond !== opts.cond) return;
-    const k = e.sid + '|' + e.iid;
+    const k = visitKey(e, vi);
     (seqs[k] = seqs[k] || []).push(e);
   });
   let nSeq = 0, nEvent = 0;
@@ -91,8 +118,9 @@ function enaLines(){
      第一個動作往往就是回頭改那一題——AI 回覆一旦被擠出視窗，這個孩子在
      最該被記到 REV 的地方沒被記到，ENA 的組間投影因此帶進一個與
      「有沒有被中斷」相關、而非與條件相關的位移。 */
+  const vi = visitIndex();
   behaviorSeq(allLogs()).forEach(function(e){
-    const k = e.sid + '|' + e.iid;
+    const k = visitKey(e, vi);
     (seqs[k] = seqs[k] || []).push(e);
   });
   Object.keys(seqs).forEach(function(k){

@@ -215,8 +215,20 @@ select{min-width:0; max-width:100%; text-overflow:ellipsis}
 .btn:disabled{opacity:.45; cursor:not-allowed}
 .btn.primary{background:var(--accent); border-color:var(--accent); color:var(--accent-ink); font-weight:600}
 .btn.primary:hover{filter:brightness(1.14)}
-.btn.ghost{border-color:transparent; background:transparent}
+/* :not(.primary) 不可以拿掉。高對比按鈕是 `btn sm ghost`，applyA11y 在開啟時
+   再掛上 .primary；兩條的特異度同為 (0,2,0)，ghost 寫在後面而勝出，
+   把底色與邊框打回 transparent，但 ghost 沒有宣告 color，所以 .primary 的
+   color:var(--accent-ink) 存活－－高對比下它是 #fff，而頂列也是白底。
+   於是低視力孩子按下高對比的那一瞬間，「已開啟」的回饋與
+   「再按一次關掉」的唯一入口一起不見－－而這是平台為這群受試者
+   準備的唯一控制項，偏偏只在被使用時壞掉。 */
+.btn.ghost:not(.primary):not([aria-pressed="true"]){border-color:transparent; background:transparent}
 .btn.ghost:hover{background:var(--shade)}
+/* 「按下去了」直接由 aria-pressed 承載外觀，不再倚賴 JS 另外掛一個 .primary。
+   狀態只有一個來源，視覺與報讀器就不可能各說各話；而且寫在 .btn.ghost 之後，
+   不會再被它打回 transparent。 */
+.btn[aria-pressed="true"]{background:var(--accent); border-color:var(--accent);
+  color:var(--accent-ink); font-weight:600}
 .btn.sm{padding:4px 9px; font-size:0.85rem}
 .btn.danger{color:var(--crit); border-color:var(--q2-line)}
 
@@ -551,6 +563,14 @@ input[type=checkbox],input[type=radio]{ width:1.15em; height:1.15em; accent-colo
 
 /* 高對比模式：使用者可在頂列開啟 */
 :root[data-contrast="high"]{
+  /* 必須宣告 color-scheme。這個區塊把每個色彩 token 翻成黑白，
+     却沒有把深色主題設的 color-scheme:dark 改回來。
+     state.ui.theme 預設是 'system'，平板跟著系統進深色就落到這個組合：
+     作者樣式已經把卡片與文字拉成白底黑字，瀏覽器却繼續用深色配置
+     畫 radio／checkbox／range／下拉彈出清單與捲軸。
+     未選的單選鈕在白卡片上變成深色實心圓，看起來就是「已經選好了」，
+     而缺答會以 null 進 Rasch。 */
+  color-scheme: light;
   --ink:#000; --ink-2:#111; --ink-3:#333; --ink-4:#444;
   --rule:#555; --rule-strong:#333; --rule-soft:#777;
   --card:#fff; --paper:#fff; --cool:#fff; --shade:#f0f0f0; --grid:#ddd;
@@ -644,7 +664,14 @@ input[type=checkbox],input[type=radio]{ width:1.15em; height:1.15em; accent-colo
    scroll-margin-top：按〈下一題〉之後 #aalAnswer 的 top 是 0、頂列的 bottom
    是 100（175% 時 209），題號與題幹整個在頂列後面（WCAG 2.4.11），
    而那正是孩子換題後要讀的第一樣東西，16 題每題至少一次。 */
-[tabindex="-1"], .likert, .modal{ scroll-margin-top: calc(var(--sticky-top) + 12px) }
+/* 原本掛在 [tabindex="-1"], .likert, .modal 上的 scroll-margin-top 已經拿掉。
+   底下 html 的 scroll-padding-top 同值，而 scrollIntoView 的定義是
+   「把目標的 scroll-margin 盒對齊捲動區扣掉 scroll-padding 之後的起緣」——
+   兩者相加，實際偏移是兩倍。實測 100% 時 160px、175% 時 442px：
+   768px 高的教室平板上，頂列蓋掉最上面 209px，中間 233px 是上一段文章的
+   尾巴，要讀的題幹被推到螢幕下半部，而且偏移隨字級放大而變大，
+   正好懲罰最需要放大的孩子。每按一次〈下一題〉（16 題）、〈跳到題目 ↓〉、
+   〈↑ 回到文章〉、〈回到題目導覽〉與交卷缺答救援都會發生。 */
 /* 上面那一行只涵蓋三種選擇器，而 Tab 鍵每一站都會自動捲動：捲的是這個
    頁面捲動容器，所以真正的修法是在容器上留出頂列的高度。少了它，用 Tab
    往下走時被聚焦的按鈕、連結、輸入框一律停在頂列後面——看得到焦點框
@@ -1880,10 +1907,18 @@ const ROLE_OPENER = {
   peer:  {first: PEER_SHARE_FIRST, later: PEER_SHARE_LATER}
 };
 
+/* 第三段也要納入話量規格。每一則內建引擎回覆＝opener + ' ' + ROLE_STEM(body)，
+   opener 池已依規格收斂到 12–18 字、CONDITIONS.frame 收斂到 27–28 字，
+   但這三個 stem 從來不在那份規格裡：原本 tutor 7 字、tutee 10 字、peer 4 字，
+   而 body 三組完全相同——peer 每一輪固定比 tutee 少 6 字、比 tutor 少 3 字，
+   不隨回合或題目變動，也不是抽樣的。上一輪判定必須修掉的 frame 差距是
+   每題 10 字，這一處每題最多 6 輪、16 題累積可達約 576 字。
+   而且它同時是 LLM 逾時退回時的主要路徑，退回率又與班級／時段的網路品質共變。
+   三句收斂到 6–7 字（見 zz-debug 的 assertStemParity）。 */
 const ROLE_STEM = {
-  tutor: function(q){ return '你先說說看——' + q; },
-  tutee: function(q){ return '你可以說給我聽嗎——' + q; },
-  peer:  function(q){ return '那你呢？' + q; }
+  tutor: function(q){ return '你先說說看——' + q; },      // 6
+  tutee: function(q){ return '你說給我聽——' + q; },      // 6
+  peer:  function(q){ return '那你怎麼看——' + q; }       // 6
 };
 
 /* 子歷程一律不看學生說了什麼，只看該題的標定、文體與回合排程。 */
@@ -3287,6 +3322,15 @@ function kbLocked(u){
      而誰走這一趟由完課速度決定，暴露率與條件系統性共變。
      成績頁與學習軌跡早就補了這道門（第 5 輪 val5），知識建構空間沒有。 */
   if (submitted('a-post', me.id) && !surveyOf(me.id, 'post')) return true;
+  /* 第三道門：班級層級。前兩道只問這個孩子自己，於是他二十分鐘走完
+     交卷＋問卷之後條件立刻為假，而共構視圖的畫布最上面會把來源題的
+     完整題幹與四個選項原樣印出來－－而同教室還有 23 人正在作答它，
+     前後測又是同一份題本。這正是答案卡當初寫下 classKeyReleased 的
+     那個情境（第一個交卷的孩子接下來十分鐘沒事做、螢幕朝著旁邊），
+     同一道班級層級的門沒有裝到知識建構空間。洩題方向是先做完的
+     流向還在做的，而完課速度本身與條件共變（三個 AI 組每題要花對話時間），
+     KB 曝露量與貼文量也一併被完課速度決定，而那正是 KBI 與論述層次的來源。 */
+  if (typeof classKeyReleased === 'function' && !classKeyReleased('a-post', me.id)) return true;
   return false;
 }
 /* 鎖住的原因。文案與出口要跟著原因走，不能一律說「先把作業交出來」。 */
@@ -3295,6 +3339,7 @@ function kbLockReason(u){
   if (me.role !== 'student') return null;
   if (pendingAssignments(me.id).length > 0) return 'pending';
   if (submitted('a-post', me.id) && !surveyOf(me.id, 'post')) return 'survey';
+  if (typeof classKeyReleased === 'function' && !classKeyReleased('a-post', me.id)) return 'class';
   return null;
 }
 function scaffold(id){ return SCAFFOLDS.find(function(s){ return s.id === id; }); }
@@ -3858,6 +3903,32 @@ function communitySummary(){
 /* ==========================================================================
    延宕序列分析
    ========================================================================== */
+/* 同一題的「第幾次坐下來」。lsa() 與 enaLines() 原本都以 sid|iid 切段，
+   而 ENTER／EXIT 的 code 是 null、會被 behaviorSeq() 濾掉，所以同一題的
+   多次造訪被黏成一段。於是：
+     · LSA 會在「離開這一題前的最後一個動作」與「十幾分鐘後回來的
+       第一個動作」之間記一次 lag-1 轉移
+     · ENA 的 REV 判定是「往前 3 格裡有 A 或 Q 就算對話之後的修正」，
+       孩子跟夥伴講完話、翻去別題、十幾分鐘後回來改選項，
+       那個 OPTION 的前 3 格仍是離開前的 A／Q，於是被編成 REV。
+   而只有三個 AI 條件會產生 'A' 與 'Q…'（對照組只有 'N'），
+   這種假 REV 在結構上不可能出現在對照組，產生方向與操弄同向－－
+   而「對話帶動修正」正是三個 AI 條件的核心宣稱。
+   dwell 已經改用 ENTER→EXIT 累加，序列這一側要跟上。 */
+function visitIndex(){
+  const seen = {}, out = {};
+  allLogs().slice().sort(function(a, b){ return a.t - b.t; }).forEach(function(e){
+    const k = (e.sid || '_') + '|' + (e.iid || '_');
+    if (e.type === 'ENTER') seen[k] = (seen[k] || 0) + 1;
+    out[e.t + '|' + k] = seen[k] || 1;
+  });
+  return out;
+}
+function visitKey(e, vi){
+  const k = (e.sid || '_') + '|' + (e.iid || '_');
+  return k + '|v' + (vi[e.t + '|' + k] || 1);
+}
+
 function lsa(opts){
   opts = opts || {};
   const codes = BEHAVIOR_ORDER;
@@ -3865,13 +3936,14 @@ function lsa(opts){
   const n = codes.length;
   const F = codes.map(function(){ return new Array(n).fill(0); });
 
-  // 依「同一位學生、同一題」切段，段與段之間不計轉移
+  // 依「同一位學生、同一題、同一次造訪」切段（見 visitIndex）
   const seqs = {};
+  const vi = visitIndex();
   /* 共用取樣：只留真正的行為碼並排掉「取消」。原本只檢查 e.code 有沒有值，
      於是取消標記／取消檢核與 RESUME 都被當成一次完整動作進入轉移矩陣。 */
   behaviorSeq(allLogs()).forEach(function(e){
     if (opts.cond && e.cond !== opts.cond) return;
-    const k = e.sid + '|' + e.iid;
+    const k = visitKey(e, vi);
     (seqs[k] = seqs[k] || []).push(e);
   });
   let nSeq = 0, nEvent = 0;
@@ -3941,8 +4013,9 @@ function enaLines(){
      第一個動作往往就是回頭改那一題——AI 回覆一旦被擠出視窗，這個孩子在
      最該被記到 REV 的地方沒被記到，ENA 的組間投影因此帶進一個與
      「有沒有被中斷」相關、而非與條件相關的位移。 */
+  const vi = visitIndex();
   behaviorSeq(allLogs()).forEach(function(e){
-    const k = e.sid + '|' + e.iid;
+    const k = visitKey(e, vi);
     (seqs[k] = seqs[k] || []).push(e);
   });
   Object.keys(seqs).forEach(function(k){
@@ -5317,8 +5390,13 @@ function confirmModal(opts, onYes){
     (o.note ? '<p class="muted small" style="margin-top:10px;max-width:60ch">' + esc(o.note) + '</p>' : '') +
     '</div>' +
     '<div class="modal-f">' +
-    '<button class="btn" data-act="confirm-no">' + esc(o.no || '取消') + '</button>' +
-    '<button class="btn primary" data-act="confirm-yes">' + esc(o.yes || '確定') + '</button>' +
+    /* o.danger：「確定」那一邊才是不可逆的時候，把視覺權重翻過來。
+       兩個缺答分支的 yes 正是「還是要交卷」「還是要送出」，
+       no 才是救援路徑。初始焦點早就放在取消（理由寫在上面），
+       但同一個理由沒有套到視覺權重上－－而教室裡的孩子是用手指點的，
+       不是用 Tab 的；十歲孩子在鐘響前點的是顏色最重的那一顆。 */
+    '<button class="btn' + (o.danger ? ' primary' : '') + '" data-act="confirm-no">' + esc(o.no || '取消') + '</button>' +
+    '<button class="btn' + (o.danger ? '' : ' primary') + '" data-act="confirm-yes">' + esc(o.yes || '確定') + '</button>' +
     '</div>', {focus:'[data-act="confirm-no"]'});
   /* Esc 與點背景關掉彈窗，語意上就是按了〈取消〉，所以要走同一條路。
      原本只有〈取消〉那顆鈕會呼叫 _onNo，於是用 Esc 關掉缺答提醒的孩子
@@ -6115,6 +6193,25 @@ function viewAssign(aid, tab){
     '<p class="small" style="margin:0">這一頁的統計範圍是<strong>四個班級共 ' + diag.roster.length +
     ' 人</strong>——四班共用同一次 Rasch 校準，條件之間才可以比較。' +
     '只有「理解歷程」分頁另外把本班拆出來。</p></div>' +
+    /* 答案卡釋出開關。它原本只在 #/settings，而那一頁在 RESEARCHER_ONLY 裡－－
+       role==='teacher' 的老師根本進不去，而三條釋出路徑裡另外兩條
+       （過期出口、同班全交）在一人一台平板的正式部署下都走不到。
+       於是學生成績頁永遠停在「等老師打開」，而老師找不到那顆鈕。
+       處理器本來就守 isTeacher()，這裡只是把入口放到老師真的到得了的地方。 */
+    (function(){
+      const on = !!(((state.settings || {}).keyReleased || {})[aid]);
+      return '<div class="card card-p" style="margin-bottom:12px">' +
+        '<div class="row" style="justify-content:space-between;gap:10px">' +
+        '<span class="small">答案卡：' + (on ? '<strong>已對已交卷的學生打開</strong>' : '尚未開放') +
+        '。打開之後，交過卷的孩子就看得到每一題的選項與正解。</span>' +
+        '<button type="button" class="btn sm' + (on ? ' primary' : '') +
+        '" data-act="toggle-key" data-id="' + aid + '" aria-pressed="' + on + '">' +
+        '<span aria-hidden="true">' + (on ? '☑' : '☐') + '</span>' +
+        (on ? '收回答案卡' : '打開答案卡') + '</button></div>' +
+        '<p class="muted small" style="margin:8px 0 0">一人一台平板時這是唯一真的會成立的' +
+        '釋出路徑：每台裝置只看得到自己那一筆交卷紀錄，「全班都交完」在那個情境下' +
+        '永遠不會成立。</p></div>';
+    })() +
     '<div class="tabs" role="tablist">' + tabs.map(function(t){
       const on = T === t[0];
       return '<a href="#/assign/' + aid + '/' + t[0] + '"' + (on ? ' aria-current="true"' : '') +
@@ -6608,6 +6705,19 @@ function kbGate(){
       '<div class="row" style="margin-top:14px">' +
       '<a class="btn primary" href="#/survey/post">去填課後問卷 →</a>' +
       '<a class="btn" href="#/student">回我的作業</a></div></div>';
+  }
+  /* 班級層級的門。這一頁的畫布最上面會把來源題的完整題幹與四個選項
+     原樣印出來，而同教室還有二十幾人正在作答同一份題本——先做完的孩子
+     在這裡讀到的東西會流向還在做的。見 kbLocked 的第三道門。 */
+  if (kbLockReason(me) === 'class'){
+    const left = typeof classKeyPending === 'function' ? classKeyPending('a-post', me.id) : 0;
+    return '<div class="empty"><h3>等同學都做完，這裡就會打開</h3>' +
+      '<p style="max-width:62ch">這裡放的是全班一起想的問題，裡面會直接出現這次的題目。' +
+      '現在打開的話，還在作答的同學就等於先看到題目了。</p>' +
+      (left ? '<p class="muted small">還有 ' + left + ' 位同學還沒做完。</p>' : '') +
+      '<div class="row" style="margin-top:14px">' +
+      '<a class="btn primary" href="#/student">回我的作業</a>' +
+      '<a class="btn" href="#/mygrowth">看我的學習軌跡</a></div></div>';
   }
   const pend = pendingAssignments(me.id);
   const blocking = pend[0];
@@ -7554,8 +7664,10 @@ function viewStudent(){
       (kbLocked(me)
         ? statCard('我貼的想法', myNotes, '交完卷就可以繼續') +
           statCard('知識建構空間',
-            kbLockReason(me) === 'survey' ? '問卷後開放' : '測驗後開放',
-            kbLockReason(me) === 'survey' ? '問卷填完就會打開' : '交完卷就會打開')
+            kbLockReason(me) === 'survey' ? '問卷後開放'
+              : kbLockReason(me) === 'class' ? '全班完成後開放' : '測驗後開放',
+            kbLockReason(me) === 'survey' ? '問卷填完就會打開'
+              : kbLockReason(me) === 'class' ? '等同學都做完' : '交完卷就會打開')
         : statCard('我貼的想法', myNotes, '在知識建構空間') +
           statCard('未讀貼文', unread, '同學的新想法', unread ? 'warn' : '')) +
     '</div>' +
@@ -7582,7 +7694,12 @@ function viewStudent(){
         '<div class="muted small">' + esc(a.desc || '') + '</div>' +
         '<div class="row small muted" style="margin-top:6px;gap:12px">' +
           '<span>' + n + ' 題</span>' +
-          '<span>截止 ' + fmtDate(a.due) + '</span>' +
+          /* 沒有設定過就整格不印，不要印一個假日期。goLiveCommit 把 due 清成 null，
+             而 fmtDate(null) 走 new Date(null) → 紀元：清場、正式施測開始之後，
+             每個孩子的每一張作業卡都印「截止 1970-01-01」，就在「寫到一半」旁邊。
+             一個已經落後的十歲孩子最合理的解讀是「我遲交了」，
+             而焦慮與自我效能正是課後問卷要量的構念。 */
+          (a.dueSet && a.due ? '<span>截止 ' + fmtDate(a.due) + '</span>' : '') +
           /* 三種狀態，不是兩種。原本只有「已完成／尚未作答」：
              鐘響、平板沒電、被叫走——寫到一半離開的孩子回來看到「尚未作答」，
              按鈕還寫著「開始這節課」，兩句都不是真的，而「開始」讀起來
@@ -8020,7 +8137,9 @@ function viewResult(aid){
           return '這一次作答的題目不到一半，所以逐題的答案沒有打開。' +
             '想看的話，跟老師說一聲。' + tail;
         const pend = classKeyPending(aid, me.id);
-        if (pend > 0) return '等大家都交完、老師打開之後，' +
+        /* 不要再承諾「等大家都交完」：一人一台平板時每台裝置只看得到
+           自己那一筆交卷紀錄，那個條件永遠不會成立，真正會發生的是老師按那顆開關。 */
+        if (pend > 0) return '等老師打開之後，' +
           '這裡就會讓你看到每一題的四個選項、正確答案和你當時選的。' + tail;
         return '等課後那一份也做完，這裡就會打開，' +
           '讓你看到每一題的四個選項、正確答案和你當時選的。' + tail;
@@ -8189,7 +8308,7 @@ function padPayload(padId){
      而它自己記的 w 是個數字、不會跟著動。評閱端於是用舊的 viewBox 去畫
      被放大過的座標，筆跡被裁掉，接著任何一次 save() 就寫死進匯出檔。
      只留有效筆畫，順便把點一下留下的單點清掉。 */
-  return {w: p.w || (p.cv && p.cv.clientWidth) || 600, h: p.h || 240,
+  return {w: p.w || (p.cv && p.cv.clientWidth) || 600, h: p.h || padBaseHeight(),
     lines: p.strokes.filter(function(s){ return s.pts && s.pts.length > 1; })
       .map(function(s){
         return {color:s.color, width:s.width, pts:s.pts.map(function(pt){ return pt.slice(); })};
@@ -8245,6 +8364,52 @@ function strokesSvg(sp){
    而且沒有任何線索告訴他要先去改「筆色」。存成 'ink' 之後，畫的時候解析成
    當下主題的 --ink，落地之後在評閱端解析成 currentColor——
    孩子與老師的主題不同也不會有一邊看不見。 */
+/* 手寫板的基準高度。原本寫死 240 CSS px——手寫板是整個作答通道裡唯一
+   釘在絕對 px 的輸入區（同一張卡上的打字框是 min-height:11rem，label 與
+   按鈕也都吃 rem）。以孩子自己的視覺尺度算，100% 時這塊板子有 12 個行高、
+   175% 時只剩 6.8 個，而需要放大字級的孩子筆跡本來就大。
+   改成跟著 --fs 走，並與 #crText 的 min-height:11rem 對齊。 */
+function padBaseHeight(){
+  try {
+    const rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 20;
+    return Math.round(rem * 11);
+  } catch (e) { return 240; }
+}
+
+/* 工具列與畫布的狀態要跟 PADS 對齊。真值一直在模組記憶體的 PADS 裡
+   （touchDraw／color／width／h），但畫面每次 render 都用寫死的預設值重建：
+   按鈕永遠 aria-pressed="false" ＋「開始手寫」、canvas 沒有 .penmode、
+   色票永遠 #12161c、筆寬永遠 2。於是：
+     · 開過手寫再換題回來，touchDraw 仍是 true 但畫布回到 pan-y，
+       手指想捲頁時照樣記一筆；而按鈕寫著「開始手寫」，第一次按下去
+       其實是把它關掉，要按兩次才真的打開
+     · 色票顯示淺色主題的墨色，孩子在深色主題下碰一次就把 'ink' 改回
+       #12161c（對 --card 約 1.1:1，等於隱形墨水）
+     · 換主題時已經光柵化的筆跡不會重畫
+   initPads 尾端、applyA11y、applyTheme 與系統主題變更都呼叫這一支。 */
+function syncPads(){
+  Object.keys(PADS).forEach(function(id){
+    const p = PADS[id];
+    if (!p) return;
+    const cv = document.querySelector('canvas.pad[data-pad="' + (window.CSS && CSS.escape ? CSS.escape(id) : id) + '"]');
+    if (!cv) return;
+    p.cv = cv;
+    const btn = document.querySelector('[data-act="pad-touch"][data-id="' + (window.CSS && CSS.escape ? CSS.escape(id) : id) + '"]');
+    if (btn){
+      btn.setAttribute('aria-pressed', p.touchDraw ? 'true' : 'false');
+      btn.textContent = p.touchDraw ? '結束手寫' : '開始手寫';
+      btn.classList.toggle('primary', !!p.touchDraw);
+    }
+    cv.classList.toggle('penmode', !!p.touchDraw);
+    const col = document.querySelector('[data-act="pad-color"][data-id="' + (window.CSS && CSS.escape ? CSS.escape(id) : id) + '"]');
+    if (col) col.value = padResolveColor(p.color);
+    const wd = document.querySelector('[data-act="pad-width"][data-id="' + (window.CSS && CSS.escape ? CSS.escape(id) : id) + '"]');
+    if (wd) wd.value = String(p.width || 2);
+    if (p._resize) p._resize();
+    else redraw(id);
+  });
+}
+
 function padInk(){
   try {
     const v = getComputedStyle(document.documentElement).getPropertyValue('--ink').trim();
@@ -8277,14 +8442,23 @@ function initPads(){
           s.pts.forEach(function(pt){ pt[0] *= k; pt[1] *= k; });
           s.width = (s.width || 2) * k;
         });
+        /* 高度也要跟著等比放大。原本 x 與 y 都乘 k，實際的畫布高度却永遠是 240：
+           畫布變寬（直式寫完轉橫式、或 175% 由雙欄翻成單欄後回來）時 k>1，
+           y 被推到 240 以上，畫布上看不見，strokesSvg 的 viewBox 也切掉－－
+           評閱端與唯讀重播看到的同樣是殘缺的那一份。
+           原註解只推演了 1024→768 的縮小方向。 */
+        p.h = Math.round((p.h || padBaseHeight()) * k);
       }
-      if (p){ p.w = w; p.h = 240; }
-      cv.width = w * dpr; cv.height = 240 * dpr;
+      if (p){ p.w = w; p.h = p.h || padBaseHeight(); }
+      const H = (p && p.h) || padBaseHeight();
+      /* height 屬性一起設：canvas 只有 width:100%，顯示高度由內建比例推出來。 */
+      cv.style.height = H + 'px';
+      cv.width = w * dpr; cv.height = H * dpr;
       const ctx = cv.getContext('2d');
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       redraw(id);
     }
-    PADS[id] = PADS[id] || {strokes:[], color:'ink', width:2, cv:cv};
+    PADS[id] = PADS[id] || {strokes:[], color:'ink', width:2, h:padBaseHeight(), cv:cv};
     PADS[id].cv = cv;
     size();
     /* 舊的監聽器要先拆掉。原本每渲染一次 CR 題就多掛一個 window resize
@@ -8292,6 +8466,7 @@ function initPads(){
        也跟著累積——記憶體壓力正是平板把分頁丟掉的原因之一。 */
     if (PADS[id]._onResize) window.removeEventListener('resize', PADS[id]._onResize);
     PADS[id]._onResize = size;
+    PADS[id]._resize = size;      // syncPads 要從外面叫得到
     window.addEventListener('resize', size);
 
     let cur = null;
@@ -8337,6 +8512,8 @@ function initPads(){
        不處理的話同一次捲動會在計算紙上留下一條假筆畫。 */
     cv.addEventListener('pointercancel', dropEmptyStroke);
   });
+  /* 畫布建好之後把工具列與 PADS 對齊一次。 */
+  if (typeof syncPads === 'function') syncPads();
 }
 
 /* 這塊板子被改動之後要做的事。三件都不能少：
@@ -9842,7 +10019,7 @@ function aalSubmit(){
       list: missIdx.map(function(idx){ return '第 ' + (idx + 1) + ' 題'; }),
       note: '按〈回去寫完〉會帶你到第一題沒寫完的地方；' +
             '也可以用上面的〈先離開（進度會保留）〉，寫過的都會留著。',
-      yes: '還是要交卷', no: '回去寫完'
+      yes: '還是要交卷', no: '回去寫完', danger: true
     }, aalSubmitCommit);
     /* 取消時要走 onCancelMissing，而 confirmModal 的取消只會關閉彈窗——
        把它掛在關閉之後由這裡自己接手。 */
@@ -10057,7 +10234,25 @@ function surveyDraftSave(){
     const all = JSON.parse(localStorage.getItem(SURVEY_DRAFT_KEY) || '{}');
     all[SURVEY.sid + '|' + SURVEY.phase] = {resp:SURVEY.resp, page:SURVEY.page, savedAt:Date.now()};
     localStorage.setItem(SURVEY_DRAFT_KEY, JSON.stringify(all));
-  } catch (e) { toast('這一段沒能存起來，先不要關掉分頁。'); }
+    surveyDraftSave._fails = 0;
+    SURVEY.dirty = false;
+  } catch (e) {
+    /* 這一支原本只有一句 toast：不設 dirty、不累計次數、不掀開同一頁早就
+       備好的 #svSaveWarn（那張卡只接送出失敗），beforeunload 也完全不看
+       SURVEY。而問卷是整節課最後一關，localStorage 這時最滿——
+       孩子每按一格看到一次 2.6 秒的提示條就過去了，答案其實只活在記憶體裡；
+       被叫走、關分頁或分頁被回收時沒有任何攔阻，回來看到的是一份從第 1 段
+       重新開始的空問卷，而頁面上寫著「填到哪裡會自動記住」。
+       作答頁那一支（aalSave）三樣都有，這裡照抄。 */
+    SURVEY.dirty = true;
+    surveyDraftSave._fails = (surveyDraftSave._fails || 0) + 1;
+    if (surveyDraftSave._fails >= 2){
+      SURVEY._saveOff = true;
+      const w = document.getElementById('svSaveWarn');
+      if (w) w.hidden = false;
+    }
+    toast('這一段沒能存起來，先不要關掉分頁。');
+  }
 }
 function surveyDraftLoad(sid, phase){
   try {
@@ -10259,7 +10454,7 @@ function surveySubmit(phase){
       title: '還有題目沒有選',
       body: '這份問卷還有 ' + miss.length + ' 題沒有選。',
       note: '按〈回去填完〉會帶你到第一段還沒填的地方，並把沒選的題目標出來。',
-      yes: '還是要送出', no: '回去填完'
+      yes: '還是要送出', no: '回去填完', danger: true
     }, function(){ surveySubmitCommit(phase); });
     confirmModal._onNo = function(){
       if (!SURVEY) return;
@@ -11616,7 +11811,8 @@ function bindEvents(){
     /* 前測同樣要在關分頁前把去抖中的草稿寫掉，否則最後 600ms 內作答的
        那一題會遺失（而前測沒有任何補交路徑）。 */
     if (QUIZ){ try { quizSaveFlush(); } catch (e2) {} }
-    if ((AAL && AAL.dirty) || (QUIZ && QUIZ.dirty)){ e.preventDefault(); e.returnValue = ''; }
+    if ((AAL && AAL.dirty) || (QUIZ && QUIZ.dirty) || (SURVEY && SURVEY.dirty)){
+      e.preventDefault(); e.returnValue = ''; }
   });
 
   /* 對話輸入框按 Enter 送出。
@@ -11876,6 +12072,21 @@ function bindEvents(){
         go('#/student'); render();
         toast('可以用右上角的選單換人了。換完之後請再按一次〈換人〉鎖回去。');
       });
+      return; }
+    /* 答案卡釋出開關。這一段原本寫在 change 監聽器裡－－而它是一顆
+       <button>，永遠不會觸發 change。也就是說這顆開關從來沒有生效過：
+       不只老師進不去 #/settings，研究者在那一頁按下去也一樣沒反應。
+       而另外兩條釋出路徑（過期出口、同班全交）在一人一台平板下都走不到，
+       所以學生的逐題回饋——「評量即學習」回饋迴圈的最後一步——
+       對每一位受試者都不會抵達。 */
+    if (act === 'toggle-key'){
+      if (!isTeacher()) return;
+      const aid = t.dataset.id;
+      state.settings.keyReleased = state.settings.keyReleased || {};
+      const now = !state.settings.keyReleased[aid];
+      state.settings.keyReleased[aid] = now;
+      save(); render();
+      toast(now ? '已開放這份的答案卡。' : '已收回這份的答案卡。');
       return; }
     if (act === 'toast-close'){
       clearTimeout(toast._t);
@@ -12217,15 +12428,6 @@ function bindEvents(){
       return; }
     if (act === 'set-thr'){ state.settings.misThreshold = Math.max(1, Math.min(60, +t.value || 15)); save(); toast('已儲存。'); return; }
     if (act === 'set-minn'){ state.settings.minN = Math.max(3, Math.min(40, +t.value || 3)); save(); render(); return; }
-    if (act === 'toggle-key'){
-      if (!isTeacher()) return;
-      const aid = t.dataset.id;
-      state.settings.keyReleased = state.settings.keyReleased || {};
-      const now = !state.settings.keyReleased[aid];
-      state.settings.keyReleased[aid] = now;
-      save(); render();
-      toast(now ? '已開放這份的答案卡。' : '已收回這份的答案卡。');
-      return; }
     if (act === 'set-kur'){
       const v = parseFloat(t.value);
       state.settings.keyUnlockRatio = isFinite(v) ? Math.max(0, Math.min(1, v)) : 0.5;
@@ -12305,6 +12507,20 @@ function bindEvents(){
       return; }
     if (act === 'aal-text'){
       const it = aalItem();
+      /* 注音組字期間不要記遙測。input 事件在組字途中就連續觸發，
+         t.value 依序是 ""→"ㄨ"→"ㄨㄛ"→"ㄨㄛˇ"→"我"，而 aalTypeTelemetry
+         只比長度：變短就累加 deletions、變長就累加 keystrokes。
+         於是每打出一個中文字就憑空多出約 2 次 deletions 與 3 次 keystrokes——
+         deletions 的語意是「刪改／自我修正」，實際量到的卻是作答字數×2，
+         也就是作答長度的代理值；而作答長度與條件共變（三個 AI 組每題被對話
+         吃掉時間），這個歷程依變項會出現與操弄同向、卻純粹來自輸入法的
+         組間差異，方向看起來完全合理，分析階段不會被察覺。
+         同一支檔案早就為了同一件事替 #aalSay 的 Enter 守了 isComposing。
+         草稿照存（孩子的字不能掉），只是不進遙測、不寫 drafts。 */
+      if (e.isComposing){
+        AAL.texts[it.id] = t.value;
+        scheduleDraftSave();
+        return; }
       aalTypeTelemetry(it.id, t.value);
       if (AAL.texts[it.id] === undefined) AAL.drafts[it.id] = {first: t.value, final: t.value};
       AAL.texts[it.id] = t.value;
@@ -12340,7 +12556,15 @@ function bindEvents(){
       return; }
     if (act === 'aalSay'){ return; }
     if (act === 'seg-text'){ EDIT.segs[+t.dataset.i].text = t.value; return; }
-    if (act === 'pad-color'){ if (PADS[t.dataset.id]) PADS[t.dataset.id].color = t.value; return; }
+    /* 選到的顏色剛好等於當下主題的墨色時，存回語意值 'ink' 而不是色碼——
+       不然孩子在深色主題下碰一次色票，就把 padInk() 修好的東西寫死成
+       #12161c（對 --card #1a1f26 約 1.1:1，等於隱形墨水）。 */
+    if (act === 'pad-color'){
+      if (PADS[t.dataset.id]){
+        const v = String(t.value || '').toLowerCase();
+        PADS[t.dataset.id].color = (v === String(padInk()).toLowerCase()) ? 'ink' : t.value;
+      }
+      return; }
     if (act === 'pad-width'){ if (PADS[t.dataset.id]) PADS[t.dataset.id].width = +t.value; return; }
   });
 
@@ -12380,7 +12604,13 @@ function applyA11y(){
   if (btn){
     btn.setAttribute('aria-pressed', a.highContrast ? 'true' : 'false');
     btn.classList.toggle('primary', !!a.highContrast);
+    /* 狀態不要只靠色票承載。aria-pressed 只服務報讀器，不服務放大字級的
+       視覺使用者，而平板也沒有 hover——按鈕上直接寫開或關，就算色彩
+       被別的規則蓋掉也讀得出來。 */
+    btn.textContent = a.highContrast ? '高對比：開' : '高對比：關';
   }
+  /* 主題與字級一變，手寫板的墨色與尺寸都要跟著重算（見 syncPads）。 */
+  if (typeof syncPads === 'function') syncPads();
   syncNarrow();
   syncTopbarHeight();   // 字級變大時頂列會變高，sticky 的偏移量要跟著更新
 }
@@ -12421,6 +12651,8 @@ function syncTopbarHeight(){
 }
 
 function applyTheme(){
+  /* 換主題之後已經光栁化的筆跡不會自己重畫，而默色是跟著主題的語意值 'ink'。 */
+  setTimeout(function(){ if (typeof syncPads === 'function') syncPads(); }, 0);
   const t = state.ui.theme || 'system';
   if (t === 'system') document.documentElement.removeAttribute('data-theme');
   else document.documentElement.setAttribute('data-theme', t);
@@ -12441,7 +12673,11 @@ function submitWizard(){
   const a = {id: uid('a'), title: WIZ.title.trim(), desc: WIZ.desc,
              classIds: state.classes.map(function(c){ return c.id; }),
              teacherId: state.classes[0].teacherId, itemIds: ids, phase: WIZ.phase,
-             createdAt: Date.now(), due: WIZ.due ? Date.parse(WIZ.due) : Date.now() + 7 * 86400000};
+             createdAt: Date.now(), due: WIZ.due ? Date.parse(WIZ.due) : Date.now() + 7 * 86400000,
+    /* dueSet 是「老師真的設過」的唯一標記。全庫原本只有 goLiveCommit 寫過 false，
+       於是 classKeyReleased 的過期出口（a.dueSet && a.due）是死碼，
+       而設定頁明文說這條路會生效。「現在＋7 天」不算他設定過。 */
+    dueSet: !!WIZ.due};
   state.assignments.push(a); save();
   WIZ = null;
   toast('已派出。學生登入後就會看到。');
@@ -12579,7 +12815,7 @@ function submitQuiz(aid){
       body: FINAL + '還有 ' + missing.length + ' 題沒作答：',
       list: missing.map(function(i){ return itemLabel(aid, i.id); }),
       note: '按〈回去寫完〉會帶你到第一題沒作答的地方。',
-      yes: '還是要交卷', no: '回去寫完'
+      yes: '還是要交卷', no: '回去寫完', danger: true
     }, function(){ submitQuizCommit(aid); });
     confirmModal._onNo = onCancelMissing;
     return;
@@ -12648,6 +12884,16 @@ function boot(){
   syncNarrow();
   syncTopbarHeight();
   window.addEventListener('resize', function(){ syncNarrow(); syncTopbarHeight(); });
+  /* 主題設成「跟隨系統」時，入夜切深色不會跑任何 JS——已經光柵化的手寫
+     筆跡就停在舊墨色上。監聽系統偏好，變了就重畫一次。 */
+  try {
+    if (window.matchMedia){
+      const mq = window.matchMedia('(prefers-color-scheme: dark)');
+      const onScheme = function(){ if (typeof syncPads === 'function') syncPads(); };
+      if (mq.addEventListener) mq.addEventListener('change', onScheme);
+      else if (mq.addListener) mq.addListener(onScheme);
+    }
+  } catch (e) {}
   state = loadState();
   if (!state.ui) state.ui = {role:'u-t1', classId:'c-1'};
   /* 預設對齊登入教師實際帶的班，不要靜默停在 c-1。 */

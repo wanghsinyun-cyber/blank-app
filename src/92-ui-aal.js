@@ -1029,7 +1029,7 @@ function aalSubmit(){
       list: missIdx.map(function(idx){ return '第 ' + (idx + 1) + ' 題'; }),
       note: '按〈回去寫完〉會帶你到第一題沒寫完的地方；' +
             '也可以用上面的〈先離開（進度會保留）〉，寫過的都會留著。',
-      yes: '還是要交卷', no: '回去寫完'
+      yes: '還是要交卷', no: '回去寫完', danger: true
     }, aalSubmitCommit);
     /* 取消時要走 onCancelMissing，而 confirmModal 的取消只會關閉彈窗——
        把它掛在關閉之後由這裡自己接手。 */
@@ -1244,7 +1244,25 @@ function surveyDraftSave(){
     const all = JSON.parse(localStorage.getItem(SURVEY_DRAFT_KEY) || '{}');
     all[SURVEY.sid + '|' + SURVEY.phase] = {resp:SURVEY.resp, page:SURVEY.page, savedAt:Date.now()};
     localStorage.setItem(SURVEY_DRAFT_KEY, JSON.stringify(all));
-  } catch (e) { toast('這一段沒能存起來，先不要關掉分頁。'); }
+    surveyDraftSave._fails = 0;
+    SURVEY.dirty = false;
+  } catch (e) {
+    /* 這一支原本只有一句 toast：不設 dirty、不累計次數、不掀開同一頁早就
+       備好的 #svSaveWarn（那張卡只接送出失敗），beforeunload 也完全不看
+       SURVEY。而問卷是整節課最後一關，localStorage 這時最滿——
+       孩子每按一格看到一次 2.6 秒的提示條就過去了，答案其實只活在記憶體裡；
+       被叫走、關分頁或分頁被回收時沒有任何攔阻，回來看到的是一份從第 1 段
+       重新開始的空問卷，而頁面上寫著「填到哪裡會自動記住」。
+       作答頁那一支（aalSave）三樣都有，這裡照抄。 */
+    SURVEY.dirty = true;
+    surveyDraftSave._fails = (surveyDraftSave._fails || 0) + 1;
+    if (surveyDraftSave._fails >= 2){
+      SURVEY._saveOff = true;
+      const w = document.getElementById('svSaveWarn');
+      if (w) w.hidden = false;
+    }
+    toast('這一段沒能存起來，先不要關掉分頁。');
+  }
 }
 function surveyDraftLoad(sid, phase){
   try {
@@ -1446,7 +1464,7 @@ function surveySubmit(phase){
       title: '還有題目沒有選',
       body: '這份問卷還有 ' + miss.length + ' 題沒有選。',
       note: '按〈回去填完〉會帶你到第一段還沒填的地方，並把沒選的題目標出來。',
-      yes: '還是要送出', no: '回去填完'
+      yes: '還是要送出', no: '回去填完', danger: true
     }, function(){ surveySubmitCommit(phase); });
     confirmModal._onNo = function(){
       if (!SURVEY) return;

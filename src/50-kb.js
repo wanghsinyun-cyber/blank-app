@@ -328,6 +328,15 @@ function kbLocked(u){
      而誰走這一趟由完課速度決定，暴露率與條件系統性共變。
      成績頁與學習軌跡早就補了這道門（第 5 輪 val5），知識建構空間沒有。 */
   if (submitted('a-post', me.id) && !surveyOf(me.id, 'post')) return true;
+  /* 第三道門：班級層級。前兩道只問這個孩子自己，於是他二十分鐘走完
+     交卷＋問卷之後條件立刻為假，而共構視圖的畫布最上面會把來源題的
+     完整題幹與四個選項原樣印出來－－而同教室還有 23 人正在作答它，
+     前後測又是同一份題本。這正是答案卡當初寫下 classKeyReleased 的
+     那個情境（第一個交卷的孩子接下來十分鐘沒事做、螢幕朝著旁邊），
+     同一道班級層級的門沒有裝到知識建構空間。洩題方向是先做完的
+     流向還在做的，而完課速度本身與條件共變（三個 AI 組每題要花對話時間），
+     KB 曝露量與貼文量也一併被完課速度決定，而那正是 KBI 與論述層次的來源。 */
+  if (typeof classKeyReleased === 'function' && !classKeyReleased('a-post', me.id)) return true;
   return false;
 }
 /* 鎖住的原因。文案與出口要跟著原因走，不能一律說「先把作業交出來」。 */
@@ -336,6 +345,7 @@ function kbLockReason(u){
   if (me.role !== 'student') return null;
   if (pendingAssignments(me.id).length > 0) return 'pending';
   if (submitted('a-post', me.id) && !surveyOf(me.id, 'post')) return 'survey';
+  if (typeof classKeyReleased === 'function' && !classKeyReleased('a-post', me.id)) return 'class';
   return null;
 }
 function scaffold(id){ return SCAFFOLDS.find(function(s){ return s.id === id; }); }

@@ -282,10 +282,18 @@ const ROLE_OPENER = {
   peer:  {first: PEER_SHARE_FIRST, later: PEER_SHARE_LATER}
 };
 
+/* 第三段也要納入話量規格。每一則內建引擎回覆＝opener + ' ' + ROLE_STEM(body)，
+   opener 池已依規格收斂到 12–18 字、CONDITIONS.frame 收斂到 27–28 字，
+   但這三個 stem 從來不在那份規格裡：原本 tutor 7 字、tutee 10 字、peer 4 字，
+   而 body 三組完全相同——peer 每一輪固定比 tutee 少 6 字、比 tutor 少 3 字，
+   不隨回合或題目變動，也不是抽樣的。上一輪判定必須修掉的 frame 差距是
+   每題 10 字，這一處每題最多 6 輪、16 題累積可達約 576 字。
+   而且它同時是 LLM 逾時退回時的主要路徑，退回率又與班級／時段的網路品質共變。
+   三句收斂到 6–7 字（見 zz-debug 的 assertStemParity）。 */
 const ROLE_STEM = {
-  tutor: function(q){ return '你先說說看——' + q; },
-  tutee: function(q){ return '你可以說給我聽嗎——' + q; },
-  peer:  function(q){ return '那你呢？' + q; }
+  tutor: function(q){ return '你先說說看——' + q; },      // 6
+  tutee: function(q){ return '你說給我聽——' + q; },      // 6
+  peer:  function(q){ return '那你怎麼看——' + q; }       // 6
 };
 
 /* 子歷程一律不看學生說了什麼，只看該題的標定、文體與回合排程。 */

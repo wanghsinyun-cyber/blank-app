@@ -26,6 +26,19 @@ function kbGate(){
       '<a class="btn primary" href="#/survey/post">去填課後問卷 →</a>' +
       '<a class="btn" href="#/student">回我的作業</a></div></div>';
   }
+  /* 班級層級的門。這一頁的畫布最上面會把來源題的完整題幹與四個選項
+     原樣印出來，而同教室還有二十幾人正在作答同一份題本——先做完的孩子
+     在這裡讀到的東西會流向還在做的。見 kbLocked 的第三道門。 */
+  if (kbLockReason(me) === 'class'){
+    const left = typeof classKeyPending === 'function' ? classKeyPending('a-post', me.id) : 0;
+    return '<div class="empty"><h3>等同學都做完，這裡就會打開</h3>' +
+      '<p style="max-width:62ch">這裡放的是全班一起想的問題，裡面會直接出現這次的題目。' +
+      '現在打開的話，還在作答的同學就等於先看到題目了。</p>' +
+      (left ? '<p class="muted small">還有 ' + left + ' 位同學還沒做完。</p>' : '') +
+      '<div class="row" style="margin-top:14px">' +
+      '<a class="btn primary" href="#/student">回我的作業</a>' +
+      '<a class="btn" href="#/mygrowth">看我的學習軌跡</a></div></div>';
+  }
   const pend = pendingAssignments(me.id);
   const blocking = pend[0];
   return '<div class="empty">' +

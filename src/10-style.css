@@ -198,8 +198,20 @@ select{min-width:0; max-width:100%; text-overflow:ellipsis}
 .btn:disabled{opacity:.45; cursor:not-allowed}
 .btn.primary{background:var(--accent); border-color:var(--accent); color:var(--accent-ink); font-weight:600}
 .btn.primary:hover{filter:brightness(1.14)}
-.btn.ghost{border-color:transparent; background:transparent}
+/* :not(.primary) 不可以拿掉。高對比按鈕是 `btn sm ghost`，applyA11y 在開啟時
+   再掛上 .primary；兩條的特異度同為 (0,2,0)，ghost 寫在後面而勝出，
+   把底色與邊框打回 transparent，但 ghost 沒有宣告 color，所以 .primary 的
+   color:var(--accent-ink) 存活－－高對比下它是 #fff，而頂列也是白底。
+   於是低視力孩子按下高對比的那一瞬間，「已開啟」的回饋與
+   「再按一次關掉」的唯一入口一起不見－－而這是平台為這群受試者
+   準備的唯一控制項，偏偏只在被使用時壞掉。 */
+.btn.ghost:not(.primary):not([aria-pressed="true"]){border-color:transparent; background:transparent}
 .btn.ghost:hover{background:var(--shade)}
+/* 「按下去了」直接由 aria-pressed 承載外觀，不再倚賴 JS 另外掛一個 .primary。
+   狀態只有一個來源，視覺與報讀器就不可能各說各話；而且寫在 .btn.ghost 之後，
+   不會再被它打回 transparent。 */
+.btn[aria-pressed="true"]{background:var(--accent); border-color:var(--accent);
+  color:var(--accent-ink); font-weight:600}
 .btn.sm{padding:4px 9px; font-size:0.85rem}
 .btn.danger{color:var(--crit); border-color:var(--q2-line)}
 
@@ -534,6 +546,14 @@ input[type=checkbox],input[type=radio]{ width:1.15em; height:1.15em; accent-colo
 
 /* 高對比模式：使用者可在頂列開啟 */
 :root[data-contrast="high"]{
+  /* 必須宣告 color-scheme。這個區塊把每個色彩 token 翻成黑白，
+     却沒有把深色主題設的 color-scheme:dark 改回來。
+     state.ui.theme 預設是 'system'，平板跟著系統進深色就落到這個組合：
+     作者樣式已經把卡片與文字拉成白底黑字，瀏覽器却繼續用深色配置
+     畫 radio／checkbox／range／下拉彈出清單與捲軸。
+     未選的單選鈕在白卡片上變成深色實心圓，看起來就是「已經選好了」，
+     而缺答會以 null 進 Rasch。 */
+  color-scheme: light;
   --ink:#000; --ink-2:#111; --ink-3:#333; --ink-4:#444;
   --rule:#555; --rule-strong:#333; --rule-soft:#777;
   --card:#fff; --paper:#fff; --cool:#fff; --shade:#f0f0f0; --grid:#ddd;
@@ -627,7 +647,14 @@ input[type=checkbox],input[type=radio]{ width:1.15em; height:1.15em; accent-colo
    scroll-margin-top：按〈下一題〉之後 #aalAnswer 的 top 是 0、頂列的 bottom
    是 100（175% 時 209），題號與題幹整個在頂列後面（WCAG 2.4.11），
    而那正是孩子換題後要讀的第一樣東西，16 題每題至少一次。 */
-[tabindex="-1"], .likert, .modal{ scroll-margin-top: calc(var(--sticky-top) + 12px) }
+/* 原本掛在 [tabindex="-1"], .likert, .modal 上的 scroll-margin-top 已經拿掉。
+   底下 html 的 scroll-padding-top 同值，而 scrollIntoView 的定義是
+   「把目標的 scroll-margin 盒對齊捲動區扣掉 scroll-padding 之後的起緣」——
+   兩者相加，實際偏移是兩倍。實測 100% 時 160px、175% 時 442px：
+   768px 高的教室平板上，頂列蓋掉最上面 209px，中間 233px 是上一段文章的
+   尾巴，要讀的題幹被推到螢幕下半部，而且偏移隨字級放大而變大，
+   正好懲罰最需要放大的孩子。每按一次〈下一題〉（16 題）、〈跳到題目 ↓〉、
+   〈↑ 回到文章〉、〈回到題目導覽〉與交卷缺答救援都會發生。 */
 /* 上面那一行只涵蓋三種選擇器，而 Tab 鍵每一站都會自動捲動：捲的是這個
    頁面捲動容器，所以真正的修法是在容器上留出頂列的高度。少了它，用 Tab
    往下走時被聚焦的按鈕、連結、輸入框一律停在頂列後面——看得到焦點框

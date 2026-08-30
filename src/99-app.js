@@ -420,7 +420,8 @@ function bindEvents(){
     /* 前測同樣要在關分頁前把去抖中的草稿寫掉，否則最後 600ms 內作答的
        那一題會遺失（而前測沒有任何補交路徑）。 */
     if (QUIZ){ try { quizSaveFlush(); } catch (e2) {} }
-    if ((AAL && AAL.dirty) || (QUIZ && QUIZ.dirty)){ e.preventDefault(); e.returnValue = ''; }
+    if ((AAL && AAL.dirty) || (QUIZ && QUIZ.dirty) || (SURVEY && SURVEY.dirty)){
+      e.preventDefault(); e.returnValue = ''; }
   });
 
   /* 對話輸入框按 Enter 送出。
@@ -680,6 +681,21 @@ function bindEvents(){
         go('#/student'); render();
         toast('可以用右上角的選單換人了。換完之後請再按一次〈換人〉鎖回去。');
       });
+      return; }
+    /* 答案卡釋出開關。這一段原本寫在 change 監聽器裡－－而它是一顆
+       <button>，永遠不會觸發 change。也就是說這顆開關從來沒有生效過：
+       不只老師進不去 #/settings，研究者在那一頁按下去也一樣沒反應。
+       而另外兩條釋出路徑（過期出口、同班全交）在一人一台平板下都走不到，
+       所以學生的逐題回饋——「評量即學習」回饋迴圈的最後一步——
+       對每一位受試者都不會抵達。 */
+    if (act === 'toggle-key'){
+      if (!isTeacher()) return;
+      const aid = t.dataset.id;
+      state.settings.keyReleased = state.settings.keyReleased || {};
+      const now = !state.settings.keyReleased[aid];
+      state.settings.keyReleased[aid] = now;
+      save(); render();
+      toast(now ? '已開放這份的答案卡。' : '已收回這份的答案卡。');
       return; }
     if (act === 'toast-close'){
       clearTimeout(toast._t);
@@ -1021,15 +1037,6 @@ function bindEvents(){
       return; }
     if (act === 'set-thr'){ state.settings.misThreshold = Math.max(1, Math.min(60, +t.value || 15)); save(); toast('已儲存。'); return; }
     if (act === 'set-minn'){ state.settings.minN = Math.max(3, Math.min(40, +t.value || 3)); save(); render(); return; }
-    if (act === 'toggle-key'){
-      if (!isTeacher()) return;
-      const aid = t.dataset.id;
-      state.settings.keyReleased = state.settings.keyReleased || {};
-      const now = !state.settings.keyReleased[aid];
-      state.settings.keyReleased[aid] = now;
-      save(); render();
-      toast(now ? '已開放這份的答案卡。' : '已收回這份的答案卡。');
-      return; }
     if (act === 'set-kur'){
       const v = parseFloat(t.value);
       state.settings.keyUnlockRatio = isFinite(v) ? Math.max(0, Math.min(1, v)) : 0.5;
@@ -1109,6 +1116,20 @@ function bindEvents(){
       return; }
     if (act === 'aal-text'){
       const it = aalItem();
+      /* 注音組字期間不要記遙測。input 事件在組字途中就連續觸發，
+         t.value 依序是 ""→"ㄨ"→"ㄨㄛ"→"ㄨㄛˇ"→"我"，而 aalTypeTelemetry
+         只比長度：變短就累加 deletions、變長就累加 keystrokes。
+         於是每打出一個中文字就憑空多出約 2 次 deletions 與 3 次 keystrokes——
+         deletions 的語意是「刪改／自我修正」，實際量到的卻是作答字數×2，
+         也就是作答長度的代理值；而作答長度與條件共變（三個 AI 組每題被對話
+         吃掉時間），這個歷程依變項會出現與操弄同向、卻純粹來自輸入法的
+         組間差異，方向看起來完全合理，分析階段不會被察覺。
+         同一支檔案早就為了同一件事替 #aalSay 的 Enter 守了 isComposing。
+         草稿照存（孩子的字不能掉），只是不進遙測、不寫 drafts。 */
+      if (e.isComposing){
+        AAL.texts[it.id] = t.value;
+        scheduleDraftSave();
+        return; }
       aalTypeTelemetry(it.id, t.value);
       if (AAL.texts[it.id] === undefined) AAL.drafts[it.id] = {first: t.value, final: t.value};
       AAL.texts[it.id] = t.value;
@@ -1144,7 +1165,15 @@ function bindEvents(){
       return; }
     if (act === 'aalSay'){ return; }
     if (act === 'seg-text'){ EDIT.segs[+t.dataset.i].text = t.value; return; }
-    if (act === 'pad-color'){ if (PADS[t.dataset.id]) PADS[t.dataset.id].color = t.value; return; }
+    /* 選到的顏色剛好等於當下主題的墨色時，存回語意值 'ink' 而不是色碼——
+       不然孩子在深色主題下碰一次色票，就把 padInk() 修好的東西寫死成
+       #12161c（對 --card #1a1f26 約 1.1:1，等於隱形墨水）。 */
+    if (act === 'pad-color'){
+      if (PADS[t.dataset.id]){
+        const v = String(t.value || '').toLowerCase();
+        PADS[t.dataset.id].color = (v === String(padInk()).toLowerCase()) ? 'ink' : t.value;
+      }
+      return; }
     if (act === 'pad-width'){ if (PADS[t.dataset.id]) PADS[t.dataset.id].width = +t.value; return; }
   });
 
@@ -1184,7 +1213,13 @@ function applyA11y(){
   if (btn){
     btn.setAttribute('aria-pressed', a.highContrast ? 'true' : 'false');
     btn.classList.toggle('primary', !!a.highContrast);
+    /* 狀態不要只靠色票承載。aria-pressed 只服務報讀器，不服務放大字級的
+       視覺使用者，而平板也沒有 hover——按鈕上直接寫開或關，就算色彩
+       被別的規則蓋掉也讀得出來。 */
+    btn.textContent = a.highContrast ? '高對比：開' : '高對比：關';
   }
+  /* 主題與字級一變，手寫板的墨色與尺寸都要跟著重算（見 syncPads）。 */
+  if (typeof syncPads === 'function') syncPads();
   syncNarrow();
   syncTopbarHeight();   // 字級變大時頂列會變高，sticky 的偏移量要跟著更新
 }
@@ -1225,6 +1260,8 @@ function syncTopbarHeight(){
 }
 
 function applyTheme(){
+  /* 換主題之後已經光栁化的筆跡不會自己重畫，而默色是跟著主題的語意值 'ink'。 */
+  setTimeout(function(){ if (typeof syncPads === 'function') syncPads(); }, 0);
   const t = state.ui.theme || 'system';
   if (t === 'system') document.documentElement.removeAttribute('data-theme');
   else document.documentElement.setAttribute('data-theme', t);
@@ -1245,7 +1282,11 @@ function submitWizard(){
   const a = {id: uid('a'), title: WIZ.title.trim(), desc: WIZ.desc,
              classIds: state.classes.map(function(c){ return c.id; }),
              teacherId: state.classes[0].teacherId, itemIds: ids, phase: WIZ.phase,
-             createdAt: Date.now(), due: WIZ.due ? Date.parse(WIZ.due) : Date.now() + 7 * 86400000};
+             createdAt: Date.now(), due: WIZ.due ? Date.parse(WIZ.due) : Date.now() + 7 * 86400000,
+    /* dueSet 是「老師真的設過」的唯一標記。全庫原本只有 goLiveCommit 寫過 false，
+       於是 classKeyReleased 的過期出口（a.dueSet && a.due）是死碼，
+       而設定頁明文說這條路會生效。「現在＋7 天」不算他設定過。 */
+    dueSet: !!WIZ.due};
   state.assignments.push(a); save();
   WIZ = null;
   toast('已派出。學生登入後就會看到。');
@@ -1383,7 +1424,7 @@ function submitQuiz(aid){
       body: FINAL + '還有 ' + missing.length + ' 題沒作答：',
       list: missing.map(function(i){ return itemLabel(aid, i.id); }),
       note: '按〈回去寫完〉會帶你到第一題沒作答的地方。',
-      yes: '還是要交卷', no: '回去寫完'
+      yes: '還是要交卷', no: '回去寫完', danger: true
     }, function(){ submitQuizCommit(aid); });
     confirmModal._onNo = onCancelMissing;
     return;
@@ -1452,6 +1493,16 @@ function boot(){
   syncNarrow();
   syncTopbarHeight();
   window.addEventListener('resize', function(){ syncNarrow(); syncTopbarHeight(); });
+  /* 主題設成「跟隨系統」時，入夜切深色不會跑任何 JS——已經光柵化的手寫
+     筆跡就停在舊墨色上。監聽系統偏好，變了就重畫一次。 */
+  try {
+    if (window.matchMedia){
+      const mq = window.matchMedia('(prefers-color-scheme: dark)');
+      const onScheme = function(){ if (typeof syncPads === 'function') syncPads(); };
+      if (mq.addEventListener) mq.addEventListener('change', onScheme);
+      else if (mq.addListener) mq.addListener(onScheme);
+    }
+  } catch (e) {}
   state = loadState();
   if (!state.ui) state.ui = {role:'u-t1', classId:'c-1'};
   /* 預設對齊登入教師實際帶的班，不要靜默停在 c-1。 */

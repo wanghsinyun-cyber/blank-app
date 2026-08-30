@@ -137,8 +137,10 @@ function viewStudent(){
       (kbLocked(me)
         ? statCard('我貼的想法', myNotes, '交完卷就可以繼續') +
           statCard('知識建構空間',
-            kbLockReason(me) === 'survey' ? '問卷後開放' : '測驗後開放',
-            kbLockReason(me) === 'survey' ? '問卷填完就會打開' : '交完卷就會打開')
+            kbLockReason(me) === 'survey' ? '問卷後開放'
+              : kbLockReason(me) === 'class' ? '全班完成後開放' : '測驗後開放',
+            kbLockReason(me) === 'survey' ? '問卷填完就會打開'
+              : kbLockReason(me) === 'class' ? '等同學都做完' : '交完卷就會打開')
         : statCard('我貼的想法', myNotes, '在知識建構空間') +
           statCard('未讀貼文', unread, '同學的新想法', unread ? 'warn' : '')) +
     '</div>' +
@@ -165,7 +167,12 @@ function viewStudent(){
         '<div class="muted small">' + esc(a.desc || '') + '</div>' +
         '<div class="row small muted" style="margin-top:6px;gap:12px">' +
           '<span>' + n + ' 題</span>' +
-          '<span>截止 ' + fmtDate(a.due) + '</span>' +
+          /* 沒有設定過就整格不印，不要印一個假日期。goLiveCommit 把 due 清成 null，
+             而 fmtDate(null) 走 new Date(null) → 紀元：清場、正式施測開始之後，
+             每個孩子的每一張作業卡都印「截止 1970-01-01」，就在「寫到一半」旁邊。
+             一個已經落後的十歲孩子最合理的解讀是「我遲交了」，
+             而焦慮與自我效能正是課後問卷要量的構念。 */
+          (a.dueSet && a.due ? '<span>截止 ' + fmtDate(a.due) + '</span>' : '') +
           /* 三種狀態，不是兩種。原本只有「已完成／尚未作答」：
              鐘響、平板沒電、被叫走——寫到一半離開的孩子回來看到「尚未作答」，
              按鈕還寫著「開始這節課」，兩句都不是真的，而「開始」讀起來
@@ -603,7 +610,9 @@ function viewResult(aid){
           return '這一次作答的題目不到一半，所以逐題的答案沒有打開。' +
             '想看的話，跟老師說一聲。' + tail;
         const pend = classKeyPending(aid, me.id);
-        if (pend > 0) return '等大家都交完、老師打開之後，' +
+        /* 不要再承諾「等大家都交完」：一人一台平板時每台裝置只看得到
+           自己那一筆交卷紀錄，那個條件永遠不會成立，真正會發生的是老師按那顆開關。 */
+        if (pend > 0) return '等老師打開之後，' +
           '這裡就會讓你看到每一題的四個選項、正確答案和你當時選的。' + tail;
         return '等課後那一份也做完，這裡就會打開，' +
           '讓你看到每一題的四個選項、正確答案和你當時選的。' + tail;
@@ -772,7 +781,7 @@ function padPayload(padId){
      而它自己記的 w 是個數字、不會跟著動。評閱端於是用舊的 viewBox 去畫
      被放大過的座標，筆跡被裁掉，接著任何一次 save() 就寫死進匯出檔。
      只留有效筆畫，順便把點一下留下的單點清掉。 */
-  return {w: p.w || (p.cv && p.cv.clientWidth) || 600, h: p.h || 240,
+  return {w: p.w || (p.cv && p.cv.clientWidth) || 600, h: p.h || padBaseHeight(),
     lines: p.strokes.filter(function(s){ return s.pts && s.pts.length > 1; })
       .map(function(s){
         return {color:s.color, width:s.width, pts:s.pts.map(function(pt){ return pt.slice(); })};
@@ -828,6 +837,52 @@ function strokesSvg(sp){
    而且沒有任何線索告訴他要先去改「筆色」。存成 'ink' 之後，畫的時候解析成
    當下主題的 --ink，落地之後在評閱端解析成 currentColor——
    孩子與老師的主題不同也不會有一邊看不見。 */
+/* 手寫板的基準高度。原本寫死 240 CSS px——手寫板是整個作答通道裡唯一
+   釘在絕對 px 的輸入區（同一張卡上的打字框是 min-height:11rem，label 與
+   按鈕也都吃 rem）。以孩子自己的視覺尺度算，100% 時這塊板子有 12 個行高、
+   175% 時只剩 6.8 個，而需要放大字級的孩子筆跡本來就大。
+   改成跟著 --fs 走，並與 #crText 的 min-height:11rem 對齊。 */
+function padBaseHeight(){
+  try {
+    const rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 20;
+    return Math.round(rem * 11);
+  } catch (e) { return 240; }
+}
+
+/* 工具列與畫布的狀態要跟 PADS 對齊。真值一直在模組記憶體的 PADS 裡
+   （touchDraw／color／width／h），但畫面每次 render 都用寫死的預設值重建：
+   按鈕永遠 aria-pressed="false" ＋「開始手寫」、canvas 沒有 .penmode、
+   色票永遠 #12161c、筆寬永遠 2。於是：
+     · 開過手寫再換題回來，touchDraw 仍是 true 但畫布回到 pan-y，
+       手指想捲頁時照樣記一筆；而按鈕寫著「開始手寫」，第一次按下去
+       其實是把它關掉，要按兩次才真的打開
+     · 色票顯示淺色主題的墨色，孩子在深色主題下碰一次就把 'ink' 改回
+       #12161c（對 --card 約 1.1:1，等於隱形墨水）
+     · 換主題時已經光柵化的筆跡不會重畫
+   initPads 尾端、applyA11y、applyTheme 與系統主題變更都呼叫這一支。 */
+function syncPads(){
+  Object.keys(PADS).forEach(function(id){
+    const p = PADS[id];
+    if (!p) return;
+    const cv = document.querySelector('canvas.pad[data-pad="' + (window.CSS && CSS.escape ? CSS.escape(id) : id) + '"]');
+    if (!cv) return;
+    p.cv = cv;
+    const btn = document.querySelector('[data-act="pad-touch"][data-id="' + (window.CSS && CSS.escape ? CSS.escape(id) : id) + '"]');
+    if (btn){
+      btn.setAttribute('aria-pressed', p.touchDraw ? 'true' : 'false');
+      btn.textContent = p.touchDraw ? '結束手寫' : '開始手寫';
+      btn.classList.toggle('primary', !!p.touchDraw);
+    }
+    cv.classList.toggle('penmode', !!p.touchDraw);
+    const col = document.querySelector('[data-act="pad-color"][data-id="' + (window.CSS && CSS.escape ? CSS.escape(id) : id) + '"]');
+    if (col) col.value = padResolveColor(p.color);
+    const wd = document.querySelector('[data-act="pad-width"][data-id="' + (window.CSS && CSS.escape ? CSS.escape(id) : id) + '"]');
+    if (wd) wd.value = String(p.width || 2);
+    if (p._resize) p._resize();
+    else redraw(id);
+  });
+}
+
 function padInk(){
   try {
     const v = getComputedStyle(document.documentElement).getPropertyValue('--ink').trim();
@@ -860,14 +915,23 @@ function initPads(){
           s.pts.forEach(function(pt){ pt[0] *= k; pt[1] *= k; });
           s.width = (s.width || 2) * k;
         });
+        /* 高度也要跟著等比放大。原本 x 與 y 都乘 k，實際的畫布高度却永遠是 240：
+           畫布變寬（直式寫完轉橫式、或 175% 由雙欄翻成單欄後回來）時 k>1，
+           y 被推到 240 以上，畫布上看不見，strokesSvg 的 viewBox 也切掉－－
+           評閱端與唯讀重播看到的同樣是殘缺的那一份。
+           原註解只推演了 1024→768 的縮小方向。 */
+        p.h = Math.round((p.h || padBaseHeight()) * k);
       }
-      if (p){ p.w = w; p.h = 240; }
-      cv.width = w * dpr; cv.height = 240 * dpr;
+      if (p){ p.w = w; p.h = p.h || padBaseHeight(); }
+      const H = (p && p.h) || padBaseHeight();
+      /* height 屬性一起設：canvas 只有 width:100%，顯示高度由內建比例推出來。 */
+      cv.style.height = H + 'px';
+      cv.width = w * dpr; cv.height = H * dpr;
       const ctx = cv.getContext('2d');
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       redraw(id);
     }
-    PADS[id] = PADS[id] || {strokes:[], color:'ink', width:2, cv:cv};
+    PADS[id] = PADS[id] || {strokes:[], color:'ink', width:2, h:padBaseHeight(), cv:cv};
     PADS[id].cv = cv;
     size();
     /* 舊的監聽器要先拆掉。原本每渲染一次 CR 題就多掛一個 window resize
@@ -875,6 +939,7 @@ function initPads(){
        也跟著累積——記憶體壓力正是平板把分頁丟掉的原因之一。 */
     if (PADS[id]._onResize) window.removeEventListener('resize', PADS[id]._onResize);
     PADS[id]._onResize = size;
+    PADS[id]._resize = size;      // syncPads 要從外面叫得到
     window.addEventListener('resize', size);
 
     let cur = null;
@@ -920,6 +985,8 @@ function initPads(){
        不處理的話同一次捲動會在計算紙上留下一條假筆畫。 */
     cv.addEventListener('pointercancel', dropEmptyStroke);
   });
+  /* 畫布建好之後把工具列與 PADS 對齊一次。 */
+  if (typeof syncPads === 'function') syncPads();
 }
 
 /* 這塊板子被改動之後要做的事。三件都不能少：

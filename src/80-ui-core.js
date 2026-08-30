@@ -177,8 +177,13 @@ function confirmModal(opts, onYes){
     (o.note ? '<p class="muted small" style="margin-top:10px;max-width:60ch">' + esc(o.note) + '</p>' : '') +
     '</div>' +
     '<div class="modal-f">' +
-    '<button class="btn" data-act="confirm-no">' + esc(o.no || '取消') + '</button>' +
-    '<button class="btn primary" data-act="confirm-yes">' + esc(o.yes || '確定') + '</button>' +
+    /* o.danger：「確定」那一邊才是不可逆的時候，把視覺權重翻過來。
+       兩個缺答分支的 yes 正是「還是要交卷」「還是要送出」，
+       no 才是救援路徑。初始焦點早就放在取消（理由寫在上面），
+       但同一個理由沒有套到視覺權重上－－而教室裡的孩子是用手指點的，
+       不是用 Tab 的；十歲孩子在鐘響前點的是顏色最重的那一顆。 */
+    '<button class="btn' + (o.danger ? ' primary' : '') + '" data-act="confirm-no">' + esc(o.no || '取消') + '</button>' +
+    '<button class="btn' + (o.danger ? '' : ' primary') + '" data-act="confirm-yes">' + esc(o.yes || '確定') + '</button>' +
     '</div>', {focus:'[data-act="confirm-no"]'});
   /* Esc 與點背景關掉彈窗，語意上就是按了〈取消〉，所以要走同一條路。
      原本只有〈取消〉那顆鈕會呼叫 _onNo，於是用 Esc 關掉缺答提醒的孩子

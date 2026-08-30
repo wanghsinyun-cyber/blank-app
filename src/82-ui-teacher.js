@@ -195,6 +195,25 @@ function viewAssign(aid, tab){
     '<p class="small" style="margin:0">這一頁的統計範圍是<strong>四個班級共 ' + diag.roster.length +
     ' 人</strong>——四班共用同一次 Rasch 校準，條件之間才可以比較。' +
     '只有「理解歷程」分頁另外把本班拆出來。</p></div>' +
+    /* 答案卡釋出開關。它原本只在 #/settings，而那一頁在 RESEARCHER_ONLY 裡－－
+       role==='teacher' 的老師根本進不去，而三條釋出路徑裡另外兩條
+       （過期出口、同班全交）在一人一台平板的正式部署下都走不到。
+       於是學生成績頁永遠停在「等老師打開」，而老師找不到那顆鈕。
+       處理器本來就守 isTeacher()，這裡只是把入口放到老師真的到得了的地方。 */
+    (function(){
+      const on = !!(((state.settings || {}).keyReleased || {})[aid]);
+      return '<div class="card card-p" style="margin-bottom:12px">' +
+        '<div class="row" style="justify-content:space-between;gap:10px">' +
+        '<span class="small">答案卡：' + (on ? '<strong>已對已交卷的學生打開</strong>' : '尚未開放') +
+        '。打開之後，交過卷的孩子就看得到每一題的選項與正解。</span>' +
+        '<button type="button" class="btn sm' + (on ? ' primary' : '') +
+        '" data-act="toggle-key" data-id="' + aid + '" aria-pressed="' + on + '">' +
+        '<span aria-hidden="true">' + (on ? '☑' : '☐') + '</span>' +
+        (on ? '收回答案卡' : '打開答案卡') + '</button></div>' +
+        '<p class="muted small" style="margin:8px 0 0">一人一台平板時這是唯一真的會成立的' +
+        '釋出路徑：每台裝置只看得到自己那一筆交卷紀錄，「全班都交完」在那個情境下' +
+        '永遠不會成立。</p></div>';
+    })() +
     '<div class="tabs" role="tablist">' + tabs.map(function(t){
       const on = T === t[0];
       return '<a href="#/assign/' + aid + '/' + t[0] + '"' + (on ? ' aria-current="true"' : '') +
