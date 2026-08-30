@@ -131,7 +131,33 @@ function keyUnlocked(aid, sid){
   if (!total) return false;
   const ratio = (state.settings && state.settings.keyUnlockRatio != null)
     ? state.settings.keyUnlockRatio : 0.5;
-  return answeredCount(aid, sid) / total >= ratio;
+  if (answeredCount(aid, sid) / total < ratio) return false;
+  return classKeyReleased(aid, sid);
+}
+
+/* 答案卡的班級層級釋出條件。
+   原本只看學生自己：第一個交卷的孩子按下按鈕的當下，同教室還有 23 人
+   在同一份題本上作答，而他接下來十分鐘沒事做、螢幕朝著旁邊。
+   函式上方的註解自己寫著「教室裡的平板螢幕是公開的」，但實作只擋住
+   「0 題作答」那一種情形。洩題方向是先做完的流向還在做的，
+   會讓 θ 與班級（＝條件）綁在一起。
+   規則：同班每一位都交了才開。有人缺席就永遠開不了，所以再給一個
+   不需要人工介入的出口——過了這份派題的截止時間也開。
+   （跨班仍共用同一份題本，四個班若不同天施測，班與班之間的口耳相傳
+     不是軟體擋得住的；這裡守的是同一間教室裡的當下。） */
+function classKeyReleased(aid, sid){
+  const a = getAssignment(aid);
+  if (!a) return false;
+  if (a.due && Date.now() > a.due) return true;
+  const k = classOfStudent(sid);
+  if (!k || !k.studentIds || !k.studentIds.length) return true;
+  return k.studentIds.every(function(x){ return submitted(aid, x); });
+}
+/* 還沒開的話，是差在誰身上——文案要講得出真正的條件 */
+function classKeyPending(aid, sid){
+  const k = classOfStudent(sid);
+  if (!k) return 0;
+  return k.studentIds.filter(function(x){ return !submitted(aid, x); }).length;
 }
 
 /* --- 作答 --- */
@@ -340,9 +366,19 @@ function viewResult(aid){
         '所以還畫不出你的閱讀地圖。等大家都交了再回來看。</p></div>') +
     '<div class="card" style="margin-bottom:16px"><div class="card-h"><h3>逐題檢視</h3>' +
     (keyLocked ? '<span class="pill"><span class="dot"></span>答案還沒打開</span>' : '') + '</div>' +
+    /* 文案要講真正的條件。原本寫「這一節課上完之後」，而實際條件是
+       「同班每一位都交了（或過了截止時間）」——講錯條件的等待訊息，
+       孩子會以為壞掉了。 */
     (keyLocked ? '<div class="card-p"><p class="small" style="max-width:70ch;margin:0">' +
-      '這一節課上完之後，這裡會打開，讓你看到每一題的四個選項、正確答案和你當時選的。' +
-      '現在先看上面的閱讀地圖——它已經告訴你哪幾題值得回去重讀。</p></div>' : '') +
+      (function(){
+        const pend = classKeyPending(aid, me.id);
+        if (pend > 0) return '班上還有 ' + pend + ' 位同學在寫。等大家都交完，' +
+          '這裡就會打開，讓你看到每一題的四個選項、正確答案和你當時選的。' +
+          '現在先看上面的閱讀地圖——它已經告訴你哪幾題值得回去重讀。';
+        return '等課後那一份也做完，這裡就會打開，' +
+          '讓你看到每一題的四個選項、正確答案和你當時選的。' +
+          '現在先看上面的閱讀地圖——它已經告訴你哪幾題值得回去重讀。';
+      })() + '</p></div>' : '') +
     '<div class="card-p col">' + a.itemIds.map(getItem).filter(function(i){ return i && i.type === 'mc'; }).map(function(it){
       const r = mine.find(function(x){ return x.iid === it.id; });
       const c = diag && diag.ready && ps ? ps.cells.find(function(x){ return x.iid === it.id; }) : null;

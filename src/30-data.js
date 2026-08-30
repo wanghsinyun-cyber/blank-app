@@ -738,6 +738,11 @@ function buildSeedState(){
       engine:'builtin', provider:'anthropic', baseUrl:'https://api.anthropic.com/v1',
       apiKey:'', model:'claude-sonnet-5',
       misThreshold: 12, minN: 3, maxTurns: 6, kbClassId: 'c-1',
+      /* 答案卡的釋出門檻：至少要作答到這個比例，而且同班都交完了
+         （見 88-ui-student.js 的 keyUnlocked／classKeyReleased）。
+         原本只硬編碼在函式裡、預設物件沒有這個鍵，也沒有任何 UI 寫得到它——
+         正式施測時研究者連調高門檻都做不到。 */
+      keyUnlockRatio: 0.5,
       a11y: {fontScale: 1, highContrast: false}
     },
     aiCache: {},

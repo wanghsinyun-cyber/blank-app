@@ -792,6 +792,10 @@ function bindEvents(){
       return; }
     if (act === 'set-thr'){ state.settings.misThreshold = Math.max(1, Math.min(60, +t.value || 15)); save(); toast('已儲存。'); return; }
     if (act === 'set-minn'){ state.settings.minN = Math.max(3, Math.min(40, +t.value || 3)); save(); render(); return; }
+    if (act === 'set-kur'){
+      const v = parseFloat(t.value);
+      state.settings.keyUnlockRatio = isFinite(v) ? Math.max(0, Math.min(1, v)) : 0.5;
+      save(); render(); return; }
     if (act === 'set-engine'){ state.settings.engine = t.value; save(); render();
       toast(t.value === 'llm' ? '已切換為外部語言模型。' : '已切換為內建規則引擎。'); return; }
     if (act === 'set-provider'){

@@ -1409,6 +1409,11 @@ function buildSeedState(){
       engine:'builtin', provider:'anthropic', baseUrl:'https://api.anthropic.com/v1',
       apiKey:'', model:'claude-sonnet-5',
       misThreshold: 12, minN: 3, maxTurns: 6, kbClassId: 'c-1',
+      /* 答案卡的釋出門檻：至少要作答到這個比例，而且同班都交完了
+         （見 88-ui-student.js 的 keyUnlocked／classKeyReleased）。
+         原本只硬編碼在函式裡、預設物件沒有這個鍵，也沒有任何 UI 寫得到它——
+         正式施測時研究者連調高門檻都做不到。 */
+      keyUnlockRatio: 0.5,
       a11y: {fontScale: 1, highContrast: false}
     },
     aiCache: {},
@@ -6910,7 +6915,33 @@ function keyUnlocked(aid, sid){
   if (!total) return false;
   const ratio = (state.settings && state.settings.keyUnlockRatio != null)
     ? state.settings.keyUnlockRatio : 0.5;
-  return answeredCount(aid, sid) / total >= ratio;
+  if (answeredCount(aid, sid) / total < ratio) return false;
+  return classKeyReleased(aid, sid);
+}
+
+/* 答案卡的班級層級釋出條件。
+   原本只看學生自己：第一個交卷的孩子按下按鈕的當下，同教室還有 23 人
+   在同一份題本上作答，而他接下來十分鐘沒事做、螢幕朝著旁邊。
+   函式上方的註解自己寫著「教室裡的平板螢幕是公開的」，但實作只擋住
+   「0 題作答」那一種情形。洩題方向是先做完的流向還在做的，
+   會讓 θ 與班級（＝條件）綁在一起。
+   規則：同班每一位都交了才開。有人缺席就永遠開不了，所以再給一個
+   不需要人工介入的出口——過了這份派題的截止時間也開。
+   （跨班仍共用同一份題本，四個班若不同天施測，班與班之間的口耳相傳
+     不是軟體擋得住的；這裡守的是同一間教室裡的當下。） */
+function classKeyReleased(aid, sid){
+  const a = getAssignment(aid);
+  if (!a) return false;
+  if (a.due && Date.now() > a.due) return true;
+  const k = classOfStudent(sid);
+  if (!k || !k.studentIds || !k.studentIds.length) return true;
+  return k.studentIds.every(function(x){ return submitted(aid, x); });
+}
+/* 還沒開的話，是差在誰身上——文案要講得出真正的條件 */
+function classKeyPending(aid, sid){
+  const k = classOfStudent(sid);
+  if (!k) return 0;
+  return k.studentIds.filter(function(x){ return !submitted(aid, x); }).length;
 }
 
 /* --- 作答 --- */
@@ -7119,9 +7150,19 @@ function viewResult(aid){
         '所以還畫不出你的閱讀地圖。等大家都交了再回來看。</p></div>') +
     '<div class="card" style="margin-bottom:16px"><div class="card-h"><h3>逐題檢視</h3>' +
     (keyLocked ? '<span class="pill"><span class="dot"></span>答案還沒打開</span>' : '') + '</div>' +
+    /* 文案要講真正的條件。原本寫「這一節課上完之後」，而實際條件是
+       「同班每一位都交了（或過了截止時間）」——講錯條件的等待訊息，
+       孩子會以為壞掉了。 */
     (keyLocked ? '<div class="card-p"><p class="small" style="max-width:70ch;margin:0">' +
-      '這一節課上完之後，這裡會打開，讓你看到每一題的四個選項、正確答案和你當時選的。' +
-      '現在先看上面的閱讀地圖——它已經告訴你哪幾題值得回去重讀。</p></div>' : '') +
+      (function(){
+        const pend = classKeyPending(aid, me.id);
+        if (pend > 0) return '班上還有 ' + pend + ' 位同學在寫。等大家都交完，' +
+          '這裡就會打開，讓你看到每一題的四個選項、正確答案和你當時選的。' +
+          '現在先看上面的閱讀地圖——它已經告訴你哪幾題值得回去重讀。';
+        return '等課後那一份也做完，這裡就會打開，' +
+          '讓你看到每一題的四個選項、正確答案和你當時選的。' +
+          '現在先看上面的閱讀地圖——它已經告訴你哪幾題值得回去重讀。';
+      })() + '</p></div>' : '') +
     '<div class="card-p col">' + a.itemIds.map(getItem).filter(function(i){ return i && i.type === 'mc'; }).map(function(it){
       const r = mine.find(function(x){ return x.iid === it.id; });
       const c = diag && diag.ready && ps ? ps.cells.find(function(x){ return x.iid === it.id; }) : null;
@@ -7399,6 +7440,15 @@ function viewSettings(){
       '<div class="field"><label for="minn">KIDMAP 最低樣本數</label>' +
       '<input id="minn" type="number" min="3" max="40" value="' + s.minN + '" data-act="set-minn">' +
       '<span class="muted small">低於這個人數不執行 Rasch 估計。人數太少時難度與能力的估計會非常不穩定。</span></div>' +
+      /* 這個門檻原本硬編碼在 keyUnlocked() 裡、預設物件也沒有這個鍵，
+         正式施測時連調都調不了。 */
+      '<div class="field"><label for="kur">答案卡釋出門檻（作答比例）</label>' +
+      '<input id="kur" type="number" min="0" max="1" step="0.05" value="' +
+      (s.keyUnlockRatio != null ? s.keyUnlockRatio : 0.5) + '" data-act="set-kur">' +
+      '<span class="muted small">學生至少要作答到這個比例，答案卡才可能打開（出廠預設 0.5）。' +
+      '另外還要<strong>同班每一位都交卷</strong>才會真的釋出——' +
+      '前後測共用同一份題本，先交卷的孩子把答案攤在螢幕上，' +
+      '旁邊還在寫的同學就看得到。有人缺席時，過了該份派題的截止時間也會自動開。</span></div>' +
     '</div></div>' +
     '<div class="card"><div class="card-h"><h3>AI 引擎</h3></div><div class="card-p col">' +
       '<div class="field"><label for="eng">目前使用</label><select id="eng" data-act="set-engine">' +
@@ -10455,6 +10505,10 @@ function bindEvents(){
       return; }
     if (act === 'set-thr'){ state.settings.misThreshold = Math.max(1, Math.min(60, +t.value || 15)); save(); toast('已儲存。'); return; }
     if (act === 'set-minn'){ state.settings.minN = Math.max(3, Math.min(40, +t.value || 3)); save(); render(); return; }
+    if (act === 'set-kur'){
+      const v = parseFloat(t.value);
+      state.settings.keyUnlockRatio = isFinite(v) ? Math.max(0, Math.min(1, v)) : 0.5;
+      save(); render(); return; }
     if (act === 'set-engine'){ state.settings.engine = t.value; save(); render();
       toast(t.value === 'llm' ? '已切換為外部語言模型。' : '已切換為內建規則引擎。'); return; }
     if (act === 'set-provider'){

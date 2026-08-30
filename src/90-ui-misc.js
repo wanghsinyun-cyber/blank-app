@@ -120,6 +120,15 @@ function viewSettings(){
       '<div class="field"><label for="minn">KIDMAP 最低樣本數</label>' +
       '<input id="minn" type="number" min="3" max="40" value="' + s.minN + '" data-act="set-minn">' +
       '<span class="muted small">低於這個人數不執行 Rasch 估計。人數太少時難度與能力的估計會非常不穩定。</span></div>' +
+      /* 這個門檻原本硬編碼在 keyUnlocked() 裡、預設物件也沒有這個鍵，
+         正式施測時連調都調不了。 */
+      '<div class="field"><label for="kur">答案卡釋出門檻（作答比例）</label>' +
+      '<input id="kur" type="number" min="0" max="1" step="0.05" value="' +
+      (s.keyUnlockRatio != null ? s.keyUnlockRatio : 0.5) + '" data-act="set-kur">' +
+      '<span class="muted small">學生至少要作答到這個比例，答案卡才可能打開（出廠預設 0.5）。' +
+      '另外還要<strong>同班每一位都交卷</strong>才會真的釋出——' +
+      '前後測共用同一份題本，先交卷的孩子把答案攤在螢幕上，' +
+      '旁邊還在寫的同學就看得到。有人缺席時，過了該份派題的截止時間也會自動開。</span></div>' +
     '</div></div>' +
     '<div class="card"><div class="card-h"><h3>AI 引擎</h3></div><div class="card-p col">' +
       '<div class="field"><label for="eng">目前使用</label><select id="eng" data-act="set-engine">' +
