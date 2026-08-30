@@ -153,6 +153,10 @@ function render(){
     try { window.scrollTo(0, prevY); } catch (e) {}
   }
   LAST_ROUTE_KEY = key;
+  /* 施測期間擱下的跨分頁更新，在這裡補套用。放在 render() 最後是因為
+     它是「離開作答／問卷／前測」的共同出口——AAL 就在上面幾行被釋放的。
+     PENDING_FOREIGN 為空、或還在施測中時，這一行什麼都不做。 */
+  if (typeof flushPendingForeign === 'function') flushPendingForeign();
 }
 
 /* --- 畫布拖曳 --- */

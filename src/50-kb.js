@@ -33,6 +33,25 @@ function nextRev(){
   return STATE_REV;
 }
 
+/* 這一頁是不是正在「量東西」。作答、問卷、前測都算：這三段期間有
+   記憶體裡才有的狀態（AAL 的標記與草稿、SURVEY 的作答與頁碼、QUIZ 的
+   答案與筆跡），被整份 state 換掉就無聲消失。 */
+function measuringNow(){
+  if (typeof AAL !== 'undefined' && AAL) return 'aal';
+  if (typeof SURVEY !== 'undefined' && SURVEY) return 'survey';
+  if (typeof QUIZ !== 'undefined' && QUIZ) return 'quiz';
+  return null;
+}
+
+/* 施測中收到的外部更新先擱著，離開之後再套用。 */
+let PENDING_FOREIGN = null;
+function flushPendingForeign(){
+  if (!PENDING_FOREIGN) return;
+  if (measuringNow()) return;
+  const next = PENDING_FOREIGN; PENDING_FOREIGN = null;
+  adoptForeignState(next);
+}
+
 function adoptForeignState(next){
   if (!next || typeof next !== 'object') return;
   STATE_REV = next.rev || 0;
@@ -65,6 +84,22 @@ if (typeof window !== 'undefined' && window.addEventListener){
     if (isImpersonating()){
       if (typeof console !== 'undefined' && console.warn)
         console.warn('[KAIROS] 代為檢視期間收到另一個分頁的更新，暫不同步。');
+      return;
+    }
+    /* 施測中一律不換。原本只擋代為檢視，於是同一台平板開了第二個分頁、
+       或兩個孩子共用一台的時候，另一邊的任何一次寫入都會在作答途中把
+       整份 state 換掉——實測 tutor 條件的王品瑄在第 1 題作答中，被換成
+       對照組的宋昱翔：畫面上的名字、班級、右欄（對話面板變成筆記面板）
+       全部跟著變，而 viewAaL 會用新身分重建 AAL。後果有三層：
+         · 他接下來寫的每一個字都記在另一個孩子的 sid 與條件底下
+         · 條件操弄在一次施測中途翻面，違反班級叢集分派本身
+         · 他自己這一題的標記、打到一半的話、停留時間全部消失
+       擱著、等他離開作答／問卷／前測再套用。 */
+    const busy = measuringNow();
+    if (busy){
+      PENDING_FOREIGN = next;
+      if (typeof console !== 'undefined' && console.warn)
+        console.warn('[KAIROS] 施測中（' + busy + '）收到另一個分頁的更新，先擱著，離開後再同步。');
       return;
     }
     adoptForeignState(next);
