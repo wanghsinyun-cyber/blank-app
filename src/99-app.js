@@ -557,8 +557,38 @@ function bindEvents(){
 
     /* 學生 */
     if (act === 'quiz-submit'){ submitQuiz(id); return; }
-    if (act === 'pad-undo'){ if (PADS[id]){ PADS[id].strokes.pop(); redraw(id); } return; }
-    if (act === 'pad-clear'){ if (PADS[id]){ PADS[id].strokes = []; redraw(id); } return; }
+    if (act === 'pad-undo'){ if (PADS[id]){ PADS[id].strokes.pop(); redraw(id); padChanged(id); } return; }
+    /* 〈清空〉要問一次。它把 strokes 換成新陣列，所以緊鄰的〈復原〉事後
+       一筆都救不回來；而這兩顆是隔著 10px 的小按鈕，平板誤觸率遠高於滑鼠。
+       對照組的〈清空筆記〉早就有確認框，理由一模一樣（清空之後沒有復原路徑），
+       而手寫板對不會打字的孩子是他唯一的作答通道——保護的有無不該與
+       孩子的輸入方式（進而與能力）相關。 */
+    if (act === 'pad-clear'){
+      if (!PADS[id] || !padHasInk(id)) return;
+      confirmModal({
+        title: '要清掉這裡的手寫嗎？',
+        body: '清掉之後不能復原，〈復原〉也救不回來。',
+        note: '只會清掉這一塊手寫板，打的字不受影響。',
+        yes: '清掉', no: '先不要'
+      }, function(){
+        if (!PADS[id]) return;
+        PADS[id].strokes = [];
+        redraw(id); padChanged(id);
+      });
+      return; }
+    /* 手寫模式。畫布預設讓瀏覽器捲動（touch-action:pan-y），按下這顆才改成
+       none 並開始接受手指／觸控筆的筆畫，避免孩子想捲頁卻在自己的作答上
+       畫線。滑鼠不受這顆影響，桌機沒有捲動衝突。 */
+    if (act === 'pad-touch'){
+      const p = PADS[id]; if (!p) return;
+      p.touchDraw = !p.touchDraw;
+      t.setAttribute('aria-pressed', p.touchDraw ? 'true' : 'false');
+      t.textContent = p.touchDraw ? '結束手寫' : '開始手寫';
+      t.classList.toggle('primary', !!p.touchDraw);
+      if (p.cv) p.cv.classList.toggle('penmode', !!p.touchDraw);
+      toast(p.touchDraw ? '手寫模式開著，現在可以在格子裡寫字。'
+                        : '手寫模式關掉了，用手指可以捲動頁面。');
+      return; }
     /* 相似題只給教師備課用。它原本印在學生的診斷頁上、四個條件都給、
        不限次數、完全在 MAX_TURNS 之外——那會讓對照組拿到一顆無限次的 AI
        按鈕，變成第四種處理，RQ1 的組間比較失去基準。 */
@@ -768,6 +798,7 @@ function bindEvents(){
         DEMO_LOGS = DEMO_LOGS.filter(function(e){ return !(e.aid === aid && e.sid === me.id); });
       aalDraftDrop(aid, me.id);
       AAL = null;
+      clearPads();
       save(); go('#/aal/' + aid);
     }
 
@@ -835,6 +866,10 @@ function bindEvents(){
         localStorage.removeItem('kairos-survey-draft');
       } catch (e) {}
       AAL = null; SURVEY = null; QUIZ = null;
+      /* PADS 是全域物件、只以題目 id 為鍵、不在 state 裡，所以上面這一排清場漏掉了它。
+         只要中間沒有整頁重載，第一個坐下來的孩子打開那一題就會看到別人示範時留下的手寫字
+         在自己的答案格裡，而交卷時它會被寫進他的 responses。 */
+      clearPads();
       save(); renderShell(); render();
       toast('已清空前後測示範作答、示範問卷、歷程事件與作答草稿，可以施測了。');
       return;
@@ -860,6 +895,7 @@ function bindEvents(){
         return; }
       if (AAL){ try { flushPendingPicks(); flushLogs(); } catch (e2) {} }
       state.ui.impersonate = null;
+      clearPads();          // 上一個身分的手寫不能跟過來
       state.ui.role = e.target.value; save(); renderShell();
       go(isTeacher() ? '#/teacher' : '#/student'); render(); return; }
     if (!t) return;
@@ -1228,8 +1264,10 @@ function quizProgressUpdate(){
   if (!a) return;
   const items = a.itemIds.map(getItem).filter(Boolean);
   const done = items.filter(function(i){
+    /* 手寫也算，否則整份用手寫作答的孩子看到的進度條一路停在
+       「已作答 14 / 16」，而他其實寫完了。 */
     return i.type === 'cr'
-      ? !!String(QUIZ.texts[i.id] || '').trim()
+      ? (!!String(QUIZ.texts[i.id] || '').trim() || padHasInk(i.id))
       : QUIZ.answers[i.id] !== undefined;
   }).length;
   const total = items.length;
@@ -1247,8 +1285,9 @@ function submitQuiz(aid){
      孩子被告知做完了，交出去的卻是兩題空白的建構反應題。
      前測 θ 是 ANCOVA 的共變數，而缺失與打字能力、作答節奏共變。 */
   const missing = items.filter(function(i){
+    /* 手寫也算作答，理由與 aalSubmit 的 missIdx 相同。 */
     return i.type === 'cr'
-      ? !String(QUIZ.texts[i.id] || '').trim()
+      ? (!String(QUIZ.texts[i.id] || '').trim() && !padHasInk(i.id))
       : QUIZ.answers[i.id] === undefined;
   });
   /* 這一整支都沒跟上 aalSubmit 的修正：原生 confirm（不吃字級與高對比）、
@@ -1293,7 +1332,7 @@ function submitQuizCommit(aid){
       return !(r.aid === aid && r.sid === me.id && r.iid === it.id); });
     if (it.type === 'cr'){
       state.responses.push({aid:aid, sid:me.id, iid:it.id, text:QUIZ.texts[it.id] || '',
-        strokes:(PADS[it.id] && PADS[it.id].strokes.length) ? PADS[it.id].strokes : null,
+        strokes:padPayload(it.id),
         score:null, comment:'', correct:null});
     } else {
       const c = QUIZ.answers[it.id];

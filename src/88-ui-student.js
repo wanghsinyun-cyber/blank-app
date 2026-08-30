@@ -130,12 +130,23 @@ function submitted(aid, sid){
   return state.submissions.some(function(s){ return s.aid === aid && s.sid === sid; });
 }
 
-/* 這份派題他實際作答了幾題（選擇題有選、建構反應題有寫）。 */
+/* 這份派題他實際作答了幾題（選擇題有選、建構反應題有寫）。
+   手寫也算：不算的話，只用手寫作答的孩子在 keyUnlocked 的「實際作答比例」
+   門檻上永遠達不到，成績頁與答案卡對他一直是鎖著的——而他其實整份都寫完了。 */
 function answeredCount(aid, sid){
   return state.responses.filter(function(r){
     return r.aid === aid && r.sid === sid &&
-           (r.choice != null || (r.text && String(r.text).trim()));
+           (r.choice != null || (r.text && String(r.text).trim()) || respHasInk(r));
   }).length;
+}
+
+/* 已落地的那一筆作答裡有沒有手寫。相容兩種格式：新的 {w,h,lines}
+   與早期直接存陣列的。 */
+function respHasInk(r){
+  const sp = r && r.strokes;
+  if (!sp) return false;
+  if (Array.isArray(sp)) return sp.length > 0;
+  return !!(sp.lines && sp.lines.length);
 }
 
 /* 可以打開答案卡了嗎。
@@ -284,6 +295,7 @@ function viewQuiz(aid){
             '<input id="qPadC-' + esc(it.id) + '" type="color" value="#12161c" data-act="pad-color" data-id="' + it.id + '" style="width:2.2rem;padding:2px">' +
             '<label class="small muted" for="qPadW-' + esc(it.id) + '">筆寬</label>' +
             '<input id="qPadW-' + esc(it.id) + '" type="range" min="1" max="8" value="2" data-act="pad-width" data-id="' + it.id + '" style="width:5rem">' +
+            '<button class="btn sm" data-act="pad-touch" aria-pressed="false" data-id="' + it.id + '">開始手寫</button>' +
             '<button class="btn sm" data-act="pad-undo" data-id="' + it.id + '">復原</button>' +
             '<button class="btn sm" data-act="pad-clear" data-id="' + it.id + '">清空</button>' +
           '</div></div>' +
@@ -569,8 +581,75 @@ async function showSimilar(iid, force){
   }
 }
 
-/* --- 手寫板 --- */
+/* --- 手寫板 ---
+   手寫是「不會用鍵盤的孩子」寫建構反應題的唯一通道，所以它在下游必須
+   跟打字完全等價：算作答、進得了草稿、老師看得到。下面三支是那份等價的
+   單一來源，任何一處要問「這一題有沒有寫」都必須經過 padHasInk()。 */
 const PADS = {};
+
+/* 把所有手寫板清乾淨，連同掛在 window 上的 resize 監聽。
+   換身分、施測前清場、示範的「再走一次」都要呼叫——PADS 不在 state 裡，
+   那幾支清場只清了 state，手寫會原地留著跟到下一個人身上。 */
+function clearPads(){
+  Object.keys(PADS).forEach(function(k){
+    const p = PADS[k];
+    if (p && p._onResize) window.removeEventListener('resize', p._onResize);
+    delete PADS[k];
+  });
+}
+
+/* 這塊板子上有沒有東西。空的 strokes 陣列不算。 */
+function padHasInk(padId){
+  const p = PADS[padId];
+  return !!(p && p.strokes && p.strokes.length);
+}
+
+/* 落地用的格式。除了筆畫本身還要記下當時的畫布寬度：筆畫存的是 CSS px
+   絕對座標，沒有寬度就無法在別的寬度（老師的桌機、列印、平板轉向）
+   正確重畫——而評閱畫面的寬度幾乎一定和孩子作答時不同。 */
+function padPayload(padId){
+  const p = PADS[padId];
+  if (!padHasInk(padId)) return null;
+  return {w: p.w || (p.cv && p.cv.clientWidth) || 600, h: p.h || 240, lines: p.strokes};
+}
+
+/* 把落地的筆跡畫成 SVG。用 SVG 不用 canvas，因為評閱頁與唯讀重播都只是
+   要「看」：SVG 不需要初始化、會跟著容器縮放、也印得出來。
+   色票 'ink' 是刻意的語意值而不是色碼——見 padInk() 的說明。 */
+function strokesSvg(sp){
+  if (!sp) return '';
+  const lines = Array.isArray(sp) ? sp : (sp.lines || []);   // 舊格式：直接是陣列
+  if (!lines.length) return '';
+  const w = (Array.isArray(sp) ? 600 : sp.w) || 600;
+  const h = (Array.isArray(sp) ? 240 : sp.h) || 240;
+  const paths = lines.map(function(s){
+    const pts = s.pts || [];
+    if (!pts.length) return '';
+    const d = pts.map(function(pt, i){
+      return (i ? 'L' : 'M') + (Math.round(pt[0] * 10) / 10) + ' ' + (Math.round(pt[1] * 10) / 10);
+    }).join(' ');
+    const col = (!s.color || s.color === 'ink') ? 'currentColor' : s.color;
+    return '<path d="' + d + '" fill="none" stroke="' + esc(col) + '" stroke-width="' +
+      (+s.width || 2) + '" stroke-linecap="round" stroke-linejoin="round"/>';
+  }).join('');
+  return '<svg class="padview" viewBox="0 0 ' + w + ' ' + h + '" ' +
+    'role="img" aria-label="學生的手寫作答" preserveAspectRatio="xMinYMin meet">' + paths + '</svg>';
+}
+/* 預設筆色存的是語意值 'ink'，不是色碼。原本寫死 '#12161c'（淺色主題的
+   墨色），而畫布底色是 var(--card)——平板跟著系統偏好進暗色主題時，
+   --card 是 #1a1f26，對比約 1.1:1，孩子等於用隱形墨水在寫，
+   而且沒有任何線索告訴他要先去改「筆色」。存成 'ink' 之後，畫的時候解析成
+   當下主題的 --ink，落地之後在評閱端解析成 currentColor——
+   孩子與老師的主題不同也不會有一邊看不見。 */
+function padInk(){
+  try {
+    const v = getComputedStyle(document.documentElement).getPropertyValue('--ink').trim();
+    if (v) return v;
+  } catch (e) {}
+  return '#12161c';
+}
+function padResolveColor(c){ return (!c || c === 'ink') ? padInk() : c; }
+
 function initPads(){
   $$('canvas[data-pad]').forEach(function(cv){
     const id = cv.dataset.pad;
@@ -579,20 +658,52 @@ function initPads(){
     const dpr = window.devicePixelRatio || 1;
     function size(){
       const w = cv.clientWidth || 600;
+      const p = PADS[id];
+      /* 筆畫是 CSS px 絕對座標。原本 resize 只重設畫布尺寸就直接重畫舊座標，
+         平板由橫轉直（約 1024→768）之後，寫在右半邊的字整片落在畫布外——
+         資料還在、畫面沒了，而孩子最可能的反應是按〈清空〉整題重寫。
+         這裡依新舊寬度比例換算，字跟著縮，不會掉出去。 */
+      if (p && p.w && w && Math.abs(p.w - w) > 0.5){
+        const k = w / p.w;
+        p.strokes.forEach(function(s){
+          s.pts.forEach(function(pt){ pt[0] *= k; pt[1] *= k; });
+          s.width = (s.width || 2) * k;
+        });
+      }
+      if (p){ p.w = w; p.h = 240; }
       cv.width = w * dpr; cv.height = 240 * dpr;
       const ctx = cv.getContext('2d');
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       redraw(id);
     }
-    PADS[id] = PADS[id] || {strokes:[], color:'#12161c', width:2, cv:cv};
+    PADS[id] = PADS[id] || {strokes:[], color:'ink', width:2, cv:cv};
     PADS[id].cv = cv;
     size();
+    /* 舊的監聽器要先拆掉。原本每渲染一次 CR 題就多掛一個 window resize
+       監聽且從不移除，被閉包鎖住的分離畫布（1200×480 backing store）
+       也跟著累積——記憶體壓力正是平板把分頁丟掉的原因之一。 */
+    if (PADS[id]._onResize) window.removeEventListener('resize', PADS[id]._onResize);
+    PADS[id]._onResize = size;
     window.addEventListener('resize', size);
+
     let cur = null;
+    /* 觸控預設不畫。canvas.pad 原本是 touch-action:none 的全寬區塊，
+       而它所在的都是長捲動頁（前測一頁 16 題、AaL 在平板上恆為單欄）——
+       孩子想捲頁時手指落在畫布上，頁面不動，他會再滑幾次，
+       每滑一次就在自己的作答上留一條斜線，而那些線會跟著交卷送出去。
+       改成：手寫筆與滑鼠一律可畫；手指要先按〈用手指寫〉才會畫，
+       沒開的時候畫布讓瀏覽器正常捲動（touch-action 由 .pad.penmode 切換）。 */
+    function drawableFrom(e){
+      if (e.pointerType === 'mouse') return true;      // 桌機沒有捲動衝突
+      return !!PADS[id].touchDraw;                     // 手指與觸控筆都要先開手寫模式
+    }
     cv.addEventListener('pointerdown', function(e){
+      if (!drawableFrom(e)) return;
+      e.preventDefault();
       cv.setPointerCapture(e.pointerId);
       const r = cv.getBoundingClientRect();
-      cur = {color:PADS[id].color, width:PADS[id].width, pts:[[e.clientX - r.left, e.clientY - r.top]]};
+      cur = {color:PADS[id].color, width:PADS[id].width,
+             pts:[[e.clientX - r.left, e.clientY - r.top]]};
       PADS[id].strokes.push(cur);
     });
     cv.addEventListener('pointermove', function(e){
@@ -601,20 +712,39 @@ function initPads(){
       cur.pts.push([e.clientX - r.left, e.clientY - r.top]);
       redraw(id);
     });
-    cv.addEventListener('pointerup', function(){ cur = null; if (QUIZ) QUIZ.strokes[id] = PADS[id].strokes; });
+    cv.addEventListener('pointerup', function(){ cur = null; padChanged(id); });
     cv.addEventListener('pointerleave', function(){ cur = null; });
     /* 與畫布同一個坑：手勢被瀏覽器接管時會送 pointercancel，
        不處理的話同一次捲動會在計算紙上留下一條假筆畫。 */
     cv.addEventListener('pointercancel', function(){ cur = null; });
   });
 }
+
+/* 這塊板子被改動之後要做的事。三件都不能少：
+   · 前測把筆畫同步進 QUIZ（交卷時從那裡讀）
+   · 後測寫進草稿（不寫的話重載就整片空白，而畫面承諾「進度會保留」）
+   · 解除「還沒寫完」的紅框並更新進度——原本 aalClearMissing 只掛在選項與
+     textarea 上，在畫布上寫再多都消不掉那個紅字。 */
+function padChanged(id){
+  if (QUIZ && !/^aal-/.test(id)) QUIZ.strokes[id] = PADS[id].strokes;
+  if (typeof quizProgressUpdate === 'function' && QUIZ) quizProgressUpdate();
+  if (/^aal-/.test(id)){
+    if (typeof AAL !== 'undefined' && AAL && typeof aalSave === 'function') aalSave();
+    if (typeof aalClearMissing === 'function') aalClearMissing();
+  } else {
+    const cv = PADS[id] && PADS[id].cv;
+    const card = cv && cv.closest ? cv.closest('.card') : null;
+    if (card && padHasInk(id)) card.classList.remove('missing');
+  }
+}
+
 function redraw(id){
   const p = PADS[id]; if (!p || !p.cv) return;
   const ctx = p.cv.getContext('2d');
   ctx.clearRect(0, 0, p.cv.width, p.cv.height);
   ctx.lineCap = 'round'; ctx.lineJoin = 'round';
   p.strokes.forEach(function(s){
-    ctx.strokeStyle = s.color; ctx.lineWidth = s.width;
+    ctx.strokeStyle = padResolveColor(s.color); ctx.lineWidth = s.width;
     ctx.beginPath();
     s.pts.forEach(function(pt, i){ if (i) ctx.lineTo(pt[0], pt[1]); else ctx.moveTo(pt[0], pt[1]); });
     ctx.stroke();

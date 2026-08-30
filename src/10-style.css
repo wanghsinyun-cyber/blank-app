@@ -446,7 +446,16 @@ td.n,th.n{text-align:right; font-family:var(--f-mono); font-variant-numeric:tabu
 .rub-row{display:grid; grid-template-columns:130px 1fr 54px; gap:10px; align-items:center; font-size:0.85rem}
 .rub-row .lv{font-family:var(--f-mono); font-size:0.8rem; text-align:right; color:var(--ink-3)}
 
-canvas.pad{border:1px solid var(--rule); border-radius:var(--r-m); background:var(--card); touch-action:none; display:block; width:100%; cursor:crosshair}
+/* touch-action 預設是 pan-y，不是 none。原本 none 讓瀏覽器不再把畫布上的
+   滑動視為捲動：前測一頁列 16 題、AaL 在平板上恆為單欄，畫布都落在主捲動
+   路徑上，孩子想捲頁時手指落在這裡，頁面不動，他會再滑幾次——每一次都變成
+   一條被記下、跟著交卷送出去的假筆畫。改成預設可捲，按〈開始手寫〉才鎖住。 */
+canvas.pad{border:1px solid var(--rule); border-radius:var(--r-m); background:var(--card); touch-action:pan-y; display:block; width:100%; cursor:crosshair}
+canvas.pad.penmode{touch-action:none; border-color:var(--accent); box-shadow:inset 0 0 0 1px var(--accent)}
+/* 評閱端與唯讀重播看到的手寫。currentColor 讓筆跡跟著閱讀者的主題走——
+   孩子作答時的主題與老師批改時的主題不一定相同。 */
+.padview{display:block; width:100%; height:auto; background:var(--card);
+  border:1px solid var(--rule); border-radius:var(--r-m); color:var(--ink); margin-top:6px}
 
 .sna{width:100%; height:auto; display:block}
 .sna text{font-family:var(--f-body); font-size:0.8rem; fill:var(--ink-3)}

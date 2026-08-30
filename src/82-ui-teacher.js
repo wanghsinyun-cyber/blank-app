@@ -577,7 +577,18 @@ function tabCR(diag){
         '" aria-label="' + esc(userName(r.sid)) + ' 的給分（滿分 6）" value="' + (r.score === null ? '' : r.score) +
         '" data-act="cr-score" data-sid="' + r.sid + '" data-iid="' + it.id + '" data-aid="' + diag.assignment.id + '">' +
         '</span></div>' +
-        '<div class="ai-out" style="white-space:pre-wrap;font-family:var(--f-mono);font-size:0.78rem">' + esc(r.text || '（未作答）') + '</div>' +
+        /* 手寫也要印出來。畫面上那塊板子的標籤寫著「老師評閱時看得到」，
+           但這裡原本只印 r.text，於是整題用手寫作答的孩子在評閱畫面上是
+           「（未作答）」、給分留白——而手寫正是不會打字的孩子唯一的
+           建構反應通道，遺失會與打字能力共變，直接污染 CR 的組間比較。
+           兩者都有就兩者都印：孩子可能先打幾個字再用畫的補圖。 */
+        (String(r.text || '').trim()
+          ? '<div class="ai-out" style="white-space:pre-wrap;font-family:var(--f-mono);font-size:0.78rem">' + esc(r.text) + '</div>'
+          : (respHasInk(r) ? '' :
+             '<div class="ai-out" style="white-space:pre-wrap;font-family:var(--f-mono);font-size:0.78rem">（未作答）</div>')) +
+        (respHasInk(r)
+          ? '<div class="small muted" style="margin-top:8px">手寫作答</div>' + strokesSvg(r.strokes)
+          : '') +
         '<div class="field" style="margin-top:8px"><label for="' + noteId + '">給學生的評語</label>' +
         '<textarea rows="3" style="min-height:4.5rem" id="' + noteId +
         '" aria-label="給 ' + esc(userName(r.sid)) + ' 的評語" data-act="cr-comment" data-sid="' + r.sid + '" data-iid="' + it.id +

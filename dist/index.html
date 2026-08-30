@@ -463,7 +463,16 @@ td.n,th.n{text-align:right; font-family:var(--f-mono); font-variant-numeric:tabu
 .rub-row{display:grid; grid-template-columns:130px 1fr 54px; gap:10px; align-items:center; font-size:0.85rem}
 .rub-row .lv{font-family:var(--f-mono); font-size:0.8rem; text-align:right; color:var(--ink-3)}
 
-canvas.pad{border:1px solid var(--rule); border-radius:var(--r-m); background:var(--card); touch-action:none; display:block; width:100%; cursor:crosshair}
+/* touch-action 預設是 pan-y，不是 none。原本 none 讓瀏覽器不再把畫布上的
+   滑動視為捲動：前測一頁列 16 題、AaL 在平板上恆為單欄，畫布都落在主捲動
+   路徑上，孩子想捲頁時手指落在這裡，頁面不動，他會再滑幾次——每一次都變成
+   一條被記下、跟著交卷送出去的假筆畫。改成預設可捲，按〈開始手寫〉才鎖住。 */
+canvas.pad{border:1px solid var(--rule); border-radius:var(--r-m); background:var(--card); touch-action:pan-y; display:block; width:100%; cursor:crosshair}
+canvas.pad.penmode{touch-action:none; border-color:var(--accent); box-shadow:inset 0 0 0 1px var(--accent)}
+/* 評閱端與唯讀重播看到的手寫。currentColor 讓筆跡跟著閱讀者的主題走——
+   孩子作答時的主題與老師批改時的主題不一定相同。 */
+.padview{display:block; width:100%; height:auto; background:var(--card);
+  border:1px solid var(--rule); border-radius:var(--r-m); color:var(--ink); margin-top:6px}
 
 .sna{width:100%; height:auto; display:block}
 .sna text{font-family:var(--f-body); font-size:0.8rem; fill:var(--ink-3)}
@@ -6334,7 +6343,18 @@ function tabCR(diag){
         '" aria-label="' + esc(userName(r.sid)) + ' 的給分（滿分 6）" value="' + (r.score === null ? '' : r.score) +
         '" data-act="cr-score" data-sid="' + r.sid + '" data-iid="' + it.id + '" data-aid="' + diag.assignment.id + '">' +
         '</span></div>' +
-        '<div class="ai-out" style="white-space:pre-wrap;font-family:var(--f-mono);font-size:0.78rem">' + esc(r.text || '（未作答）') + '</div>' +
+        /* 手寫也要印出來。畫面上那塊板子的標籤寫著「老師評閱時看得到」，
+           但這裡原本只印 r.text，於是整題用手寫作答的孩子在評閱畫面上是
+           「（未作答）」、給分留白——而手寫正是不會打字的孩子唯一的
+           建構反應通道，遺失會與打字能力共變，直接污染 CR 的組間比較。
+           兩者都有就兩者都印：孩子可能先打幾個字再用畫的補圖。 */
+        (String(r.text || '').trim()
+          ? '<div class="ai-out" style="white-space:pre-wrap;font-family:var(--f-mono);font-size:0.78rem">' + esc(r.text) + '</div>'
+          : (respHasInk(r) ? '' :
+             '<div class="ai-out" style="white-space:pre-wrap;font-family:var(--f-mono);font-size:0.78rem">（未作答）</div>')) +
+        (respHasInk(r)
+          ? '<div class="small muted" style="margin-top:8px">手寫作答</div>' + strokesSvg(r.strokes)
+          : '') +
         '<div class="field" style="margin-top:8px"><label for="' + noteId + '">給學生的評語</label>' +
         '<textarea rows="3" style="min-height:4.5rem" id="' + noteId +
         '" aria-label="給 ' + esc(userName(r.sid)) + ' 的評語" data-act="cr-comment" data-sid="' + r.sid + '" data-iid="' + it.id +
@@ -7379,12 +7399,23 @@ function submitted(aid, sid){
   return state.submissions.some(function(s){ return s.aid === aid && s.sid === sid; });
 }
 
-/* 這份派題他實際作答了幾題（選擇題有選、建構反應題有寫）。 */
+/* 這份派題他實際作答了幾題（選擇題有選、建構反應題有寫）。
+   手寫也算：不算的話，只用手寫作答的孩子在 keyUnlocked 的「實際作答比例」
+   門檻上永遠達不到，成績頁與答案卡對他一直是鎖著的——而他其實整份都寫完了。 */
 function answeredCount(aid, sid){
   return state.responses.filter(function(r){
     return r.aid === aid && r.sid === sid &&
-           (r.choice != null || (r.text && String(r.text).trim()));
+           (r.choice != null || (r.text && String(r.text).trim()) || respHasInk(r));
   }).length;
+}
+
+/* 已落地的那一筆作答裡有沒有手寫。相容兩種格式：新的 {w,h,lines}
+   與早期直接存陣列的。 */
+function respHasInk(r){
+  const sp = r && r.strokes;
+  if (!sp) return false;
+  if (Array.isArray(sp)) return sp.length > 0;
+  return !!(sp.lines && sp.lines.length);
 }
 
 /* 可以打開答案卡了嗎。
@@ -7533,6 +7564,7 @@ function viewQuiz(aid){
             '<input id="qPadC-' + esc(it.id) + '" type="color" value="#12161c" data-act="pad-color" data-id="' + it.id + '" style="width:2.2rem;padding:2px">' +
             '<label class="small muted" for="qPadW-' + esc(it.id) + '">筆寬</label>' +
             '<input id="qPadW-' + esc(it.id) + '" type="range" min="1" max="8" value="2" data-act="pad-width" data-id="' + it.id + '" style="width:5rem">' +
+            '<button class="btn sm" data-act="pad-touch" aria-pressed="false" data-id="' + it.id + '">開始手寫</button>' +
             '<button class="btn sm" data-act="pad-undo" data-id="' + it.id + '">復原</button>' +
             '<button class="btn sm" data-act="pad-clear" data-id="' + it.id + '">清空</button>' +
           '</div></div>' +
@@ -7818,8 +7850,75 @@ async function showSimilar(iid, force){
   }
 }
 
-/* --- 手寫板 --- */
+/* --- 手寫板 ---
+   手寫是「不會用鍵盤的孩子」寫建構反應題的唯一通道，所以它在下游必須
+   跟打字完全等價：算作答、進得了草稿、老師看得到。下面三支是那份等價的
+   單一來源，任何一處要問「這一題有沒有寫」都必須經過 padHasInk()。 */
 const PADS = {};
+
+/* 把所有手寫板清乾淨，連同掛在 window 上的 resize 監聽。
+   換身分、施測前清場、示範的「再走一次」都要呼叫——PADS 不在 state 裡，
+   那幾支清場只清了 state，手寫會原地留著跟到下一個人身上。 */
+function clearPads(){
+  Object.keys(PADS).forEach(function(k){
+    const p = PADS[k];
+    if (p && p._onResize) window.removeEventListener('resize', p._onResize);
+    delete PADS[k];
+  });
+}
+
+/* 這塊板子上有沒有東西。空的 strokes 陣列不算。 */
+function padHasInk(padId){
+  const p = PADS[padId];
+  return !!(p && p.strokes && p.strokes.length);
+}
+
+/* 落地用的格式。除了筆畫本身還要記下當時的畫布寬度：筆畫存的是 CSS px
+   絕對座標，沒有寬度就無法在別的寬度（老師的桌機、列印、平板轉向）
+   正確重畫——而評閱畫面的寬度幾乎一定和孩子作答時不同。 */
+function padPayload(padId){
+  const p = PADS[padId];
+  if (!padHasInk(padId)) return null;
+  return {w: p.w || (p.cv && p.cv.clientWidth) || 600, h: p.h || 240, lines: p.strokes};
+}
+
+/* 把落地的筆跡畫成 SVG。用 SVG 不用 canvas，因為評閱頁與唯讀重播都只是
+   要「看」：SVG 不需要初始化、會跟著容器縮放、也印得出來。
+   色票 'ink' 是刻意的語意值而不是色碼——見 padInk() 的說明。 */
+function strokesSvg(sp){
+  if (!sp) return '';
+  const lines = Array.isArray(sp) ? sp : (sp.lines || []);   // 舊格式：直接是陣列
+  if (!lines.length) return '';
+  const w = (Array.isArray(sp) ? 600 : sp.w) || 600;
+  const h = (Array.isArray(sp) ? 240 : sp.h) || 240;
+  const paths = lines.map(function(s){
+    const pts = s.pts || [];
+    if (!pts.length) return '';
+    const d = pts.map(function(pt, i){
+      return (i ? 'L' : 'M') + (Math.round(pt[0] * 10) / 10) + ' ' + (Math.round(pt[1] * 10) / 10);
+    }).join(' ');
+    const col = (!s.color || s.color === 'ink') ? 'currentColor' : s.color;
+    return '<path d="' + d + '" fill="none" stroke="' + esc(col) + '" stroke-width="' +
+      (+s.width || 2) + '" stroke-linecap="round" stroke-linejoin="round"/>';
+  }).join('');
+  return '<svg class="padview" viewBox="0 0 ' + w + ' ' + h + '" ' +
+    'role="img" aria-label="學生的手寫作答" preserveAspectRatio="xMinYMin meet">' + paths + '</svg>';
+}
+/* 預設筆色存的是語意值 'ink'，不是色碼。原本寫死 '#12161c'（淺色主題的
+   墨色），而畫布底色是 var(--card)——平板跟著系統偏好進暗色主題時，
+   --card 是 #1a1f26，對比約 1.1:1，孩子等於用隱形墨水在寫，
+   而且沒有任何線索告訴他要先去改「筆色」。存成 'ink' 之後，畫的時候解析成
+   當下主題的 --ink，落地之後在評閱端解析成 currentColor——
+   孩子與老師的主題不同也不會有一邊看不見。 */
+function padInk(){
+  try {
+    const v = getComputedStyle(document.documentElement).getPropertyValue('--ink').trim();
+    if (v) return v;
+  } catch (e) {}
+  return '#12161c';
+}
+function padResolveColor(c){ return (!c || c === 'ink') ? padInk() : c; }
+
 function initPads(){
   $$('canvas[data-pad]').forEach(function(cv){
     const id = cv.dataset.pad;
@@ -7828,20 +7927,52 @@ function initPads(){
     const dpr = window.devicePixelRatio || 1;
     function size(){
       const w = cv.clientWidth || 600;
+      const p = PADS[id];
+      /* 筆畫是 CSS px 絕對座標。原本 resize 只重設畫布尺寸就直接重畫舊座標，
+         平板由橫轉直（約 1024→768）之後，寫在右半邊的字整片落在畫布外——
+         資料還在、畫面沒了，而孩子最可能的反應是按〈清空〉整題重寫。
+         這裡依新舊寬度比例換算，字跟著縮，不會掉出去。 */
+      if (p && p.w && w && Math.abs(p.w - w) > 0.5){
+        const k = w / p.w;
+        p.strokes.forEach(function(s){
+          s.pts.forEach(function(pt){ pt[0] *= k; pt[1] *= k; });
+          s.width = (s.width || 2) * k;
+        });
+      }
+      if (p){ p.w = w; p.h = 240; }
       cv.width = w * dpr; cv.height = 240 * dpr;
       const ctx = cv.getContext('2d');
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       redraw(id);
     }
-    PADS[id] = PADS[id] || {strokes:[], color:'#12161c', width:2, cv:cv};
+    PADS[id] = PADS[id] || {strokes:[], color:'ink', width:2, cv:cv};
     PADS[id].cv = cv;
     size();
+    /* 舊的監聽器要先拆掉。原本每渲染一次 CR 題就多掛一個 window resize
+       監聽且從不移除，被閉包鎖住的分離畫布（1200×480 backing store）
+       也跟著累積——記憶體壓力正是平板把分頁丟掉的原因之一。 */
+    if (PADS[id]._onResize) window.removeEventListener('resize', PADS[id]._onResize);
+    PADS[id]._onResize = size;
     window.addEventListener('resize', size);
+
     let cur = null;
+    /* 觸控預設不畫。canvas.pad 原本是 touch-action:none 的全寬區塊，
+       而它所在的都是長捲動頁（前測一頁 16 題、AaL 在平板上恆為單欄）——
+       孩子想捲頁時手指落在畫布上，頁面不動，他會再滑幾次，
+       每滑一次就在自己的作答上留一條斜線，而那些線會跟著交卷送出去。
+       改成：手寫筆與滑鼠一律可畫；手指要先按〈用手指寫〉才會畫，
+       沒開的時候畫布讓瀏覽器正常捲動（touch-action 由 .pad.penmode 切換）。 */
+    function drawableFrom(e){
+      if (e.pointerType === 'mouse') return true;      // 桌機沒有捲動衝突
+      return !!PADS[id].touchDraw;                     // 手指與觸控筆都要先開手寫模式
+    }
     cv.addEventListener('pointerdown', function(e){
+      if (!drawableFrom(e)) return;
+      e.preventDefault();
       cv.setPointerCapture(e.pointerId);
       const r = cv.getBoundingClientRect();
-      cur = {color:PADS[id].color, width:PADS[id].width, pts:[[e.clientX - r.left, e.clientY - r.top]]};
+      cur = {color:PADS[id].color, width:PADS[id].width,
+             pts:[[e.clientX - r.left, e.clientY - r.top]]};
       PADS[id].strokes.push(cur);
     });
     cv.addEventListener('pointermove', function(e){
@@ -7850,20 +7981,39 @@ function initPads(){
       cur.pts.push([e.clientX - r.left, e.clientY - r.top]);
       redraw(id);
     });
-    cv.addEventListener('pointerup', function(){ cur = null; if (QUIZ) QUIZ.strokes[id] = PADS[id].strokes; });
+    cv.addEventListener('pointerup', function(){ cur = null; padChanged(id); });
     cv.addEventListener('pointerleave', function(){ cur = null; });
     /* 與畫布同一個坑：手勢被瀏覽器接管時會送 pointercancel，
        不處理的話同一次捲動會在計算紙上留下一條假筆畫。 */
     cv.addEventListener('pointercancel', function(){ cur = null; });
   });
 }
+
+/* 這塊板子被改動之後要做的事。三件都不能少：
+   · 前測把筆畫同步進 QUIZ（交卷時從那裡讀）
+   · 後測寫進草稿（不寫的話重載就整片空白，而畫面承諾「進度會保留」）
+   · 解除「還沒寫完」的紅框並更新進度——原本 aalClearMissing 只掛在選項與
+     textarea 上，在畫布上寫再多都消不掉那個紅字。 */
+function padChanged(id){
+  if (QUIZ && !/^aal-/.test(id)) QUIZ.strokes[id] = PADS[id].strokes;
+  if (typeof quizProgressUpdate === 'function' && QUIZ) quizProgressUpdate();
+  if (/^aal-/.test(id)){
+    if (typeof AAL !== 'undefined' && AAL && typeof aalSave === 'function') aalSave();
+    if (typeof aalClearMissing === 'function') aalClearMissing();
+  } else {
+    const cv = PADS[id] && PADS[id].cv;
+    const card = cv && cv.closest ? cv.closest('.card') : null;
+    if (card && padHasInk(id)) card.classList.remove('missing');
+  }
+}
+
 function redraw(id){
   const p = PADS[id]; if (!p || !p.cv) return;
   const ctx = p.cv.getContext('2d');
   ctx.clearRect(0, 0, p.cv.width, p.cv.height);
   ctx.lineCap = 'round'; ctx.lineJoin = 'round';
   p.strokes.forEach(function(s){
-    ctx.strokeStyle = s.color; ctx.lineWidth = s.width;
+    ctx.strokeStyle = padResolveColor(s.color); ctx.lineWidth = s.width;
     ctx.beginPath();
     s.pts.forEach(function(pt, i){ if (i) ctx.lineTo(pt[0], pt[1]); else ctx.moveTo(pt[0], pt[1]); });
     ctx.stroke();
@@ -8338,15 +8488,58 @@ function aalDraftOf(aid, sid){
     return all[aid + '|' + sid] || null;
   } catch (e) { return null; }
 }
-/* 草稿裡已經寫了幾題（選擇題有選 + 非選題有字） */
+/* 草稿裡已經寫了幾題（選擇題有選 + 非選題有字或有手寫）。
+   手寫要算：不算的話，首頁那張卡對只用手寫的孩子印的是「已寫 14 / 16 題」，
+   而他其實整份寫完了。 */
 function aalDraftProgress(aid, sid){
   const d = aalDraftOf(aid, sid);
   if (!d) return 0;
   const picked = Object.keys(d.answers || {}).filter(function(k){
     return d.answers[k] !== undefined && d.answers[k] !== null; }).length;
+  const inked = {};
+  Object.keys(d.strokes || {}).forEach(function(k){
+    const sp = d.strokes[k];
+    const lines = Array.isArray(sp) ? sp : (sp && sp.lines);
+    if (lines && lines.length) inked[k] = true;
+  });
   const written = Object.keys(d.texts || {}).filter(function(k){
-    return String(d.texts[k] || '').trim(); }).length;
+    return String(d.texts[k] || '').trim(); }).length +
+    Object.keys(inked).filter(function(k){
+      return !String((d.texts || {})[k] || '').trim(); }).length;
   return picked + written;
+}
+
+/* 手寫筆畫在記憶體的 PADS 裡，不在 AAL 上，所以要自己撈出來一起落地。
+   少了這兩支，任何一次真正的重載（平板記憶體壓力下分頁被丟棄、當掉重開、
+   誤觸重新整理、下一節課接續）都會讓打的字原封不動回來、手寫整片空白——
+   而畫面上那顆〈← 先離開（進度會保留）〉與缺答框裡的「寫過的都會留著」
+   對只能手寫的孩子是假的，他整節課的 CR 產出是 100% 損失，
+   而且畫面不會說任何話，他不會舉手。 */
+function aalPadsSnapshot(){
+  const out = {};
+  if (typeof PADS === 'undefined' || !AAL) return out;
+  AAL.items.forEach(function(it){
+    if (it.type !== 'cr') return;
+    const p = padPayload('aal-' + it.id);
+    if (p) out[it.id] = p;
+  });
+  return out;
+}
+function aalPadsRestore(saved){
+  if (!saved || typeof PADS === 'undefined') return;
+  Object.keys(saved).forEach(function(iid){
+    const sp = saved[iid];
+    const lines = Array.isArray(sp) ? sp : (sp && sp.lines);
+    if (!lines || !lines.length) return;
+    const key = 'aal-' + iid;
+    PADS[key] = PADS[key] || {strokes:[], color:'ink', width:2};
+    PADS[key].strokes = lines;
+    PADS[key].w = (Array.isArray(sp) ? 0 : sp.w) || PADS[key].w;
+    PADS[key].h = (Array.isArray(sp) ? 240 : sp.h) || 240;
+    /* 畫布還沒建出來也沒關係：initPads 會沿用既有的 PADS[key]，
+       它的 size() 會依當時寬度換算座標再重畫。 */
+    if (PADS[key].cv) redraw(key);
+  });
 }
 
 function aalSave(){
@@ -8361,7 +8554,7 @@ function aalSave(){
     all[aalDraftId()] = {idx:AAL.idx, answers:AAL.answers, texts:AAL.texts, notes:AAL.notes,
                          marks:AAL.marks, checks:AAL.checks,
                          tele:AAL.tele, drafts:AAL.drafts, says:AAL.says,
-                         savedAt:Date.now()};
+                         strokes:aalPadsSnapshot(), savedAt:Date.now()};
     localStorage.setItem(AAL_DRAFT_KEY, JSON.stringify(all));
     aalSave._fails = 0;
     AAL.dirty = false;
@@ -8413,6 +8606,7 @@ function aalInit(aid){
       AAL.tele    = d.tele    || {};
       AAL.drafts  = d.drafts  || {};
       AAL.says    = d.says    || {};
+      aalPadsRestore(d.strokes);
       /* 每一題的 enter 重設為現在。不重設的話，離線的那幾個小時會被
          算進 firstKeyLatency，產生沒有意義的離群值。
          但只對「還沒下過筆」的題目重設——已經量到 firstKeyLatency 的題目
@@ -8658,6 +8852,7 @@ function viewAaL(aid){
             '<input id="aalPadC-' + esc(it.id) + '" type="color" value="#12161c" data-act="pad-color" data-id="aal-' + esc(it.id) + '" style="width:2.2rem;padding:2px">' +
             '<label class="small muted" for="aalPadW-' + esc(it.id) + '">筆寬</label>' +
             '<input id="aalPadW-' + esc(it.id) + '" type="range" min="1" max="8" value="2" data-act="pad-width" data-id="aal-' + esc(it.id) + '" style="width:5rem">' +
+            '<button class="btn sm" data-act="pad-touch" aria-pressed="false" data-id="aal-' + esc(it.id) + '">開始手寫</button>' +
             '<button class="btn sm" data-act="pad-undo" data-id="aal-' + esc(it.id) + '">復原</button>' +
             '<button class="btn sm" data-act="pad-clear" data-id="aal-' + esc(it.id) + '">清空</button>' +
           '</div></div>') +
@@ -9159,8 +9354,14 @@ function aalSubmit(){
      那正是與條件共變的缺失值來源。 */
   const missIdx = [];
   AAL.items.forEach(function(i, idx){
+    /* 手寫也算作答。原本只看 textarea：整題用手寫完的孩子按〈交卷〉會被
+       告知「還有 2 題沒寫完」，按〈回去寫完〉還被帶回去、卡片掛上紅框與
+       「還沒寫完」，而 aalClearMissing 只掛在選項與 textarea 上，
+       在畫布上再寫多少都消不掉——他只能在同一題來回被退回。
+       手寫是不會打字的孩子唯一的建構反應通道，這道本來要防止缺失值的
+       安全網，反而在製造與打字能力共變的缺失值。 */
     const blank = (i.type === 'cr')
-      ? !(AAL.texts[i.id] || '').trim()
+      ? (!(AAL.texts[i.id] || '').trim() && !padHasInk('aal-' + i.id))
       : AAL.answers[i.id] === undefined;
     if (blank) missIdx.push(idx);
   });
@@ -9246,7 +9447,7 @@ function aalSubmitCommit(){
     }
     if (it.type === 'cr'){
       state.responses.push({aid:AAL.aid, sid:me.id, iid:it.id, text:AAL.texts[it.id] || '',
-        strokes:(PADS['aal-' + it.id] && PADS['aal-' + it.id].strokes.length) ? PADS['aal-' + it.id].strokes : null,
+        strokes:padPayload('aal-' + it.id),
         score:null, comment:'', correct:null});
     } else {
       const c = AAL.answers[it.id];
@@ -9874,9 +10075,17 @@ function inspectOptions(it, resp){
 }
 
 function inspectCR(it, resp){
+  /* 唯讀重播與評閱頁同一個坑：只印 text 的話，用手寫作答的孩子在這裡
+     顯示「沒有作答。」——而這一頁的用途正是讓老師與研究者看到
+     「學生當時實際看到什麼、做了什麼」。 */
+  const inked = typeof respHasInk === 'function' && respHasInk(resp);
   return '<div class="field"><label>他寫的答案</label>' +
     '<div class="note-full" style="white-space:pre-wrap">' +
-    (resp.text ? esc(resp.text) : '<span class="muted">沒有作答。</span>') + '</div></div>' +
+    (resp.text ? esc(resp.text)
+               : (inked ? '<span class="muted">用手寫作答（見下方）。</span>'
+                        : '<span class="muted">沒有作答。</span>')) + '</div></div>' +
+    (inked ? '<div class="small muted" style="margin-top:8px">手寫作答</div>' +
+             strokesSvg(resp.strokes) : '') +
     '<p class="muted small" style="margin-top:8px">建構反應題不進入 Rasch 估計，評閱在「派題分析 → 建構反應題評閱」。</p>';
 }
 
@@ -11099,8 +11308,38 @@ function bindEvents(){
 
     /* 學生 */
     if (act === 'quiz-submit'){ submitQuiz(id); return; }
-    if (act === 'pad-undo'){ if (PADS[id]){ PADS[id].strokes.pop(); redraw(id); } return; }
-    if (act === 'pad-clear'){ if (PADS[id]){ PADS[id].strokes = []; redraw(id); } return; }
+    if (act === 'pad-undo'){ if (PADS[id]){ PADS[id].strokes.pop(); redraw(id); padChanged(id); } return; }
+    /* 〈清空〉要問一次。它把 strokes 換成新陣列，所以緊鄰的〈復原〉事後
+       一筆都救不回來；而這兩顆是隔著 10px 的小按鈕，平板誤觸率遠高於滑鼠。
+       對照組的〈清空筆記〉早就有確認框，理由一模一樣（清空之後沒有復原路徑），
+       而手寫板對不會打字的孩子是他唯一的作答通道——保護的有無不該與
+       孩子的輸入方式（進而與能力）相關。 */
+    if (act === 'pad-clear'){
+      if (!PADS[id] || !padHasInk(id)) return;
+      confirmModal({
+        title: '要清掉這裡的手寫嗎？',
+        body: '清掉之後不能復原，〈復原〉也救不回來。',
+        note: '只會清掉這一塊手寫板，打的字不受影響。',
+        yes: '清掉', no: '先不要'
+      }, function(){
+        if (!PADS[id]) return;
+        PADS[id].strokes = [];
+        redraw(id); padChanged(id);
+      });
+      return; }
+    /* 手寫模式。畫布預設讓瀏覽器捲動（touch-action:pan-y），按下這顆才改成
+       none 並開始接受手指／觸控筆的筆畫，避免孩子想捲頁卻在自己的作答上
+       畫線。滑鼠不受這顆影響，桌機沒有捲動衝突。 */
+    if (act === 'pad-touch'){
+      const p = PADS[id]; if (!p) return;
+      p.touchDraw = !p.touchDraw;
+      t.setAttribute('aria-pressed', p.touchDraw ? 'true' : 'false');
+      t.textContent = p.touchDraw ? '結束手寫' : '開始手寫';
+      t.classList.toggle('primary', !!p.touchDraw);
+      if (p.cv) p.cv.classList.toggle('penmode', !!p.touchDraw);
+      toast(p.touchDraw ? '手寫模式開著，現在可以在格子裡寫字。'
+                        : '手寫模式關掉了，用手指可以捲動頁面。');
+      return; }
     /* 相似題只給教師備課用。它原本印在學生的診斷頁上、四個條件都給、
        不限次數、完全在 MAX_TURNS 之外——那會讓對照組拿到一顆無限次的 AI
        按鈕，變成第四種處理，RQ1 的組間比較失去基準。 */
@@ -11310,6 +11549,7 @@ function bindEvents(){
         DEMO_LOGS = DEMO_LOGS.filter(function(e){ return !(e.aid === aid && e.sid === me.id); });
       aalDraftDrop(aid, me.id);
       AAL = null;
+      clearPads();
       save(); go('#/aal/' + aid);
     }
 
@@ -11377,6 +11617,10 @@ function bindEvents(){
         localStorage.removeItem('kairos-survey-draft');
       } catch (e) {}
       AAL = null; SURVEY = null; QUIZ = null;
+      /* PADS 是全域物件、只以題目 id 為鍵、不在 state 裡，所以上面這一排清場漏掉了它。
+         只要中間沒有整頁重載，第一個坐下來的孩子打開那一題就會看到別人示範時留下的手寫字
+         在自己的答案格裡，而交卷時它會被寫進他的 responses。 */
+      clearPads();
       save(); renderShell(); render();
       toast('已清空前後測示範作答、示範問卷、歷程事件與作答草稿，可以施測了。');
       return;
@@ -11402,6 +11646,7 @@ function bindEvents(){
         return; }
       if (AAL){ try { flushPendingPicks(); flushLogs(); } catch (e2) {} }
       state.ui.impersonate = null;
+      clearPads();          // 上一個身分的手寫不能跟過來
       state.ui.role = e.target.value; save(); renderShell();
       go(isTeacher() ? '#/teacher' : '#/student'); render(); return; }
     if (!t) return;
@@ -11770,8 +12015,10 @@ function quizProgressUpdate(){
   if (!a) return;
   const items = a.itemIds.map(getItem).filter(Boolean);
   const done = items.filter(function(i){
+    /* 手寫也算，否則整份用手寫作答的孩子看到的進度條一路停在
+       「已作答 14 / 16」，而他其實寫完了。 */
     return i.type === 'cr'
-      ? !!String(QUIZ.texts[i.id] || '').trim()
+      ? (!!String(QUIZ.texts[i.id] || '').trim() || padHasInk(i.id))
       : QUIZ.answers[i.id] !== undefined;
   }).length;
   const total = items.length;
@@ -11789,8 +12036,9 @@ function submitQuiz(aid){
      孩子被告知做完了，交出去的卻是兩題空白的建構反應題。
      前測 θ 是 ANCOVA 的共變數，而缺失與打字能力、作答節奏共變。 */
   const missing = items.filter(function(i){
+    /* 手寫也算作答，理由與 aalSubmit 的 missIdx 相同。 */
     return i.type === 'cr'
-      ? !String(QUIZ.texts[i.id] || '').trim()
+      ? (!String(QUIZ.texts[i.id] || '').trim() && !padHasInk(i.id))
       : QUIZ.answers[i.id] === undefined;
   });
   /* 這一整支都沒跟上 aalSubmit 的修正：原生 confirm（不吃字級與高對比）、
@@ -11835,7 +12083,7 @@ function submitQuizCommit(aid){
       return !(r.aid === aid && r.sid === me.id && r.iid === it.id); });
     if (it.type === 'cr'){
       state.responses.push({aid:aid, sid:me.id, iid:it.id, text:QUIZ.texts[it.id] || '',
-        strokes:(PADS[it.id] && PADS[it.id].strokes.length) ? PADS[it.id].strokes : null,
+        strokes:padPayload(it.id),
         score:null, comment:'', correct:null});
     } else {
       const c = QUIZ.answers[it.id];

@@ -25,15 +25,58 @@ function aalDraftOf(aid, sid){
     return all[aid + '|' + sid] || null;
   } catch (e) { return null; }
 }
-/* 草稿裡已經寫了幾題（選擇題有選 + 非選題有字） */
+/* 草稿裡已經寫了幾題（選擇題有選 + 非選題有字或有手寫）。
+   手寫要算：不算的話，首頁那張卡對只用手寫的孩子印的是「已寫 14 / 16 題」，
+   而他其實整份寫完了。 */
 function aalDraftProgress(aid, sid){
   const d = aalDraftOf(aid, sid);
   if (!d) return 0;
   const picked = Object.keys(d.answers || {}).filter(function(k){
     return d.answers[k] !== undefined && d.answers[k] !== null; }).length;
+  const inked = {};
+  Object.keys(d.strokes || {}).forEach(function(k){
+    const sp = d.strokes[k];
+    const lines = Array.isArray(sp) ? sp : (sp && sp.lines);
+    if (lines && lines.length) inked[k] = true;
+  });
   const written = Object.keys(d.texts || {}).filter(function(k){
-    return String(d.texts[k] || '').trim(); }).length;
+    return String(d.texts[k] || '').trim(); }).length +
+    Object.keys(inked).filter(function(k){
+      return !String((d.texts || {})[k] || '').trim(); }).length;
   return picked + written;
+}
+
+/* 手寫筆畫在記憶體的 PADS 裡，不在 AAL 上，所以要自己撈出來一起落地。
+   少了這兩支，任何一次真正的重載（平板記憶體壓力下分頁被丟棄、當掉重開、
+   誤觸重新整理、下一節課接續）都會讓打的字原封不動回來、手寫整片空白——
+   而畫面上那顆〈← 先離開（進度會保留）〉與缺答框裡的「寫過的都會留著」
+   對只能手寫的孩子是假的，他整節課的 CR 產出是 100% 損失，
+   而且畫面不會說任何話，他不會舉手。 */
+function aalPadsSnapshot(){
+  const out = {};
+  if (typeof PADS === 'undefined' || !AAL) return out;
+  AAL.items.forEach(function(it){
+    if (it.type !== 'cr') return;
+    const p = padPayload('aal-' + it.id);
+    if (p) out[it.id] = p;
+  });
+  return out;
+}
+function aalPadsRestore(saved){
+  if (!saved || typeof PADS === 'undefined') return;
+  Object.keys(saved).forEach(function(iid){
+    const sp = saved[iid];
+    const lines = Array.isArray(sp) ? sp : (sp && sp.lines);
+    if (!lines || !lines.length) return;
+    const key = 'aal-' + iid;
+    PADS[key] = PADS[key] || {strokes:[], color:'ink', width:2};
+    PADS[key].strokes = lines;
+    PADS[key].w = (Array.isArray(sp) ? 0 : sp.w) || PADS[key].w;
+    PADS[key].h = (Array.isArray(sp) ? 240 : sp.h) || 240;
+    /* 畫布還沒建出來也沒關係：initPads 會沿用既有的 PADS[key]，
+       它的 size() 會依當時寬度換算座標再重畫。 */
+    if (PADS[key].cv) redraw(key);
+  });
 }
 
 function aalSave(){
@@ -48,7 +91,7 @@ function aalSave(){
     all[aalDraftId()] = {idx:AAL.idx, answers:AAL.answers, texts:AAL.texts, notes:AAL.notes,
                          marks:AAL.marks, checks:AAL.checks,
                          tele:AAL.tele, drafts:AAL.drafts, says:AAL.says,
-                         savedAt:Date.now()};
+                         strokes:aalPadsSnapshot(), savedAt:Date.now()};
     localStorage.setItem(AAL_DRAFT_KEY, JSON.stringify(all));
     aalSave._fails = 0;
     AAL.dirty = false;
@@ -100,6 +143,7 @@ function aalInit(aid){
       AAL.tele    = d.tele    || {};
       AAL.drafts  = d.drafts  || {};
       AAL.says    = d.says    || {};
+      aalPadsRestore(d.strokes);
       /* 每一題的 enter 重設為現在。不重設的話，離線的那幾個小時會被
          算進 firstKeyLatency，產生沒有意義的離群值。
          但只對「還沒下過筆」的題目重設——已經量到 firstKeyLatency 的題目
@@ -345,6 +389,7 @@ function viewAaL(aid){
             '<input id="aalPadC-' + esc(it.id) + '" type="color" value="#12161c" data-act="pad-color" data-id="aal-' + esc(it.id) + '" style="width:2.2rem;padding:2px">' +
             '<label class="small muted" for="aalPadW-' + esc(it.id) + '">筆寬</label>' +
             '<input id="aalPadW-' + esc(it.id) + '" type="range" min="1" max="8" value="2" data-act="pad-width" data-id="aal-' + esc(it.id) + '" style="width:5rem">' +
+            '<button class="btn sm" data-act="pad-touch" aria-pressed="false" data-id="aal-' + esc(it.id) + '">開始手寫</button>' +
             '<button class="btn sm" data-act="pad-undo" data-id="aal-' + esc(it.id) + '">復原</button>' +
             '<button class="btn sm" data-act="pad-clear" data-id="aal-' + esc(it.id) + '">清空</button>' +
           '</div></div>') +
@@ -846,8 +891,14 @@ function aalSubmit(){
      那正是與條件共變的缺失值來源。 */
   const missIdx = [];
   AAL.items.forEach(function(i, idx){
+    /* 手寫也算作答。原本只看 textarea：整題用手寫完的孩子按〈交卷〉會被
+       告知「還有 2 題沒寫完」，按〈回去寫完〉還被帶回去、卡片掛上紅框與
+       「還沒寫完」，而 aalClearMissing 只掛在選項與 textarea 上，
+       在畫布上再寫多少都消不掉——他只能在同一題來回被退回。
+       手寫是不會打字的孩子唯一的建構反應通道，這道本來要防止缺失值的
+       安全網，反而在製造與打字能力共變的缺失值。 */
     const blank = (i.type === 'cr')
-      ? !(AAL.texts[i.id] || '').trim()
+      ? (!(AAL.texts[i.id] || '').trim() && !padHasInk('aal-' + i.id))
       : AAL.answers[i.id] === undefined;
     if (blank) missIdx.push(idx);
   });
@@ -933,7 +984,7 @@ function aalSubmitCommit(){
     }
     if (it.type === 'cr'){
       state.responses.push({aid:AAL.aid, sid:me.id, iid:it.id, text:AAL.texts[it.id] || '',
-        strokes:(PADS['aal-' + it.id] && PADS['aal-' + it.id].strokes.length) ? PADS['aal-' + it.id].strokes : null,
+        strokes:padPayload('aal-' + it.id),
         score:null, comment:'', correct:null});
     } else {
       const c = AAL.answers[it.id];
@@ -1561,9 +1612,17 @@ function inspectOptions(it, resp){
 }
 
 function inspectCR(it, resp){
+  /* 唯讀重播與評閱頁同一個坑：只印 text 的話，用手寫作答的孩子在這裡
+     顯示「沒有作答。」——而這一頁的用途正是讓老師與研究者看到
+     「學生當時實際看到什麼、做了什麼」。 */
+  const inked = typeof respHasInk === 'function' && respHasInk(resp);
   return '<div class="field"><label>他寫的答案</label>' +
     '<div class="note-full" style="white-space:pre-wrap">' +
-    (resp.text ? esc(resp.text) : '<span class="muted">沒有作答。</span>') + '</div></div>' +
+    (resp.text ? esc(resp.text)
+               : (inked ? '<span class="muted">用手寫作答（見下方）。</span>'
+                        : '<span class="muted">沒有作答。</span>')) + '</div></div>' +
+    (inked ? '<div class="small muted" style="margin-top:8px">手寫作答</div>' +
+             strokesSvg(resp.strokes) : '') +
     '<p class="muted small" style="margin-top:8px">建構反應題不進入 Rasch 估計，評閱在「派題分析 → 建構反應題評閱」。</p>';
 }
 
