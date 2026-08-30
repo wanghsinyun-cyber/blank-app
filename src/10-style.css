@@ -568,7 +568,13 @@ input[type=checkbox],input[type=radio]{ width:1.15em; height:1.15em; accent-colo
      未選的單選鈕在白卡片上變成深色實心圓，看起來就是「已經選好了」，
      而缺答會以 null 進 Rasch。 */
   color-scheme: light;
-  --ink:#000; --ink-2:#111; --ink-3:#333; --ink-4:#444;
+  /* 六位色碼。padInk() 直接回傳 --ink 的原字串，而〈筆色〉的守門拿它去和
+     input[type=color].value 比對——瀏覽器一律把值正規化成 7 字元 #rrggbb，
+     '#000000' === '#000' 恆為 false。低視力孩子在高對比下碰一次筆色並選黑，
+     PADS 的顏色就從語意值 'ink' 被寫成字面 #000000，主題一換筆跡就消失。
+     真正的修法在 normHex()（88-ui-student.js），這裡順手統一格式：
+     同一行的 -2/-3/-4 本來就是三位、與淺色深色兩套的六位混用。 */
+  --ink:#000000; --ink-2:#111111; --ink-3:#333333; --ink-4:#444444;
   --rule:#555; --rule-strong:#333; --rule-soft:#777;
   --card:#fff; --paper:#fff; --cool:#fff; --shade:#f0f0f0; --grid:#ddd;
   --accent:#0b2e63; --accent-ink:#fff; --focus:#0b57d0;
@@ -705,12 +711,21 @@ html{ scroll-padding-top: calc(var(--sticky-top) + 12px) }
    最大最好按的目標，而且只發生在需要放大字級的那一群受試者身上。
    grid-auto-columns 會依實際格數自動等分，五點量尺不用另外寫。 */
 .scale{display:grid; grid-auto-flow:column; grid-auto-columns:minmax(0,1fr); gap:6px}
-.lk{min-width:0; min-height:2.6rem; border:1px solid var(--rule-strong);
+/* min-height 從 2.6rem 提到 3.4rem：.lk-t 放大之後，六點量尺最窄的那一格
+   要裝得下兩行標籤。四個條件同時吃到，不影響版面對等。 */
+.lk{min-width:0; min-height:3.4rem; border:1px solid var(--rule-strong);
     background:var(--card); border-radius:var(--r-m); cursor:pointer; color:var(--ink-2);
     display:inline-flex; flex-direction:column; align-items:center; justify-content:center;
     gap:1px; padding:4px 2px; text-align:center}
 .lk-n{font-family:var(--f-mono); font-size:0.85rem; line-height:1.1}
-.lk-t{font-size:0.6rem; line-height:1.15; color:var(--ink-3)}
+/* 0.6rem → 0.8rem。這一格裡真正承載方向語意的就是這行文字（「非常不同意」
+   「有點同意」…），而它原本是全站最小的字：根字級 20px 時只有 12px，
+   同一頁的題幹是 19px，連不帶方向資訊、而且已經 aria-hidden 的數字都比它大。
+   96 位四到六年級受試者要靠它分辨六個相鄰選項，而這份問卷產出全部自陳
+   依變項與中介變項——相鄰一格選錯的誤差直接落在那些構念上，且不是隨機的。
+   垂直空間不是原因：.scale 是 grid-auto-columns:minmax(0,1fr)，
+   標籤放大只讓格子長高（見上面 .lk 的 min-height）。 */
+.lk-t{font-size:0.8rem; line-height:1.15; color:var(--ink-3)}
 .lk:hover{background:var(--shade)}
 .lk.on{background:var(--accent); border-color:var(--accent); color:var(--accent-ink); font-weight:600}
 .lk.on .lk-t{color:var(--accent-ink)}
@@ -729,7 +744,10 @@ html{ scroll-padding-top: calc(var(--sticky-top) + 12px) }
 /* 作答卡被帶回來時的標示。用外框 + 一行文字，不只靠顏色（1.4.1）。 */
 .card.missing{outline:3px solid var(--crit); outline-offset:4px}
 .card.missing .card-h::after{content:"　還沒寫完"; color:var(--crit); font-weight:600; font-size:0.8rem}
-.scale-lab{display:flex; justify-content:space-between; font-size:0.8rem; color:var(--ink-4); margin-top:4px; max-width:13.5rem}
+/* 量尺兩端的錨點。這條規則原本是死碼——全庫沒有任何使用點，看起來像
+   「兩端錨點已經處理過了」，實際上整份問卷只有 .lk-t 那一處印出方向。
+   現在 92-ui-aal.js 的每一段量尺底下真的印一條（見 block()）。 */
+.scale-lab{display:flex; justify-content:space-between; font-size:0.8rem; color:var(--ink-4); margin-top:6px}
 
 pre.prompt{
   font-family:var(--f-mono); font-size:0.8rem; line-height:1.65; white-space:pre-wrap; word-break:break-word;

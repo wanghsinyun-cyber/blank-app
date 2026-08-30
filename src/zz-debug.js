@@ -988,3 +988,76 @@ window.assertPadAspect = function(){
   console.log('[assertPadAspect]', r);
   return r;
 };
+
+/* ==========================================================================
+   兩件會被字級與路由默默吃掉的事
+   (1) 量尺標籤是每一格裡唯一承載方向語意的文字，而它原本是全站最小的字
+       （0.6rem，根字級 20px 時只有 12px），連不帶方向資訊、已經 aria-hidden
+       的數字都比它大。96 位四到六年級受試者要靠它分辨六個相鄰選項，
+       而這份問卷產出全部自陳依變項與中介變項。
+   (2) 18 條路由原本共用「KAIROS」一個 document.title，換頁時焦點落在一個
+       沒有可及名稱的 <main>——報讀器只播報「主要地標」，而好幾條路徑會在
+       孩子不知情的情況下換掉目的地（WCAG 2.4.2 A 級）。
+   console 一行：assertA11yCopy()
+   ========================================================================== */
+window.assertA11yCopy = function(){
+  const fails = [];
+  const realRole = state.ui.role, realHash = location.hash;
+  const realFs = document.documentElement.style.getPropertyValue('--fs');
+
+  /* (1) 量尺標籤不得小於題幹的 0.7 倍，四個字級都要成立 */
+  const k = state.classes.find(function(c){ return c.condition === 'tutor'; }) || state.classes[0];
+  const sid = k.studentIds[0];
+  const hadSub = submitted('a-post', sid);
+  if (!hadSub) state.submissions.push({aid:'a-post', sid:sid, at:Date.now(), _a11yTmp:true});
+  const keptSurvey = (state.surveys || []).filter(function(s){ return s.sid === sid && s.phase === 'post'; });
+  state.surveys = (state.surveys || []).filter(function(s){ return !(s.sid === sid && s.phase === 'post'); });
+  state.ui.role = sid; renderShell();
+  SURVEY = null; location.hash = '#/survey/post/1'; render();
+
+  const ratios = {};
+  ['1', '1.25', '1.5', '1.75'].forEach(function(fs){
+    document.documentElement.style.setProperty('--fs', fs);
+    const t = document.querySelector('#view .lk-t');
+    const q = document.querySelector('#view .likert .q');
+    if (!t || !q){ fails.push('字級 ' + fs + '：找不到量尺標籤或題幹'); return; }
+    const r = parseFloat(getComputedStyle(t).fontSize) / parseFloat(getComputedStyle(q).fontSize);
+    ratios[fs] = +r.toFixed(2);
+    if (r < 0.7) fails.push('字級 ' + fs + '：量尺標籤只有題幹的 ' + r.toFixed(2) + ' 倍（下限 0.70）');
+  });
+  document.documentElement.style.setProperty('--fs', realFs || '1');
+  if (!document.querySelectorAll('#view .scale-lab').length)
+    fails.push('量尺底下沒有印出兩端錨點（.scale-lab）');
+
+  /* (2) 每一條路由都要有自己的標題，而且不可以只是「KAIROS」 */
+  const titles = {};
+  const ROUTES = ['#/student', '#/quiz/a-pre', '#/aal/a-post', '#/survey/pre/1',
+                  '#/survey/post/1', '#/result/a-pre', '#/mygrowth', '#/kb', '#/about'];
+  ROUTES.forEach(function(h){
+    location.hash = h; render();
+    const t = document.title;
+    titles[h] = t;
+    if (!t || t === 'KAIROS') fails.push(h + '：標題還是「KAIROS」');
+    const stage = document.getElementById('stage');
+    if (stage && !stage.getAttribute('aria-label')) fails.push(h + '：#stage 沒有可及名稱');
+  });
+  /* 標題要等於「畫面上真正那一頁」，不是等於網址列打的那一條。
+     不能改成比對九條路由兩兩不同：交過卷的學生走 #/quiz/a-pre 與
+     #/aal/a-post 都會被 rerouteInRender 轉去成績頁，三條路由同時顯示
+     〈我的成績〉是對的行為——而那正是這一條要保住的東西，因為那種
+     轉向產生的訊號原本與正常抵達完全相同。 */
+  ROUTES.forEach(function(h){
+    location.hash = h; render();
+    const want = pageTitleFor(ROUTE) + '｜KAIROS';
+    if (document.title !== want)
+      fails.push(h + '：標題是「' + document.title + '」，但畫面上是「' + want + '」');
+  });
+
+  state.surveys = (state.surveys || []).concat(keptSurvey);
+  if (!hadSub) state.submissions = state.submissions.filter(function(s){ return !s._a11yTmp; });
+  state.ui.role = realRole; renderShell();
+  location.hash = realHash || '#/teacher'; render();
+  const r = {pass: fails.length === 0, fails: fails, 標籤比例: ratios, 標題: titles};
+  console.log('[assertA11yCopy]', r);
+  return r;
+};

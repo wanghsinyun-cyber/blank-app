@@ -457,11 +457,17 @@ function renderRail(){
         整頁擋板。鎖著就要說出來。 */
      b: (submitted('a-post', me.id) && !surveyOf(me.id, 'post')) ? '問卷後開放' : null},
     {g:'問卷'},
+    /* 有草稿就印「寫到一半」而不是「待填」——與作業那一側的狀態語彙一致。 */
     {h:'#/survey/pre',  g2:'前', t:'課前問卷',
      /* 課上完之後就不再標成可補的待辦（見 surveyGate 對 'pre' 的說明） */
      b: surveyOf(me.id, 'pre') ? null
-        : (submitted('a-post', me.id) ? '未填' : '待填')},
-    {h:'#/survey/post', g2:'後', t:'課後問卷', b: surveyOf(me.id, 'post') ? null : (submitted('a-post', me.id) ? '待填' : '上完課再填')},
+        : (submitted('a-post', me.id) ? '未填'
+          : (surveyDraftProgress(me.id, 'pre') ? '寫到一半' : '待填'))},
+    {h:'#/survey/post', g2:'後', t:'課後問卷',
+     b: surveyOf(me.id, 'post') ? null
+        : (submitted('a-post', me.id)
+          ? (surveyDraftProgress(me.id, 'post') ? '寫到一半' : '待填')
+          : '上完課再填')},
     {g:'關於'},
     {h:'#/about', g2:'說', t:'系統說明'}
   ];
@@ -780,4 +786,38 @@ async function runAI(outId, fn, force){
     box.innerHTML = '<p><strong>分析失敗</strong></p><p>' + esc(e.message) + '</p>' +
       '<p class="muted small">你仍然可以在「系統設定」把引擎切回<strong>內建規則引擎</strong>，所有分析功能都能離線運作。</p>';
   }
+}
+
+/* ==========================================================================
+   頁面標題
+   這是雜湊路由的單頁應用，涵蓋 18 條路由，而文件標題自始至終是「KAIROS」，
+   render() 從頭到尾沒有寫過 document.title。換頁時唯一的訊號是把焦點送到
+   #stage，而它是一個沒有 aria-label 的 <main>，可及名稱為空——報讀器只會
+   播報「主要地標」。好幾條路徑還會在孩子不知情的情況下換掉目的地
+   （entryGate 的前置門檻、交卷後 rerouteInRender 轉去成績頁、surveyGate 的
+   擋板、viewSurvey 用 replaceState 改寫頁碼），而這些轉向產生的訊號與正常
+   抵達完全相同。WCAG 2.4.2（A 級）。
+   rerouteInRender 會在轉向之後覆寫 ROUTE，所以這一支放在 render() 結尾、
+   讀最終的 ROUTE，標題與畫面永遠是同一頁。
+   ========================================================================== */
+const PAGE_TITLES = {
+  teacher:'教師後台', create:'建立派題', assign:'派題分析',
+  kb:'知識建構空間', note:'貼文', synth:'想法串綜整',
+  dash:'雙軌評量儀表板', bank:'文本與題庫', settings:'系統設定',
+  about:'名詞說明', unlock:'切換身分', research:'研究控制台',
+  aal:'評量即學習事件', inspect:'唯讀重播',
+  student:'我的作業', quiz:'前測作答', result:'我的成績', mygrowth:'我的學習軌跡'
+};
+function pageTitleFor(route){
+  const r = route || ROUTE;
+  if (r.name === 'survey') return r.args[0] === 'pre' ? '課前問卷' : '課後問卷';
+  if (r.name === 'teacher' && !isTeacher()) return PAGE_TITLES.student;
+  return PAGE_TITLES[r.name] || '找不到這一頁';
+}
+function syncPageTitle(){
+  const t = pageTitleFor(ROUTE);
+  try { document.title = t + '｜KAIROS'; } catch (e) {}
+  /* #stage 是換頁後焦點的落點，要有名字才播報得出來。 */
+  const stage = document.getElementById('stage');
+  if (stage) stage.setAttribute('aria-label', t);
 }

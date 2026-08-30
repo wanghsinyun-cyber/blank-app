@@ -123,17 +123,32 @@ function viewStudent(){
         '這一頁有一塊「我的筆記」，把想到的、卡住的地方寫下來。</p>' +
         '<p class="muted small cond-card-foot">你寫的字老師之後看得到，不會拿來打分數。' +
         '一題一頁，換題會換新的。</p></div>') +
-    (needPre ? '<div class="card card-p" style="margin-bottom:16px;border-left:3px solid var(--warn)">' +
-      '<div class="row" style="justify-content:space-between"><span class="small">' +
-      (preTooLate ? '課前問卷沒有填到。這一份要在上課前填，現在先不用填，跟老師說一聲就好。'
-                  : '還沒填課前問卷。') + '</span>' +
-      (preTooLate ? '' : '<a class="btn sm primary" href="#/survey/pre">去填課前問卷</a>') +
-      '</div></div>' : '') +
+    /* 「寫到一半」要說出來。原本兩張卡都只看送出紀錄，填了一半被叫走的
+       孩子回來看到的是「還沒填」——而問卷頁自己承諾「填到哪裡會自動記住」。
+       形狀與下面的作業卡一致（已寫 N / M 題、〈接著上次繼續〉）。 */
+    (function(){
+      const p = typeof surveyDraftProgress === 'function' ? surveyDraftProgress(me.id, 'pre') : null;
+      if (!needPre) return '';
+      return '<div class="card card-p" style="margin-bottom:16px;border-left:3px solid var(--warn)">' +
+        '<div class="row" style="justify-content:space-between"><span class="small">' +
+        (preTooLate ? '課前問卷沒有填到。這一份要在上課前填，現在先不用填，跟老師說一聲就好。'
+          : p ? '課前問卷寫到一半　·　已填 ' + p.n + ' / ' + p.total + ' 題'
+              : '還沒填課前問卷。') + '</span>' +
+        (preTooLate ? '' : '<a class="btn sm primary" href="#/survey/pre">' +
+          (p ? '接著上次繼續 →' : '去填課前問卷') + '</a>') +
+        '</div></div>';
+    })() +
     /* 側欄徽章在窄版看不見，這裡補一張結構相同的提醒卡。四條件都會出現。 */
-    (submitted('a-post', me.id) && !surveyOf(me.id, 'post')
-      ? '<div class="card card-p" style="margin-bottom:16px;border-left:3px solid var(--warn)">' +
-        '<div class="row" style="justify-content:space-between"><span class="small">這節課的問卷還沒填完。</span>' +
-        '<a class="btn sm primary" href="#/survey/post">去填課後問卷</a></div></div>' : '') +
+    (function(){
+      if (!(submitted('a-post', me.id) && !surveyOf(me.id, 'post'))) return '';
+      const p = typeof surveyDraftProgress === 'function' ? surveyDraftProgress(me.id, 'post') : null;
+      return '<div class="card card-p" style="margin-bottom:16px;border-left:3px solid var(--warn)">' +
+        '<div class="row" style="justify-content:space-between"><span class="small">' +
+        (p ? '這節課的問卷寫到一半　·　已填 ' + p.n + ' / ' + p.total + ' 題'
+           : '這節課的問卷還沒填完。') + '</span>' +
+        '<a class="btn sm primary" href="#/survey/post">' +
+        (p ? '接著上次繼續 →' : '去填課後問卷') + '</a></div></div>';
+    })() +
     /* 知識建構空間鎖著的時候，首頁不要用橘色卡片催他去一個進不去的地方。
        卡片數維持四張，只換內容與樣式。 */
     '<div class="grid g4" style="margin-bottom:16px">' +
@@ -495,7 +510,7 @@ function viewQuiz(aid){
            是只打在鍵盤使用者身上的系統性失分。而前測 θ 是 ANCOVA 的共變數，
            又沒有補交路徑。逐字用同一句，三處就一致了。 */
         '<p class="muted small" style="margin-top:6px">直接點你要的答案就可以。' +
-        '用鍵盤的話，上下方向鍵移動、空白鍵選起來。</p>' +
+        '用鍵盤的話，Tab 進到這一組，上下方向鍵移到哪一格就是選哪一格；想換答案再按方向鍵移過去就好。</p>' +
         '</div></div>';
   }
 }
@@ -924,14 +939,29 @@ function syncPads(){
   });
 }
 
+/* 色碼正規化：#abc → #aabbcc，一律小寫。
+   〈筆色〉的守門原本是字串相等，而 input[type=color].value 一律是 7 字元
+   #rrggbb——高對比主題的 --ink 是三位的 #000，'#000000' === '#000' 恆為
+   false，於是低視力孩子在高對比下碰一次色票並選黑，PADS 的顏色就從語意值
+   'ink' 被寫成字面 #000000。'ink' 存在的唯一理由就是「孩子與老師的主題
+   不同也不會有一邊看不見」（strokesSvg 存 currentColor、.padview 的 color
+   是 var(--ink)）——寫死之後，評閱者用深色主題打開時筆跡是 #000000 對
+   --card #1a1f26，約 1.06:1，等於隱形墨水。
+   不要只把 CSS 改成六位就算了：那只修掉今天這一個主題，下一個用三位或
+   大寫色碼的主題會再掉一次。 */
+function normHex(s){
+  let v = String(s || '').trim().toLowerCase();
+  if (/^#[0-9a-f]{3}$/.test(v)) v = '#' + v[1] + v[1] + v[2] + v[2] + v[3] + v[3];
+  return v;
+}
 function padInk(){
   try {
     const v = getComputedStyle(document.documentElement).getPropertyValue('--ink').trim();
-    if (v) return v;
+    if (v) return normHex(v) || v;
   } catch (e) {}
   return '#12161c';
 }
-function padResolveColor(c){ return (!c || c === 'ink') ? padInk() : c; }
+function padResolveColor(c){ return (!c || c === 'ink') ? padInk() : normHex(c) || c; }
 
 function initPads(){
   $$('canvas[data-pad]').forEach(function(cv){

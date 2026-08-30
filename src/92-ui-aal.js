@@ -380,17 +380,22 @@ function viewAaL(aid){
       esc((classOfStudent(me.id) || {}).name || '') + '</div></div>' +
       /* tabindex="-1"：〈回到題目導覽〉的焦點落在這個容器上，
          而不是落在某一顆按鈕。落在容器上，下一次 Tab 才依序碰到
-         〈上一題〉〈下一題〉〈交卷〉——不會讓鍵盤使用者一按 Enter 就交卷。 */
+         〈上一題〉〈下一題〉〈交卷〉——不會讓鍵盤使用者一按 Enter 就交卷。
+         這句話原本是錯的：DOM 上的第一顆按鈕是〈← 先離開〉，所以下一個
+         Tab 站其實是「離開這一節課」，而它長得跟旁邊兩顆換題鈕一模一樣、
+         也沒有確認框。現在 DOM 順序改成導覽優先、離開排到最後，
+         視覺位置用 order 維持原樣（Tab 序跟 DOM 走，不跟 order 走），
+         並把〈先離開〉降一個視覺層級（.ghost）。 */
       /* 存檔失敗的常駐警示。aalSave 早就會在連續兩次失敗時去掀開
          id="aalSaveWarn"，但全站從來沒有這個節點——整條安全網是死碼。
          role="alert" 讓報讀器也聽得到；平常 hidden。 */
       '<div class="row" id="aalNav" tabindex="-1">' +
-      '<button class="btn sm" data-act="aal-leave">← 先離開（進度會保留）</button>' +
-      '<span class="pill">第 ' + (AAL.idx + 1) + ' / ' + AAL.items.length + ' 題</span>' +
-      '<span class="pill">' + esc(text.title) + '</span>' +
-      '<button class="btn sm" data-act="aal-prev"' + (AAL.idx ? '' : ' disabled') + '>← 上一題</button>' +
-      '<button class="btn sm" data-act="aal-next"' + (AAL.idx < AAL.items.length - 1 ? '' : ' disabled') + '>下一題 →</button>' +
-      '<button class="btn primary sm" data-act="aal-submit">交卷</button></div>' +
+      '<button class="btn sm" data-act="aal-prev" style="order:4"' + (AAL.idx ? '' : ' disabled') + '>← 上一題</button>' +
+      '<button class="btn sm" data-act="aal-next" style="order:5"' + (AAL.idx < AAL.items.length - 1 ? '' : ' disabled') + '>下一題 →</button>' +
+      '<button class="btn primary sm" data-act="aal-submit" style="order:6">交卷</button>' +
+      '<span class="pill" style="order:2">第 ' + (AAL.idx + 1) + ' / ' + AAL.items.length + ' 題</span>' +
+      '<span class="pill" style="order:3">' + esc(text.title) + '</span>' +
+      '<button class="btn sm ghost" data-act="aal-leave" style="order:1">← 先離開（進度會保留）</button></div>' +
     '</div>' +
 
     '<div class="card card-p" id="aalSaveWarn" role="alert"' +
@@ -426,8 +431,26 @@ function viewAaL(aid){
          正停著的那一句 toggle 掉（寫一筆 MARK、底色消失）。 */
       '用鍵盤的話，Tab 停在句子上，按 Enter 或空白鍵就是標記；' +
       '想單純往下讀，把焦點停在文章區塊本身再用方向鍵捲。' +
+      '用報讀器的話，這一篇在下面還有一份不含按鈕的「連續閱讀版」，' +
+      '和前測那一份一樣是整段的文章。' +
       '標記不會影響你的分數，換題也不會消失；每一篇文章的標記分開記。' +
       '老師之後可以看到你標了哪幾句，這是為了知道你怎麼讀。</p>' +
+      /* 連續閱讀版。前測 viewQuiz 把同樣這兩篇直接輸出成 <p>，報讀器讀到的是
+         散文；後測把它拆成 30–40 顆 <button aria-pressed>，瀏覽模式會在每一句
+         前後插入「切換按鈕／未按下」，而空白鍵（NVDA／JAWS 瀏覽模式的翻頁鍵）
+         會把游標所在那一句 toggle 成已標記並寫一筆 MARK。
+         同樣兩篇文章、同一批受試者，前後測的刺激通道卻不一樣——那是 Δθ 的
+         系統性污染，而且只落在用報讀器的孩子身上。
+         保留句子鈕（標記是這個平台的核心行為資料），另外補一份純散文複本：
+         視覺上隱藏、報讀器讀得到，help 文字裡講明它的存在。 */
+      /* 外面這層 position:relative 是必要的，理由與 .msg／.tablewrap 相同：
+         .sr-only 是絕對定位，而雙欄時 .aal-text > .card-p 是捲動容器卻不是
+         已定位元素——沒有這層包裝，這一大段散文的 1px 盒子會跳過捲動容器、
+         改以 .stage 為基準，把文件撐長。 */
+      '<div style="position:relative">' +
+      '<div class="sr-only" role="region" aria-label="連續閱讀版：' + esc(text.title) + '">' +
+        text.paras.map(function(p){ return '<p>' + esc(p) + '</p>'; }).join('') +
+      '</div></div>' +
       '<div class="passage" tabindex="0" role="group" aria-labelledby="passageTitle" aria-describedby="passageHelp">' +
         text.paras.map(function(_, pi){
           return '<p class="para">' + sents.filter(function(s){ return s.para === pi; }).map(function(s){
@@ -470,7 +493,7 @@ function viewAaL(aid){
              講的是他做不到的事，而且完全沒提可以用點的。
              點選寫在前面（那是多數孩子的路徑），鍵盤寫在後面。 */
           '<p class="muted small" style="margin-top:6px">直接點你要的答案就可以。' +
-          '用鍵盤的話，上下方向鍵移動、空白鍵選起來。</p>'
+          '用鍵盤的話，Tab 進到這一組，上下方向鍵移到哪一格就是選哪一格；想換答案再按方向鍵移過去就好。</p>'
         /* 非選題的作答通道，前後測必須一致。
            前測（走 viewQuiz）的兩題非選有 textarea ＋ 手寫板＋筆色／筆寬／
            復原／清空，後測這一支卻只有 textarea——而 aalSubmit 第 879 行
@@ -1402,6 +1425,20 @@ function surveyDraftLoad(sid, phase){
     return all[sid + '|' + phase] || null;
   } catch (e) { return null; }
 }
+/* 「寫到一半」在問卷這一側原本不存在。作業卡早就用 aalDraftProgress／
+   quizDraftProgress 分成三種狀態（已完成／寫到一半 · 已寫 N / M 題／尚未
+   作答），問卷卻只看 surveyOf() 有沒有送出紀錄：填了 15 題被叫走的孩子
+   回到首頁，看到的是「還沒填課前問卷」＋〈去填課前問卷〉，側欄徽章是
+   「待填」——而問卷頁上明明印著「中間可以休息，填到哪裡會自動記住」，
+   草稿裡也確實連 page 一起存著。形狀照 aalDraftProgress。 */
+function surveyDraftProgress(sid, phase){
+  const d = surveyDraftLoad(sid, phase);
+  if (!d || !d.resp) return null;
+  const keys = surveyKeys(phase, conditionOfStudent(sid));
+  const n = keys.filter(function(k){ return d.resp[k] != null; }).length;
+  if (!n) return null;
+  return {n:n, total:keys.length, page:d.page || 1};
+}
 /* 丟掉某位學生在某一份作業上的作答草稿。
    「再走一次」與施測前清場都要用它——只清 state 而不清草稿的話，
    下一次進作答頁 aalInit 會把舊的 idx 與答案原封不動還原回來。 */
@@ -1441,7 +1478,14 @@ function viewSurvey(phase, page){
        只是不再有寫回去的路徑。） */
   if (done){
     const keys = surveyKeys(phase, cond);
-    const filled = keys.filter(function(k){ return done.resp[k] != null; }).length;
+    /* 先過反向映射再數。keys 是表單鍵（mc_x_0..2、sys_x_0..2），而 done.resp
+       是 surveyRespToStored 落地的儲存鍵（mc_tutor／sys_easy…），那支函式
+       還會把表單鍵 delete 掉——兩套鍵不相交，所以最後 6 題（對照組 3 題）
+       永遠算不到：全部填完的孩子回頭點側欄，卡片告訴他「41 題有作答」。
+       同一支檔案下面的註解逐字警告過這個「41 / 47」的形狀，
+       修的是 SURVEY 初始化那一行，這一行沒跟上。 */
+    const shown = surveyRespToForm(done.resp, phase);
+    const filled = keys.filter(function(k){ return shown[k] != null; }).length;
     return sectionHead(phase === 'pre' ? '課前問卷' : '課後問卷',
         me.name + '　·　' + (classOfStudent(me.id) || {}).name,
         '<a class="btn" href="#/student">← 回我的作業</a>') +
@@ -1512,7 +1556,14 @@ function viewSurvey(phase, page){
               ' data-k="' + key + '" data-v="' + val + '"' + (on ? ' checked' : '') + '>' +
               '<span class="lk-n" aria-hidden="true">' + val + '</span>' +
               '<span class="lk-t">' + esc(s.scale.labels[v]) + '</span></label>';
-          }).join('') + '</div></div>';
+          }).join('') + '</div>' +
+          /* 兩端錨點。整份問卷原本只有格子裡的 .lk-t 一處印出方向，
+             而 .scale-lab 這條 CSS 規則從來沒有使用點——看起來像已經處理過。
+             aria-hidden：語意由每一格 radio 自己的可及名稱承擔，
+             報讀器不需要在每一題後面再聽一次同樣的兩個詞。 */
+          '<div class="scale-lab" aria-hidden="true"><span>1＝' + esc(s.scale.labels[0]) + '</span>' +
+          '<span>' + s.scale.n + '＝' + esc(s.scale.labels[s.scale.n - 1]) + '</span></div>' +
+          '</div>';
       }).join('') + '</div></div>';
   }
 
@@ -1552,7 +1603,7 @@ function viewSurvey(phase, page){
         /* 量尺與作答頁的選項是同一個 radiogroup 形狀，第一次填時
            行為完全一樣：Tab 進來會停在第一格但不勾選它。
            兩處的說明也要一致：先講點選，再講鍵盤。 */
-        '直接點你要的那一格就可以。用鍵盤的話，上下方向鍵移動、空白鍵選起來。</p></div>'
+        '直接點你要的那一格就可以。用鍵盤的話，Tab 進到這一組，上下方向鍵移到哪一格就是選哪一格；想換答案再按方向鍵移過去就好。</p></div>'
       : '') +
     (scaleChanged
       ? '<div class="card card-p" style="margin-bottom:14px;border-left:3px solid var(--accent)">' +

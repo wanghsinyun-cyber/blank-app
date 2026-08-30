@@ -15,6 +15,9 @@ mkdir -p dist
 # 「Invalid or unexpected token」、不指行號，全站函式一起消失——
 # 表面症狀是「所有測試都在報 xxx is not defined」，很容易被誤判成別的問題。
 perl tools/lint-strings.pl src/*.js
+# 括號配對。同一類「整份 dist 變成一個 SyntaxError」的第三次，這次是
+# 編輯時把一行結尾重複貼了一次、多出一個 ')'——引號檢查看不到它。
+perl tools/lint-balance.pl src/*.js
 
 emit_body(){
   cat src/00-head.html

@@ -585,7 +585,13 @@ input[type=checkbox],input[type=radio]{ width:1.15em; height:1.15em; accent-colo
      未選的單選鈕在白卡片上變成深色實心圓，看起來就是「已經選好了」，
      而缺答會以 null 進 Rasch。 */
   color-scheme: light;
-  --ink:#000; --ink-2:#111; --ink-3:#333; --ink-4:#444;
+  /* 六位色碼。padInk() 直接回傳 --ink 的原字串，而〈筆色〉的守門拿它去和
+     input[type=color].value 比對——瀏覽器一律把值正規化成 7 字元 #rrggbb，
+     '#000000' === '#000' 恆為 false。低視力孩子在高對比下碰一次筆色並選黑，
+     PADS 的顏色就從語意值 'ink' 被寫成字面 #000000，主題一換筆跡就消失。
+     真正的修法在 normHex()（88-ui-student.js），這裡順手統一格式：
+     同一行的 -2/-3/-4 本來就是三位、與淺色深色兩套的六位混用。 */
+  --ink:#000000; --ink-2:#111111; --ink-3:#333333; --ink-4:#444444;
   --rule:#555; --rule-strong:#333; --rule-soft:#777;
   --card:#fff; --paper:#fff; --cool:#fff; --shade:#f0f0f0; --grid:#ddd;
   --accent:#0b2e63; --accent-ink:#fff; --focus:#0b57d0;
@@ -722,12 +728,21 @@ html{ scroll-padding-top: calc(var(--sticky-top) + 12px) }
    最大最好按的目標，而且只發生在需要放大字級的那一群受試者身上。
    grid-auto-columns 會依實際格數自動等分，五點量尺不用另外寫。 */
 .scale{display:grid; grid-auto-flow:column; grid-auto-columns:minmax(0,1fr); gap:6px}
-.lk{min-width:0; min-height:2.6rem; border:1px solid var(--rule-strong);
+/* min-height 從 2.6rem 提到 3.4rem：.lk-t 放大之後，六點量尺最窄的那一格
+   要裝得下兩行標籤。四個條件同時吃到，不影響版面對等。 */
+.lk{min-width:0; min-height:3.4rem; border:1px solid var(--rule-strong);
     background:var(--card); border-radius:var(--r-m); cursor:pointer; color:var(--ink-2);
     display:inline-flex; flex-direction:column; align-items:center; justify-content:center;
     gap:1px; padding:4px 2px; text-align:center}
 .lk-n{font-family:var(--f-mono); font-size:0.85rem; line-height:1.1}
-.lk-t{font-size:0.6rem; line-height:1.15; color:var(--ink-3)}
+/* 0.6rem → 0.8rem。這一格裡真正承載方向語意的就是這行文字（「非常不同意」
+   「有點同意」…），而它原本是全站最小的字：根字級 20px 時只有 12px，
+   同一頁的題幹是 19px，連不帶方向資訊、而且已經 aria-hidden 的數字都比它大。
+   96 位四到六年級受試者要靠它分辨六個相鄰選項，而這份問卷產出全部自陳
+   依變項與中介變項——相鄰一格選錯的誤差直接落在那些構念上，且不是隨機的。
+   垂直空間不是原因：.scale 是 grid-auto-columns:minmax(0,1fr)，
+   標籤放大只讓格子長高（見上面 .lk 的 min-height）。 */
+.lk-t{font-size:0.8rem; line-height:1.15; color:var(--ink-3)}
 .lk:hover{background:var(--shade)}
 .lk.on{background:var(--accent); border-color:var(--accent); color:var(--accent-ink); font-weight:600}
 .lk.on .lk-t{color:var(--accent-ink)}
@@ -746,7 +761,10 @@ html{ scroll-padding-top: calc(var(--sticky-top) + 12px) }
 /* 作答卡被帶回來時的標示。用外框 + 一行文字，不只靠顏色（1.4.1）。 */
 .card.missing{outline:3px solid var(--crit); outline-offset:4px}
 .card.missing .card-h::after{content:"　還沒寫完"; color:var(--crit); font-weight:600; font-size:0.8rem}
-.scale-lab{display:flex; justify-content:space-between; font-size:0.8rem; color:var(--ink-4); margin-top:4px; max-width:13.5rem}
+/* 量尺兩端的錨點。這條規則原本是死碼——全庫沒有任何使用點，看起來像
+   「兩端錨點已經處理過了」，實際上整份問卷只有 .lk-t 那一處印出方向。
+   現在 92-ui-aal.js 的每一段量尺底下真的印一條（見 block()）。 */
+.scale-lab{display:flex; justify-content:space-between; font-size:0.8rem; color:var(--ink-4); margin-top:6px}
 
 pre.prompt{
   font-family:var(--f-mono); font-size:0.8rem; line-height:1.65; white-space:pre-wrap; word-break:break-word;
@@ -6036,11 +6054,17 @@ function renderRail(){
         整頁擋板。鎖著就要說出來。 */
      b: (submitted('a-post', me.id) && !surveyOf(me.id, 'post')) ? '問卷後開放' : null},
     {g:'問卷'},
+    /* 有草稿就印「寫到一半」而不是「待填」——與作業那一側的狀態語彙一致。 */
     {h:'#/survey/pre',  g2:'前', t:'課前問卷',
      /* 課上完之後就不再標成可補的待辦（見 surveyGate 對 'pre' 的說明） */
      b: surveyOf(me.id, 'pre') ? null
-        : (submitted('a-post', me.id) ? '未填' : '待填')},
-    {h:'#/survey/post', g2:'後', t:'課後問卷', b: surveyOf(me.id, 'post') ? null : (submitted('a-post', me.id) ? '待填' : '上完課再填')},
+        : (submitted('a-post', me.id) ? '未填'
+          : (surveyDraftProgress(me.id, 'pre') ? '寫到一半' : '待填'))},
+    {h:'#/survey/post', g2:'後', t:'課後問卷',
+     b: surveyOf(me.id, 'post') ? null
+        : (submitted('a-post', me.id)
+          ? (surveyDraftProgress(me.id, 'post') ? '寫到一半' : '待填')
+          : '上完課再填')},
     {g:'關於'},
     {h:'#/about', g2:'說', t:'系統說明'}
   ];
@@ -6359,6 +6383,40 @@ async function runAI(outId, fn, force){
     box.innerHTML = '<p><strong>分析失敗</strong></p><p>' + esc(e.message) + '</p>' +
       '<p class="muted small">你仍然可以在「系統設定」把引擎切回<strong>內建規則引擎</strong>，所有分析功能都能離線運作。</p>';
   }
+}
+
+/* ==========================================================================
+   頁面標題
+   這是雜湊路由的單頁應用，涵蓋 18 條路由，而文件標題自始至終是「KAIROS」，
+   render() 從頭到尾沒有寫過 document.title。換頁時唯一的訊號是把焦點送到
+   #stage，而它是一個沒有 aria-label 的 <main>，可及名稱為空——報讀器只會
+   播報「主要地標」。好幾條路徑還會在孩子不知情的情況下換掉目的地
+   （entryGate 的前置門檻、交卷後 rerouteInRender 轉去成績頁、surveyGate 的
+   擋板、viewSurvey 用 replaceState 改寫頁碼），而這些轉向產生的訊號與正常
+   抵達完全相同。WCAG 2.4.2（A 級）。
+   rerouteInRender 會在轉向之後覆寫 ROUTE，所以這一支放在 render() 結尾、
+   讀最終的 ROUTE，標題與畫面永遠是同一頁。
+   ========================================================================== */
+const PAGE_TITLES = {
+  teacher:'教師後台', create:'建立派題', assign:'派題分析',
+  kb:'知識建構空間', note:'貼文', synth:'想法串綜整',
+  dash:'雙軌評量儀表板', bank:'文本與題庫', settings:'系統設定',
+  about:'名詞說明', unlock:'切換身分', research:'研究控制台',
+  aal:'評量即學習事件', inspect:'唯讀重播',
+  student:'我的作業', quiz:'前測作答', result:'我的成績', mygrowth:'我的學習軌跡'
+};
+function pageTitleFor(route){
+  const r = route || ROUTE;
+  if (r.name === 'survey') return r.args[0] === 'pre' ? '課前問卷' : '課後問卷';
+  if (r.name === 'teacher' && !isTeacher()) return PAGE_TITLES.student;
+  return PAGE_TITLES[r.name] || '找不到這一頁';
+}
+function syncPageTitle(){
+  const t = pageTitleFor(ROUTE);
+  try { document.title = t + '｜KAIROS'; } catch (e) {}
+  /* #stage 是換頁後焦點的落點，要有名字才播報得出來。 */
+  const stage = document.getElementById('stage');
+  if (stage) stage.setAttribute('aria-label', t);
 }
 
 /* ===== src/82-ui-teacher.js ===== */
@@ -8054,17 +8112,32 @@ function viewStudent(){
         '這一頁有一塊「我的筆記」，把想到的、卡住的地方寫下來。</p>' +
         '<p class="muted small cond-card-foot">你寫的字老師之後看得到，不會拿來打分數。' +
         '一題一頁，換題會換新的。</p></div>') +
-    (needPre ? '<div class="card card-p" style="margin-bottom:16px;border-left:3px solid var(--warn)">' +
-      '<div class="row" style="justify-content:space-between"><span class="small">' +
-      (preTooLate ? '課前問卷沒有填到。這一份要在上課前填，現在先不用填，跟老師說一聲就好。'
-                  : '還沒填課前問卷。') + '</span>' +
-      (preTooLate ? '' : '<a class="btn sm primary" href="#/survey/pre">去填課前問卷</a>') +
-      '</div></div>' : '') +
+    /* 「寫到一半」要說出來。原本兩張卡都只看送出紀錄，填了一半被叫走的
+       孩子回來看到的是「還沒填」——而問卷頁自己承諾「填到哪裡會自動記住」。
+       形狀與下面的作業卡一致（已寫 N / M 題、〈接著上次繼續〉）。 */
+    (function(){
+      const p = typeof surveyDraftProgress === 'function' ? surveyDraftProgress(me.id, 'pre') : null;
+      if (!needPre) return '';
+      return '<div class="card card-p" style="margin-bottom:16px;border-left:3px solid var(--warn)">' +
+        '<div class="row" style="justify-content:space-between"><span class="small">' +
+        (preTooLate ? '課前問卷沒有填到。這一份要在上課前填，現在先不用填，跟老師說一聲就好。'
+          : p ? '課前問卷寫到一半　·　已填 ' + p.n + ' / ' + p.total + ' 題'
+              : '還沒填課前問卷。') + '</span>' +
+        (preTooLate ? '' : '<a class="btn sm primary" href="#/survey/pre">' +
+          (p ? '接著上次繼續 →' : '去填課前問卷') + '</a>') +
+        '</div></div>';
+    })() +
     /* 側欄徽章在窄版看不見，這裡補一張結構相同的提醒卡。四條件都會出現。 */
-    (submitted('a-post', me.id) && !surveyOf(me.id, 'post')
-      ? '<div class="card card-p" style="margin-bottom:16px;border-left:3px solid var(--warn)">' +
-        '<div class="row" style="justify-content:space-between"><span class="small">這節課的問卷還沒填完。</span>' +
-        '<a class="btn sm primary" href="#/survey/post">去填課後問卷</a></div></div>' : '') +
+    (function(){
+      if (!(submitted('a-post', me.id) && !surveyOf(me.id, 'post'))) return '';
+      const p = typeof surveyDraftProgress === 'function' ? surveyDraftProgress(me.id, 'post') : null;
+      return '<div class="card card-p" style="margin-bottom:16px;border-left:3px solid var(--warn)">' +
+        '<div class="row" style="justify-content:space-between"><span class="small">' +
+        (p ? '這節課的問卷寫到一半　·　已填 ' + p.n + ' / ' + p.total + ' 題'
+           : '這節課的問卷還沒填完。') + '</span>' +
+        '<a class="btn sm primary" href="#/survey/post">' +
+        (p ? '接著上次繼續 →' : '去填課後問卷') + '</a></div></div>';
+    })() +
     /* 知識建構空間鎖著的時候，首頁不要用橘色卡片催他去一個進不去的地方。
        卡片數維持四張，只換內容與樣式。 */
     '<div class="grid g4" style="margin-bottom:16px">' +
@@ -8426,7 +8499,7 @@ function viewQuiz(aid){
            是只打在鍵盤使用者身上的系統性失分。而前測 θ 是 ANCOVA 的共變數，
            又沒有補交路徑。逐字用同一句，三處就一致了。 */
         '<p class="muted small" style="margin-top:6px">直接點你要的答案就可以。' +
-        '用鍵盤的話，上下方向鍵移動、空白鍵選起來。</p>' +
+        '用鍵盤的話，Tab 進到這一組，上下方向鍵移到哪一格就是選哪一格；想換答案再按方向鍵移過去就好。</p>' +
         '</div></div>';
   }
 }
@@ -8855,14 +8928,29 @@ function syncPads(){
   });
 }
 
+/* 色碼正規化：#abc → #aabbcc，一律小寫。
+   〈筆色〉的守門原本是字串相等，而 input[type=color].value 一律是 7 字元
+   #rrggbb——高對比主題的 --ink 是三位的 #000，'#000000' === '#000' 恆為
+   false，於是低視力孩子在高對比下碰一次色票並選黑，PADS 的顏色就從語意值
+   'ink' 被寫成字面 #000000。'ink' 存在的唯一理由就是「孩子與老師的主題
+   不同也不會有一邊看不見」（strokesSvg 存 currentColor、.padview 的 color
+   是 var(--ink)）——寫死之後，評閱者用深色主題打開時筆跡是 #000000 對
+   --card #1a1f26，約 1.06:1，等於隱形墨水。
+   不要只把 CSS 改成六位就算了：那只修掉今天這一個主題，下一個用三位或
+   大寫色碼的主題會再掉一次。 */
+function normHex(s){
+  let v = String(s || '').trim().toLowerCase();
+  if (/^#[0-9a-f]{3}$/.test(v)) v = '#' + v[1] + v[1] + v[2] + v[2] + v[3] + v[3];
+  return v;
+}
 function padInk(){
   try {
     const v = getComputedStyle(document.documentElement).getPropertyValue('--ink').trim();
-    if (v) return v;
+    if (v) return normHex(v) || v;
   } catch (e) {}
   return '#12161c';
 }
-function padResolveColor(c){ return (!c || c === 'ink') ? padInk() : c; }
+function padResolveColor(c){ return (!c || c === 'ink') ? padInk() : normHex(c) || c; }
 
 function initPads(){
   $$('canvas[data-pad]').forEach(function(cv){
@@ -9903,17 +9991,22 @@ function viewAaL(aid){
       esc((classOfStudent(me.id) || {}).name || '') + '</div></div>' +
       /* tabindex="-1"：〈回到題目導覽〉的焦點落在這個容器上，
          而不是落在某一顆按鈕。落在容器上，下一次 Tab 才依序碰到
-         〈上一題〉〈下一題〉〈交卷〉——不會讓鍵盤使用者一按 Enter 就交卷。 */
+         〈上一題〉〈下一題〉〈交卷〉——不會讓鍵盤使用者一按 Enter 就交卷。
+         這句話原本是錯的：DOM 上的第一顆按鈕是〈← 先離開〉，所以下一個
+         Tab 站其實是「離開這一節課」，而它長得跟旁邊兩顆換題鈕一模一樣、
+         也沒有確認框。現在 DOM 順序改成導覽優先、離開排到最後，
+         視覺位置用 order 維持原樣（Tab 序跟 DOM 走，不跟 order 走），
+         並把〈先離開〉降一個視覺層級（.ghost）。 */
       /* 存檔失敗的常駐警示。aalSave 早就會在連續兩次失敗時去掀開
          id="aalSaveWarn"，但全站從來沒有這個節點——整條安全網是死碼。
          role="alert" 讓報讀器也聽得到；平常 hidden。 */
       '<div class="row" id="aalNav" tabindex="-1">' +
-      '<button class="btn sm" data-act="aal-leave">← 先離開（進度會保留）</button>' +
-      '<span class="pill">第 ' + (AAL.idx + 1) + ' / ' + AAL.items.length + ' 題</span>' +
-      '<span class="pill">' + esc(text.title) + '</span>' +
-      '<button class="btn sm" data-act="aal-prev"' + (AAL.idx ? '' : ' disabled') + '>← 上一題</button>' +
-      '<button class="btn sm" data-act="aal-next"' + (AAL.idx < AAL.items.length - 1 ? '' : ' disabled') + '>下一題 →</button>' +
-      '<button class="btn primary sm" data-act="aal-submit">交卷</button></div>' +
+      '<button class="btn sm" data-act="aal-prev" style="order:4"' + (AAL.idx ? '' : ' disabled') + '>← 上一題</button>' +
+      '<button class="btn sm" data-act="aal-next" style="order:5"' + (AAL.idx < AAL.items.length - 1 ? '' : ' disabled') + '>下一題 →</button>' +
+      '<button class="btn primary sm" data-act="aal-submit" style="order:6">交卷</button>' +
+      '<span class="pill" style="order:2">第 ' + (AAL.idx + 1) + ' / ' + AAL.items.length + ' 題</span>' +
+      '<span class="pill" style="order:3">' + esc(text.title) + '</span>' +
+      '<button class="btn sm ghost" data-act="aal-leave" style="order:1">← 先離開（進度會保留）</button></div>' +
     '</div>' +
 
     '<div class="card card-p" id="aalSaveWarn" role="alert"' +
@@ -9949,8 +10042,26 @@ function viewAaL(aid){
          正停著的那一句 toggle 掉（寫一筆 MARK、底色消失）。 */
       '用鍵盤的話，Tab 停在句子上，按 Enter 或空白鍵就是標記；' +
       '想單純往下讀，把焦點停在文章區塊本身再用方向鍵捲。' +
+      '用報讀器的話，這一篇在下面還有一份不含按鈕的「連續閱讀版」，' +
+      '和前測那一份一樣是整段的文章。' +
       '標記不會影響你的分數，換題也不會消失；每一篇文章的標記分開記。' +
       '老師之後可以看到你標了哪幾句，這是為了知道你怎麼讀。</p>' +
+      /* 連續閱讀版。前測 viewQuiz 把同樣這兩篇直接輸出成 <p>，報讀器讀到的是
+         散文；後測把它拆成 30–40 顆 <button aria-pressed>，瀏覽模式會在每一句
+         前後插入「切換按鈕／未按下」，而空白鍵（NVDA／JAWS 瀏覽模式的翻頁鍵）
+         會把游標所在那一句 toggle 成已標記並寫一筆 MARK。
+         同樣兩篇文章、同一批受試者，前後測的刺激通道卻不一樣——那是 Δθ 的
+         系統性污染，而且只落在用報讀器的孩子身上。
+         保留句子鈕（標記是這個平台的核心行為資料），另外補一份純散文複本：
+         視覺上隱藏、報讀器讀得到，help 文字裡講明它的存在。 */
+      /* 外面這層 position:relative 是必要的，理由與 .msg／.tablewrap 相同：
+         .sr-only 是絕對定位，而雙欄時 .aal-text > .card-p 是捲動容器卻不是
+         已定位元素——沒有這層包裝，這一大段散文的 1px 盒子會跳過捲動容器、
+         改以 .stage 為基準，把文件撐長。 */
+      '<div style="position:relative">' +
+      '<div class="sr-only" role="region" aria-label="連續閱讀版：' + esc(text.title) + '">' +
+        text.paras.map(function(p){ return '<p>' + esc(p) + '</p>'; }).join('') +
+      '</div></div>' +
       '<div class="passage" tabindex="0" role="group" aria-labelledby="passageTitle" aria-describedby="passageHelp">' +
         text.paras.map(function(_, pi){
           return '<p class="para">' + sents.filter(function(s){ return s.para === pi; }).map(function(s){
@@ -9993,7 +10104,7 @@ function viewAaL(aid){
              講的是他做不到的事，而且完全沒提可以用點的。
              點選寫在前面（那是多數孩子的路徑），鍵盤寫在後面。 */
           '<p class="muted small" style="margin-top:6px">直接點你要的答案就可以。' +
-          '用鍵盤的話，上下方向鍵移動、空白鍵選起來。</p>'
+          '用鍵盤的話，Tab 進到這一組，上下方向鍵移到哪一格就是選哪一格；想換答案再按方向鍵移過去就好。</p>'
         /* 非選題的作答通道，前後測必須一致。
            前測（走 viewQuiz）的兩題非選有 textarea ＋ 手寫板＋筆色／筆寬／
            復原／清空，後測這一支卻只有 textarea——而 aalSubmit 第 879 行
@@ -10925,6 +11036,20 @@ function surveyDraftLoad(sid, phase){
     return all[sid + '|' + phase] || null;
   } catch (e) { return null; }
 }
+/* 「寫到一半」在問卷這一側原本不存在。作業卡早就用 aalDraftProgress／
+   quizDraftProgress 分成三種狀態（已完成／寫到一半 · 已寫 N / M 題／尚未
+   作答），問卷卻只看 surveyOf() 有沒有送出紀錄：填了 15 題被叫走的孩子
+   回到首頁，看到的是「還沒填課前問卷」＋〈去填課前問卷〉，側欄徽章是
+   「待填」——而問卷頁上明明印著「中間可以休息，填到哪裡會自動記住」，
+   草稿裡也確實連 page 一起存著。形狀照 aalDraftProgress。 */
+function surveyDraftProgress(sid, phase){
+  const d = surveyDraftLoad(sid, phase);
+  if (!d || !d.resp) return null;
+  const keys = surveyKeys(phase, conditionOfStudent(sid));
+  const n = keys.filter(function(k){ return d.resp[k] != null; }).length;
+  if (!n) return null;
+  return {n:n, total:keys.length, page:d.page || 1};
+}
 /* 丟掉某位學生在某一份作業上的作答草稿。
    「再走一次」與施測前清場都要用它——只清 state 而不清草稿的話，
    下一次進作答頁 aalInit 會把舊的 idx 與答案原封不動還原回來。 */
@@ -10964,7 +11089,14 @@ function viewSurvey(phase, page){
        只是不再有寫回去的路徑。） */
   if (done){
     const keys = surveyKeys(phase, cond);
-    const filled = keys.filter(function(k){ return done.resp[k] != null; }).length;
+    /* 先過反向映射再數。keys 是表單鍵（mc_x_0..2、sys_x_0..2），而 done.resp
+       是 surveyRespToStored 落地的儲存鍵（mc_tutor／sys_easy…），那支函式
+       還會把表單鍵 delete 掉——兩套鍵不相交，所以最後 6 題（對照組 3 題）
+       永遠算不到：全部填完的孩子回頭點側欄，卡片告訴他「41 題有作答」。
+       同一支檔案下面的註解逐字警告過這個「41 / 47」的形狀，
+       修的是 SURVEY 初始化那一行，這一行沒跟上。 */
+    const shown = surveyRespToForm(done.resp, phase);
+    const filled = keys.filter(function(k){ return shown[k] != null; }).length;
     return sectionHead(phase === 'pre' ? '課前問卷' : '課後問卷',
         me.name + '　·　' + (classOfStudent(me.id) || {}).name,
         '<a class="btn" href="#/student">← 回我的作業</a>') +
@@ -11035,7 +11167,14 @@ function viewSurvey(phase, page){
               ' data-k="' + key + '" data-v="' + val + '"' + (on ? ' checked' : '') + '>' +
               '<span class="lk-n" aria-hidden="true">' + val + '</span>' +
               '<span class="lk-t">' + esc(s.scale.labels[v]) + '</span></label>';
-          }).join('') + '</div></div>';
+          }).join('') + '</div>' +
+          /* 兩端錨點。整份問卷原本只有格子裡的 .lk-t 一處印出方向，
+             而 .scale-lab 這條 CSS 規則從來沒有使用點——看起來像已經處理過。
+             aria-hidden：語意由每一格 radio 自己的可及名稱承擔，
+             報讀器不需要在每一題後面再聽一次同樣的兩個詞。 */
+          '<div class="scale-lab" aria-hidden="true"><span>1＝' + esc(s.scale.labels[0]) + '</span>' +
+          '<span>' + s.scale.n + '＝' + esc(s.scale.labels[s.scale.n - 1]) + '</span></div>' +
+          '</div>';
       }).join('') + '</div></div>';
   }
 
@@ -11075,7 +11214,7 @@ function viewSurvey(phase, page){
         /* 量尺與作答頁的選項是同一個 radiogroup 形狀，第一次填時
            行為完全一樣：Tab 進來會停在第一格但不勾選它。
            兩處的說明也要一致：先講點選，再講鍵盤。 */
-        '直接點你要的那一格就可以。用鍵盤的話，上下方向鍵移動、空白鍵選起來。</p></div>'
+        '直接點你要的那一格就可以。用鍵盤的話，Tab 進到這一組，上下方向鍵移到哪一格就是選哪一格；想換答案再按方向鍵移過去就好。</p></div>'
       : '') +
     (scaleChanged
       ? '<div class="card card-p" style="margin-bottom:14px;border-left:3px solid var(--accent)">' +
@@ -12199,6 +12338,7 @@ function render(){
         '<p style="max-width:60ch">你的作業、討論與學習軌跡都在導覽選單裡。</p>' +
         '<a class="btn" href="#/student">回我的作業</a></div>';
     renderRail();
+    if (typeof syncPageTitle === "function") syncPageTitle();
     return;
   }
   if (TEACHER_ONLY[ROUTE.name] && !isTeacher()){
@@ -12207,6 +12347,7 @@ function render(){
       '<p style="max-width:60ch">你的作業、討論與學習軌跡都在導覽選單裡。</p>' +
       '<a class="btn" href="#/student">回我的作業</a></div>';
     renderRail();
+    if (typeof syncPageTitle === "function") syncPageTitle();
     return;
   }
   switch (ROUTE.name){
@@ -12331,6 +12472,12 @@ function render(){
     try { window.scrollTo(0, prevY); } catch (e) {}
   }
   LAST_ROUTE_KEY = key;
+  /* 標題與 #stage 的可及名稱。放在這裡讀的是最終的 ROUTE——
+     rerouteInRender 的轉向（交卷後轉成績頁、entryGate 與 surveyGate 的
+     擋板）在上面已經改寫過它，所以標題永遠等於畫面上真正那一頁。
+     全站原本 18 條路由共用「KAIROS」一個標題，換頁的唯一訊號是把焦點送到
+     一個沒有可及名稱的 <main>——報讀器只會播報「主要地標」（2.4.2 A 級）。 */
+  if (typeof syncPageTitle === 'function') syncPageTitle();
   /* 施測期間擱下的跨分頁更新，在這裡補套用。放在 render() 最後是因為
      它是「離開作答／問卷／前測」的共同出口——AAL 就在上面幾行被釋放的。
      PENDING_FOREIGN 為空、或還在施測中時，這一行什麼都不做。 */
@@ -13477,8 +13624,10 @@ function bindEvents(){
        #12161c（對 --card #1a1f26 約 1.1:1，等於隱形墨水）。 */
     if (act === 'pad-color'){
       if (PADS[t.dataset.id]){
-        const v = String(t.value || '').toLowerCase();
-        PADS[t.dataset.id].color = (v === String(padInk()).toLowerCase()) ? 'ink' : t.value;
+        /* 比對前兩邊都過 normHex：主題的 --ink 可能是三位色碼（高對比是
+           #000），而色票的值一律是 7 字元 #rrggbb，字串相等會恆為 false。 */
+        PADS[t.dataset.id].color =
+          (normHex(t.value) === normHex(padInk())) ? 'ink' : normHex(t.value) || t.value;
       }
       return; }
     if (act === 'pad-width'){ if (PADS[t.dataset.id]) PADS[t.dataset.id].width = +t.value; return; }

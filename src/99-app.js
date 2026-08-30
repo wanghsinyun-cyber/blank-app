@@ -47,6 +47,7 @@ function render(){
         '<p style="max-width:60ch">你的作業、討論與學習軌跡都在導覽選單裡。</p>' +
         '<a class="btn" href="#/student">回我的作業</a></div>';
     renderRail();
+    if (typeof syncPageTitle === "function") syncPageTitle();
     return;
   }
   if (TEACHER_ONLY[ROUTE.name] && !isTeacher()){
@@ -55,6 +56,7 @@ function render(){
       '<p style="max-width:60ch">你的作業、討論與學習軌跡都在導覽選單裡。</p>' +
       '<a class="btn" href="#/student">回我的作業</a></div>';
     renderRail();
+    if (typeof syncPageTitle === "function") syncPageTitle();
     return;
   }
   switch (ROUTE.name){
@@ -179,6 +181,12 @@ function render(){
     try { window.scrollTo(0, prevY); } catch (e) {}
   }
   LAST_ROUTE_KEY = key;
+  /* 標題與 #stage 的可及名稱。放在這裡讀的是最終的 ROUTE——
+     rerouteInRender 的轉向（交卷後轉成績頁、entryGate 與 surveyGate 的
+     擋板）在上面已經改寫過它，所以標題永遠等於畫面上真正那一頁。
+     全站原本 18 條路由共用「KAIROS」一個標題，換頁的唯一訊號是把焦點送到
+     一個沒有可及名稱的 <main>——報讀器只會播報「主要地標」（2.4.2 A 級）。 */
+  if (typeof syncPageTitle === 'function') syncPageTitle();
   /* 施測期間擱下的跨分頁更新，在這裡補套用。放在 render() 最後是因為
      它是「離開作答／問卷／前測」的共同出口——AAL 就在上面幾行被釋放的。
      PENDING_FOREIGN 為空、或還在施測中時，這一行什麼都不做。 */
@@ -1325,8 +1333,10 @@ function bindEvents(){
        #12161c（對 --card #1a1f26 約 1.1:1，等於隱形墨水）。 */
     if (act === 'pad-color'){
       if (PADS[t.dataset.id]){
-        const v = String(t.value || '').toLowerCase();
-        PADS[t.dataset.id].color = (v === String(padInk()).toLowerCase()) ? 'ink' : t.value;
+        /* 比對前兩邊都過 normHex：主題的 --ink 可能是三位色碼（高對比是
+           #000），而色票的值一律是 7 字元 #rrggbb，字串相等會恆為 false。 */
+        PADS[t.dataset.id].color =
+          (normHex(t.value) === normHex(padInk())) ? 'ink' : normHex(t.value) || t.value;
       }
       return; }
     if (act === 'pad-width'){ if (PADS[t.dataset.id]) PADS[t.dataset.id].width = +t.value; return; }
