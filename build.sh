@@ -41,3 +41,17 @@ dbg=dist/debug.html
   echo '</html>'
 } > "$dbg"
 echo "built $dbg ($(wc -c < "$dbg") bytes)"
+
+# dist/artifact.html＝給 claude.ai Artifact 的同一份頁面。
+# Artifact 檢視器會自己包一層 <!doctype html><head>…</head><body>，
+# 我們的 doctype 與根元素會落在 body 裡；根元素被吞掉的話 lang 也跟著消失，
+# 報讀器又會用英語唸中文題幹（就是 00-head.html 那段註解在講的事）。
+# 所以這裡把 doctype 與 </html> 拿掉，並改用一行指令碼補回 lang，
+# 讓 Pages 與 Artifact 兩個上線版本從同一份 src 產出、內容逐字相同。
+art=dist/artifact.html
+perl -0777 -pe '
+  s/\A<!doctype html>\n//;
+  s|^<html lang="zh-Hant">$|<script>document.documentElement.lang="zh-Hant";</script>|m;
+  s|</html>\n\z||;
+' "$out" > "$art"
+echo "built $art ($(wc -c < "$art") bytes)"

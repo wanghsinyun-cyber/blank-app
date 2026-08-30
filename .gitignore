@@ -1,5 +1,10 @@
-# 建置的除錯版本（由 README 的手動指令串接產生，build.sh 不會產生它，不需版控）
+# 建置的除錯版本（build.sh 會一起產生；只在本機開，不需版控）
 dist/debug.html
+
+# 給 claude.ai Artifact 的版本：由 build.sh 從 dist/index.html 逐字轉出
+# （只拿掉 doctype 與 </html>，改用一行指令碼補回 lang），
+# 內容與 index.html 完全相同，不重複佔版控空間。要發布時先跑 build.sh。
+dist/artifact.html
 
 # 注意：dist/index.html 要進版控——它是可直接下載使用的單檔成品，
 # GitHub Pages 也由 build.sh 重新產生後部署。不要把 dist/ 整個忽略。
