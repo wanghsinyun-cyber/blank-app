@@ -243,6 +243,12 @@ button.pill{font:inherit; font-size:0.8rem; cursor:pointer; border-color:var(--r
    就會看到「已標記 0 句」，取消最後一個標記後它也不會消失，
    報讀器還會多唸一段沒有意義的「已標記 0 句」。 */
 .pill[hidden]{ display:none }
+/* 標記數要占固定寬度。它是就地更新的（不重繪整頁），而每標一句就 +1；
+   從 9 變 10 時 pill 會變寬、把 .card-h 推得跳一下，而那正是孩子連續
+   點句子的時候。tabular-nums 讓每個數字等寬，min-width 讓 1 位數也
+   先佔好 2 位數的位置。 */
+#markCountN{ display:inline-block; min-width:1.2em; text-align:right;
+  font-variant-numeric:tabular-nums }
 /* 會變的數字用等寬數字並固定寬度，位數變化不會推動卡片頭的排版。
    #turnLeft（三個 AI 組）與 #noteCount（對照組）兩邊一致。 */
 #turnLeft, #noteCount{ font-variant-numeric:tabular-nums; display:inline-block;
@@ -300,9 +306,19 @@ td.n,th.n{text-align:right; font-family:var(--f-mono); font-variant-numeric:tabu
 
 .toast{
   position:fixed; left:50%; bottom:26px; transform:translateX(-50%); z-index:200;
-  background:var(--ink); color:var(--card); padding:9px 16px; border-radius:100px;
+  background:var(--ink); color:var(--card); padding:9px 9px 9px 16px; border-radius:100px;
   font-size:0.85rem; box-shadow:var(--shadow); max-width:88vw;
+  display:flex; align-items:center; gap:10px;
 }
+/* 關閉鈕（2.2.1 可關閉）。在深色的提示條上，邊界與焦點框都要用它自己的
+   前景色，不能沿用全站的 --focus——那是給淺色底用的。 */
+.toast-x{
+  flex:0 0 auto; width:1.6rem; height:1.6rem; border-radius:50%;
+  border:1px solid currentColor; background:transparent; color:inherit;
+  font:inherit; line-height:1; cursor:pointer; display:grid; place-items:center;
+}
+.toast-x:hover{ background:rgba(255,255,255,.16) }
+.toast-x:focus-visible{ outline:3px solid currentColor; outline-offset:2px }
 .modal-back{position:fixed; inset:0; background:rgba(10,14,20,.45); z-index:100; display:grid; place-items:center; padding:18px}
 .modal{background:var(--card); border:1px solid var(--rule); border-radius:var(--r-l); box-shadow:var(--shadow); width:min(760px,100%); max-height:88dvh; overflow:auto}
 .modal.wide{width:min(1060px,100%)}
@@ -313,7 +329,12 @@ td.n,th.n{text-align:right; font-family:var(--f-mono); font-variant-numeric:tabu
 
 /* ---------- 試題 ---------- */
 .item{border:1px solid var(--rule); border-radius:var(--r-m); background:var(--card); padding:13px 15px}
-.item .stem{margin:6px 0 9px; line-height:1.85}
+/* 題幹的行高綁在 .item 底下，但題幹不只出現在 .item 裡：作答頁（.aal）
+   與前測（.card）的題幹都是裸的 .stem，於是全站閱讀密度最高、孩子要
+   逐字讀懂的那一段，反而拿的是預設 1.55 行高，而旁邊的說明文字是 1.85。
+   四年級讀者的斷行追視在窄行高下明顯變差，而作答頁與前測正是量分數的地方。
+   規則改成掛在 .stem 本身，.item 內外一致。 */
+.stem{margin:6px 0 9px; line-height:1.85}
 /* 作答頁的選項容器是全站唯一的 <fieldset>（其餘都是 div），而整份 CSS
    沒有任何 fieldset 規則——UA 預設的 border、margin、padding 全部留著，
    於是選項的左緣與題幹對不齊，只有這一頁如此。
@@ -326,6 +347,11 @@ td.n,th.n{text-align:right; font-family:var(--f-mono); font-variant-numeric:tabu
 .opt:hover{background:var(--shade)}
 .opt input{margin-top:4px; accent-color:var(--accent)}
 .opt b{font-family:var(--f-mono); color:var(--ink-3)}
+/* 勾勾要一直佔著位子。原本是選中才把「✓」接到字母後面，於是選項一被選
+   就變寬，整行選項文字往右跳一格；連續比較四個選項時每點一次跳一次。
+   visibility 保留佔位（display:none 不會），空間在四個狀態下完全相同。 */
+.opt b .tick{ visibility:hidden; margin-left:1px }
+.opt b .tick.on{ visibility:visible; color:var(--accent) }
 .opt.right{border-color:var(--q1-line); background:var(--q1-bg)}
 .opt.wrong{border-color:var(--q2-line); background:var(--q2-bg)}
 /* 「我選了哪」與「我停在哪」要用不同的視覺語彙：
@@ -440,7 +466,11 @@ canvas.pad{border:1px solid var(--rule); border-radius:var(--r-m); background:va
 /* 字級調整：--fs 由使用者控制（100% / 125% / 150% / 175%）。
    基準字級放在 :root 上、元件一律用 rem，所以標題、按鈕、表格、pill 都會
    等比放大；用 rem 而不是 em，是為了避免巢狀時層層相乘。 */
-:root{ --fs:1; font-size:calc(20px * var(--fs)) }
+/* 基準寫成 rem 而不是 px：:root 上的 1rem 指的是瀏覽器／作業系統的
+   預設字級，所以把系統字級調大的人（多數是本來就看不清楚的人）
+   會照他自己的設定放大，而不是被這一行釘死在 20px。
+   預設 16px 時 1.25rem 仍等於 20px，版面完全不變。 */
+:root{ --fs:1; font-size:calc(1.25rem * var(--fs)) }
 /* 頂列實際高度。頂列是 min-height + flex-wrap，視窗變窄或字級放大時會換行變高；
    syncTopbarHeight()（99-app.js）會把量到的高度寫進這個變數，
    sticky 的側欄與文本欄才不會被壓在頂列底下（2.4.11 焦點不被遮蔽）。 */
@@ -508,7 +538,13 @@ input[type=checkbox],input[type=radio]{ width:1.15em; height:1.15em; accent-colo
   --sc-1:#0b3f7a; --sc-2:#6b4400; --sc-3:#125c3c;
   --sc-4:#8f1d10; --sc-5:#4a2d80; --sc-6:#005c63;
   --good:#125c3c; --warn:#6b4400; --crit:#8f1d10;
-  --shadow:none;
+  /* 不能寫 none。--shadow 有四處是被合成進複合陰影用的
+     （.note.sel 的選取條、.note.unread 的未讀條、.note.rise 的躍升環、
+     以及它們的組合），而 `box-shadow: none, inset 4px 0 0 …` 是無效語法，
+     整條宣告會被整個丟掉——也就是說，高對比模式下「哪幾則被我選起來了」
+     完全消失，而躍升要先選五、六則貼文。高對比正是低視力孩子在用的模式。
+     用一個透明的零尺寸陰影，語法有效、視覺上等同沒有陰影。 */
+  --shadow:0 0 0 0 transparent;
 }
 :root[data-contrast="high"] .card,
 :root[data-contrast="high"] .stat{ border-width:2px }

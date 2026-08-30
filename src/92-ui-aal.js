@@ -307,7 +307,8 @@ function viewAaL(aid){
             return '<label class="opt' + (on ? ' chosen' : '') + '">' +
               '<input type="radio" name="aal-' + it.id + '" data-act="aal-pick" data-k="' + k + '"' +
               (on ? ' checked' : '') + '>' +
-              '<b aria-hidden="true">' + String.fromCharCode(65 + k) + (on ? '✓' : '') +
+              '<b aria-hidden="true">' + String.fromCharCode(65 + k) +
+              '<span class="tick' + (on ? ' on' : '') + '">✓</span>' +
               '</b><span>' + esc(o) + '</span></label>';
           }).join('') + '</fieldset>' +
           /* 原本這句是 sr-only，而且說「停在你要的答案上就算選好」——
@@ -363,7 +364,10 @@ function viewAaL(aid){
            中途逐顆停在句子鈕上——順手按 Enter 就寫一筆 MARK 事件，
            汙染閱讀歷程資料。 */
         '<button class="skip quiet" data-act="back-to-passage" type="button">↑ 回到文章</button>' +
-        '<button class="skip" data-act="back-to-nav" type="button">回到題目導覽</button>' +
+        /* .quiet 漏掉了：這一顆會拿到 .skip 的實心 accent 底色 + 600 字重，
+           於是整頁最重的控制項是「離開這一題」，而且就貼在同樣功能、
+           卻是安靜樣式的〈↑ 回到文章〉旁邊，兩顆看起來像不同層級的東西。 */
+        '<button class="skip quiet" data-act="back-to-nav" type="button">回到題目導覽</button>' +
       '</div></div>' +
     '</div></div>';
 }
@@ -502,8 +506,10 @@ function aalPick(k){
   const fs = document.querySelector('.aal-side fieldset.opts');
   if (fs) Array.prototype.forEach.call(fs.querySelectorAll('label.opt'), function(lb, idx){
     lb.classList.toggle('chosen', idx === k);
-    const mark = lb.querySelector('b');
-    if (mark) mark.textContent = String.fromCharCode(65 + idx) + (idx === k ? '✓' : '');
+    /* 只切換 .on，不重寫 textContent：勾勾一直在 DOM 裡佔著位子，
+       選與不選的框寬才會一樣。*/
+    const tick = lb.querySelector('b .tick');
+    if (tick) tick.classList.toggle('on', idx === k);
   });
   /* 交卷被退回來時，這張卡片會標紅並在標題後面加「還沒寫完」。
      aal-pick 刻意不走 render（高頻互動不重繪整頁），所以要自己解除——
@@ -955,8 +961,12 @@ function aalSubmitCommit(){
     AAL._saveOff = true;
     const warn = document.getElementById('aalSaveWarn');
     if (warn) warn.hidden = false;
-    alert('這一份沒能存起來（裝置的儲存空間可能滿了）。\n\n' +
-          '**先不要關掉這個分頁**，你寫的東西還在畫面上。請舉手告訴老師。');
+    /* 原本是原生 alert：不吃 175% 字級與高對比，而這一則要傳達的正是
+       「先不要關掉分頁」；那兩顆星號也會原樣印在畫面上。 */
+    alertModal({title:'這一份沒能存起來',
+      body:'裝置的儲存空間可能滿了。',
+      strong:'先不要關掉這個分頁——你寫的東西還在畫面上。',
+      note:'請舉手告訴老師。'});
     return;
   }
   aalDropDraft();          // 交出去了，草稿不用留

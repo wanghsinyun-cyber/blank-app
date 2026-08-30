@@ -51,11 +51,34 @@ function parseRoute(){
   return {name: name, args: parts.slice(1)};
 }
 
+/* 提示條。原本一律 2600ms 之後自己消失，沒有任何辦法留住它：
+   · 2.6 秒是給「已存檔」那種三個字的訊息定的，但最長的一則有二十幾個字
+     （「這一題的對話次數用完了，可以按下一題。」），四年級讀者讀不完；
+   · 而 toast 是好幾條路徑唯一的回饋——〈帶你回到第 3 題〉、〈額度用完〉、
+     〈沒能存起來〉都只在這裡出現一次，錯過就沒有第二次；
+   · WCAG 2.2.1（時間可調整）要求會自動消失的訊息可暫停或可關閉。
+   改成：停留時間隨字數走、滑過或用鍵盤停在上面就暫停、並且給一顆關閉鈕。
+   #toastRoot 本身是 role="status" aria-live="polite"，報讀不受影響。 */
 function toast(msg){
   const r = $('#toastRoot');
-  r.innerHTML = '<div class="toast">' + esc(msg) + '</div>';
+  const ms = Math.min(9000, 2600 + String(msg == null ? '' : msg).length * 90);
+  r.innerHTML = '<div class="toast">' +
+    '<span>' + esc(msg) + '</span>' +
+    '<button class="toast-x" type="button" data-act="toast-close" aria-label="關閉這則訊息">×</button>' +
+    '</div>';
+  const box = r.firstChild;
   clearTimeout(toast._t);
-  toast._t = setTimeout(function(){ r.innerHTML = ''; }, 2600);
+  function arm(){
+    clearTimeout(toast._t);
+    /* 只收自己那一則：暫停期間若有新的 toast 進來，舊的計時器不該把它清掉。 */
+    toast._t = setTimeout(function(){ if (r.firstChild === box) r.innerHTML = ''; }, ms);
+  }
+  function hold(){ clearTimeout(toast._t); }
+  box.addEventListener('pointerenter', hold);
+  box.addEventListener('pointerleave', arm);
+  box.addEventListener('focusin', hold);
+  box.addEventListener('focusout', arm);
+  arm();
 }
 
 const FOCUSABLE = 'a[href],button:not([disabled]),input:not([disabled]),' +
@@ -68,6 +91,9 @@ function modal(html, opts){
      已經被移除、activeElement 已經是 body，_returnTo 就永遠是 body——
      而編輯器每按一次「＋ 再加一個支架段落」都會重繪這個彈窗。 */
   const prev = document.activeElement;
+  /* 每開一個新彈窗就把上一個的「被取消」回呼清掉。忘了清的話，
+     alertModal（沒有取消語意）被 Esc 關掉時會跑到上一個確認框的救援流程。 */
+  modal._onDismiss = null;
   const reopening = !!r.firstChild;
   const keepTop = reopening ? (r.querySelector('.modal') || {}).scrollTop : 0;
 
@@ -138,6 +164,7 @@ function confirmModal(opts, onYes){
     : '';
   confirmModal._onNo = null;
   confirmModal._yes = function(){
+    modal._onDismiss = null;      // 走的是「確定」，不要再觸發取消流程
     closeModal();
     confirmModal._onNo = null;
     try { onYes(); } catch (e) {
@@ -153,9 +180,42 @@ function confirmModal(opts, onYes){
     '<button class="btn" data-act="confirm-no">' + esc(o.no || '取消') + '</button>' +
     '<button class="btn primary" data-act="confirm-yes">' + esc(o.yes || '確定') + '</button>' +
     '</div>', {focus:'[data-act="confirm-no"]'});
+  /* Esc 與點背景關掉彈窗，語意上就是按了〈取消〉，所以要走同一條路。
+     原本只有〈取消〉那顆鈕會呼叫 _onNo，於是用 Esc 關掉缺答提醒的孩子
+     不會被帶回沒寫的那一題、也不會看到標紅——而那正是這個彈窗存在的理由；
+     鍵盤使用者按 Esc 是最自然的取消動作，等於這道救援只對用滑鼠的人生效。
+     必須在 modal() 之後設定：modal() 開頭會把它清成 null。 */
+  modal._onDismiss = function(){
+    const no = confirmModal._onNo;
+    confirmModal._onNo = null; confirmModal._yes = null;
+    if (no) try { no(); } catch (e) {
+      if (typeof console !== 'undefined' && console.error) console.error(e);
+    }
+  };
+}
+
+/* 站內的告知框。理由與 confirmModal 完全相同，只是沒有「取消」這個選項。
+   會走到它的兩個地方都是存檔失敗——原生 alert() 在那一刻特別糟：
+   它不吃 --fs 與高對比，而它要傳達的正是「先不要關掉這個分頁」；
+   而且原生對話框會把整個 JS 執行緒凍住，畫面上的內容連捲都捲不動。
+   訊息裡不要留 Markdown 的星號：原生 alert 只會把 ** 原樣印出來，
+   孩子看到的是一行帶星號的怪句子。要強調就用 strong。 */
+function alertModal(opts){
+  const o = opts || {};
+  modal('<div class="modal-h"><h3>' + esc(o.title || '請看一下') + '</h3></div>' +
+    '<div class="modal-b"><p style="margin:0;max-width:60ch">' + esc(o.body || '') + '</p>' +
+    (o.strong ? '<p style="margin:10px 0 0;max-width:60ch"><strong>' + esc(o.strong) + '</strong></p>' : '') +
+    (o.note ? '<p class="muted small" style="margin-top:10px;max-width:60ch">' + esc(o.note) + '</p>' : '') +
+    '</div>' +
+    '<div class="modal-f">' +
+    '<button class="btn primary" data-act="confirm-no">' + esc(o.ok || '我知道了') + '</button>' +
+    '</div>', {focus:'[data-act="confirm-no"]'});
 }
 
 function closeModal(){
+  /* 先取走再清空：_onDismiss 裡多半會重繪，重繪之後 modal._onDismiss
+     這個欄位還在，沒先取走會有再跑一次的風險。 */
+  const dismissed = modal._onDismiss; modal._onDismiss = null;
   $('#modalRoot').innerHTML = '';
   if (modal._trap){ document.removeEventListener('keydown', modal._trap, true); modal._trap = null; }
   /* 焦點還給打開它的那顆按鈕。那顆按鈕已經不在文件裡（重繪換掉了）時，
@@ -167,6 +227,11 @@ function closeModal(){
     if (stage) try { stage.focus({preventScroll:true}); } catch (e) {}
   }
   modal._returnTo = null;
+  /* 放在最後：救援流程多半要自己搶焦點（帶回沒寫完的那一題），
+     不能被上面的「焦點還給打開它的那顆按鈕」蓋掉。 */
+  if (dismissed) try { dismissed(); } catch (e) {
+    if (typeof console !== 'undefined' && console.error) console.error(e);
+  }
 }
 
 /* --- 外殼 --- */

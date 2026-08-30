@@ -421,15 +421,18 @@ function bindEvents(){
     if (!t) return;
     const act = t.dataset.act, id = t.dataset.id;
 
-    if (act === 'modal-back' && e.target === t){ closeModal(); EDIT = null; return; }
+    if (act === 'modal-back' && e.target === t){
+      closeModal();
+      /* closeModal 的取消回呼可能又叫回一個彈窗（刪貼文確認按〈不刪〉會
+         回到編輯器）。那時候不能把 EDIT 清掉，否則畫面上的編輯器沒有資料，
+         而孩子看到的是自己還沒存的那一段文字。 */
+      if (!$('#modalRoot').firstChild) EDIT = null;
+      return; }
     if (act === 'close-modal'){ closeModal(); EDIT = null; return; }
     /* 站內確認框。取消就只是關掉；確定交給 confirmModal 存下來的回呼。 */
-    if (act === 'confirm-no'){
-      closeModal();
-      confirmModal._yes = null;
-      const no = confirmModal._onNo; confirmModal._onNo = null;
-      if (no) no();
-      return; }
+    /* 〈取消〉與 Esc／點背景現在走同一條路：closeModal() 會呼叫
+       modal._onDismiss，由它把 _onNo 取走並執行。這裡不要再自己跑一次。 */
+    if (act === 'confirm-no'){ closeModal(); return; }
     if (act === 'confirm-yes'){
       const fn = confirmModal._yes; confirmModal._yes = null;
       if (fn) fn(); else closeModal();
@@ -516,9 +519,23 @@ function bindEvents(){
     if (act === 'seg-del'){ collectEditor(); const di = +t.dataset.i; EDIT.segs.splice(di, 1);
       renderEditor({focus:'[data-act="seg-text"][data-i="' + Math.max(0, di - 1) + '"]'}); return; }
     if (act === 'save-note'){ saveEditor(); return; }
-    if (act === 'del-note'){ if (confirm('刪除這則貼文？延伸它的貼文會失去連結，這個動作無法復原。')){
-      if (!deleteNote(id)){ toast('代為檢視時不能替學生刪貼文。'); return; }
-      closeModal(); EDIT = null; replaceHash('#/kb'); toast('已刪除。'); } return; }
+    /* 刪貼文是孩子在知識建構空間裡唯一不可逆的動作，原本走原生 confirm——
+       不吃 --fs 與高對比，理由見 confirmModal 上方。
+       這一顆是從編輯彈窗裡按的，而 modal() 會換掉 #modalRoot 的內容：
+       按〈不刪〉之後要把編輯器叫回來，否則連同還沒存的修改一起消失，
+       孩子只是想確認一下就丟了整段文字。 */
+    if (act === 'del-note'){
+      confirmModal({
+        title: '要刪掉這則貼文嗎？',
+        body: '刪掉之後不能復原。',
+        note: '延伸這則想法的貼文會失去連結。',
+        yes: '刪掉', no: '不刪'
+      }, function(){
+        if (!deleteNote(id)){ toast('代為檢視時不能替學生刪貼文。'); return; }
+        EDIT = null; replaceHash('#/kb'); toast('已刪除。');
+      });
+      confirmModal._onNo = function(){ if (EDIT) renderEditor(); };
+      return; }
     if (act === 'add-ann'){ const ta = $('#annText');
       /* 空白時原本什麼都不做——沒有訊息、焦點也不回到輸入框，
          使用者只會覺得按鈕壞了。 */
@@ -554,14 +571,23 @@ function bindEvents(){
     /* 研究控制台 */
     if (act === 'rtab'){ RTAB = id; render(); return; }
     if (act === 'reassign'){
-      if (confirm('重新分派會改變每個班級的條件，示範日誌與示範問卷也會依新條件重算。確定嗎？')){
+      confirmModal({
+        title: '要重新分派條件嗎？',
+        body: '每個班級被分到的條件會改變。',
+        note: '示範日誌與示範問卷也會依新條件重算。',
+        yes: '重新分派', no: '取消'
+      }, function(){
         doReassign(); state.surveys = buildDemoSurveys(); save(); render();
-      }
+      });
       return; }
 
     /* 評量即學習事件 */
     if (act === 'aal-mark'){ aalMark(+t.dataset.i); return; }
     if (act === 'aal-pick'){ aalPick(+t.dataset.k); return; }
+    if (act === 'toast-close'){
+      clearTimeout(toast._t);
+      const tr = $('#toastRoot'); if (tr) tr.innerHTML = '';
+      return; }
     if (act === 'aal-say'){ aalSay(); return; }
     /* 等 AI 回覆時的〈不等了〉。只是中止那一次 fetch——後續還原（拿掉
        「正在想…」、把輸入框交還、寫入語料）一律由 aalSay 自己走完，
@@ -640,9 +666,20 @@ function bindEvents(){
     if (act === 'aal-submit'){ aalSubmit(); return; }
     if (act === 'aal-note-clear'){
       const it = aalItem();
-      if ((AAL.notes[it.id] || '') && !confirm('清空這一題的筆記？')) return;
-      AAL.notes[it.id] = '';
-      aalSave(); render();
+      /* 對照組整節課唯一的產出就是這份筆記，而這顆鈕就在筆記框旁邊。
+         原生 confirm 在施測當下特別糟：不吃 175% 字級與高對比，
+         還會把整個執行緒凍住。清空之後也沒有復原路徑，所以確認框要留。 */
+      if (!(AAL.notes[it.id] || '')){ AAL.notes[it.id] = ''; aalSave(); render(); return; }
+      confirmModal({
+        title: '要清空這一題的筆記嗎？',
+        body: '清空之後不能復原。',
+        note: '只會清掉這一題的，其他題的筆記不受影響。',
+        yes: '清空', no: '先不要'
+      }, function(){
+        if (!AAL) return;
+        AAL.notes[aalItem().id] = '';
+        aalSave(); render();
+      });
       return; }
     if (act === 'aal-check'){
       const it = aalItem();
@@ -679,8 +716,16 @@ function bindEvents(){
     if (act === 'export-json'){ saveFile('kairos-research-data.json',
       JSON.stringify(researchBundle(), null, 2), 'application/json'); return; }
     if (act === 'export-csv'){ saveFile('kairos-responses.csv', responseCSV(), 'text/csv'); return; }
-    if (act === 'reset'){ if (confirm('重設會清除你在這台瀏覽器上新增的所有貼文與作答，回到出廠的模擬班級。確定嗎？')){
-      resetState(); renderShell(); render(); toast('已重設為示範資料。'); } return; }
+    if (act === 'reset'){
+      confirmModal({
+        title: '要重設回示範資料嗎？',
+        body: '你在這台瀏覽器上新增的所有貼文與作答都會被清除，回到出廠的模擬班級。',
+        note: '這一步不可復原。',
+        yes: '重設', no: '取消'
+      }, function(){
+        resetState(); renderShell(); render(); toast('已重設為示範資料。');
+      });
+      return; }
 
     /* 示範模式下讓自己重走一次這節課。只清掉「我自己」這一份後測作答，
        全班的前測、Rasch 校準與其他人的資料都不動。 */
@@ -689,7 +734,17 @@ function bindEvents(){
          而那是依變項本身。措辭與 aalSubmit 的守門對齊。 */
       if (isImpersonating()){ toast('代為檢視時不能替學生重做這節課。'); return; }
       const aid = t.dataset.id, me = currentUser();
-      if (!confirm('這會清掉你自己在這份評量上的作答，重新走一次流程。班上其他人的資料不受影響。確定嗎？')) return;
+      confirmModal({
+        title: '要重新走一次嗎？',
+        body: '這會清掉你自己在這份評量上的作答，從頭再來一次。',
+        note: '班上其他人的資料不受影響。清掉之後不能復原。',
+        yes: '重新走一次', no: '先不要'
+      }, function(){ redoDemoCommit(aid, me); });
+      return;
+    }
+
+    /* 確認之後真正執行的那一段（切法與 aalSubmitCommit 相同）。 */
+    function redoDemoCommit(aid, me){
       state.submissions = state.submissions.filter(function(s){ return !(s.aid === aid && s.sid === me.id); });
       state.responses   = state.responses.filter(function(r){ return !(r.aid === aid && r.sid === me.id); });
       state.dialog      = (state.dialog || []).filter(function(d){ return !(d.aid === aid && d.sid === me.id); });
@@ -709,7 +764,7 @@ function bindEvents(){
         DEMO_LOGS = DEMO_LOGS.filter(function(e){ return !(e.aid === aid && e.sid === me.id); });
       aalDraftDrop(aid, me.id);
       AAL = null;
-      save(); go('#/aal/' + aid); return;
+      save(); go('#/aal/' + aid);
     }
 
     /* 施測前的清場。
@@ -723,8 +778,29 @@ function bindEvents(){
        本來就不該有校準。寧可空著，也不要讓孩子看到別人的成績掛在自己名下。 */
     if (act === 'go-live'){
       if (!isResearcher()) return;
-      if (!confirm('這會清空**前測與後測**的示範作答、示範問卷、歷程事件、作答草稿，以及知識建構空間裡所有示範的視圖與貼文，讓學生端回到「尚未作答」。\n\n教師端的 KIDMAP 與 Rasch 校準會一併變成空狀態，直到真正的前測跑完為止。\n\n這一步不可復原（要回到示範資料需按「重設」）。確定嗎？')) return;
-      if (!confirm('再確認一次：清空之後，這台瀏覽器上的平台就是準備施測的狀態。')) return;
+      /* 原本是兩段原生 confirm，而且第一段把 Markdown 的星號原樣印出來
+         （「清空**前測與後測**的示範作答」）。改成站內兩段確認，
+         第一段列清單、第二段只做最後一問。 */
+      confirmModal({
+        title: '要清空示範資料、準備施測嗎？',
+        body: '這會把學生端回復到「尚未作答」。要清掉的是：',
+        list: ['前測與後測的示範作答', '示範問卷', '歷程事件與作答草稿',
+               '知識建構空間裡所有示範的視圖與貼文'],
+        note: '教師端的 KIDMAP 與 Rasch 校準會一併變成空狀態，直到真正的前測跑完為止。' +
+              '這一步不可復原（要回到示範資料需按〈重設〉）。',
+        yes: '繼續', no: '取消'
+      }, function(){
+        confirmModal({
+          title: '再確認一次',
+          body: '清空之後，這台瀏覽器上的平台就是準備施測的狀態。',
+          yes: '清空，開始施測', no: '取消'
+        }, goLiveCommit);
+      });
+      return;
+    }
+
+    /* 確認之後真正執行的那一段（切法與 aalSubmitCommit 相同）。 */
+    function goLiveCommit(){
       state.demoSeed  = false;
       state.surveys   = (state.surveys || []).filter(function(s){ return !s.demo; });
       state.submissions = [];
@@ -1009,13 +1085,18 @@ function applyA11y(){
 /* 有效寬度 = 視窗寬 ÷ 字級倍率。媒體查詢看不到 :root 的 font-size，
    所以平台自己提供的 175% 字級一開，右欄會被壓到十個中文字寬卻不觸發斷點。
    這個屬性讓 CSS 的 :root[data-narrow] 區塊接手。 */
+/* 走雙欄所需的最小視窗寬（單位是「100% 字級下的 px」，所以下面除以字級倍率）。 */
+const NARROW_MIN_PX = 1160;
 function syncNarrow(){
   const fs = ((state && state.settings && state.settings.a11y) || {}).fontScale || 1;
-  /* 門檻由 900 提到 1100。作答頁的兩欄現在各有下限（文章 24rem、對話 16.5rem，
-     相加 40.5rem＝810px，再加側欄、內距與間隔）——1024px 的平板橫放
-     若還走雙欄，兩個下限相加會超過可用寬度而讓 grid 溢出。
-     教室用的正是 1024px 橫放，所以它必須落在單欄側。 */
-  document.documentElement.toggleAttribute('data-narrow', (window.innerWidth / fs) < 1100);
+  /* 1100 是估的，而且估少了。實測（assertNarrowThreshold）雙欄要 1144px 的
+     容器才不溢出：文章 24rem + 對話 16.5rem = 810，欄間距 16，側欄 13.6rem
+     = 272，.wrap 左右內距 44 —— 合計 1142，再加捲軸 15 ≈ 1159 的視窗。
+     於是 1100–1159 這一段仍走雙欄卻裝不下：grid 橫向溢出，孩子要左右捲
+     才看得到對話欄或選項。取 1160，並在 zz-debug 裡重新量一次，
+     日後若改動兩欄的下限會直接被驗出來。
+     教室用的 1024px 平板橫放仍然落在單欄側。 */
+  document.documentElement.toggleAttribute('data-narrow', (window.innerWidth / fs) < NARROW_MIN_PX);
 }
 
 /* 兩個變數，不能共用一個：
@@ -1223,8 +1304,10 @@ function submitQuizCommit(aid){
      前測連草稿都沒有（QUIZ 只在記憶體裡），所以更不能把它清掉。 */
   if (!save()){
     state.submissions = state.submissions.filter(function(s){ return !(s.aid === aid && s.sid === me.id); });
-    alert('這一份沒能存起來（裝置的儲存空間可能滿了）。\n\n' +
-          '先不要關掉這個分頁，你寫的東西還在畫面上。請舉手告訴老師。');
+    alertModal({title:'這一份沒能存起來',
+      body:'裝置的儲存空間可能滿了。',
+      strong:'先不要關掉這個分頁——你寫的東西還在畫面上。',
+      note:'請舉手告訴老師。'});
     return;
   }
   QUIZ = null;

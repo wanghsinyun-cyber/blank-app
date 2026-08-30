@@ -467,3 +467,54 @@ window.assertSeedCanary = function(){
                 eta: typeof a.eta === 'number' ? +a.eta.toFixed(3) : null,
                 p: typeof a.p === 'number' ? +a.p.toFixed(4) : null, order: got}};
 };
+
+/* ==========================================================================
+   窄版門檻的實測
+   syncNarrow 的門檻原本是估的（1100），實測雙欄要 1144px 的容器才不溢出，
+   於是 1100–1159 這一段仍走雙欄卻裝不下，孩子要左右捲才看得到對話欄。
+   這一支把 .aal 放進雙欄、逐格縮小容器量出真正的下限，再與 NARROW_MIN_PX
+   對照：日後改動兩欄的 minmax 下限、側欄寬或 .wrap 內距都會被驗出來。
+   console 一行：assertNarrowThreshold()
+   ========================================================================== */
+window.assertNarrowThreshold = function(){
+  const realRole = state.ui.role, realImp = state.ui.impersonate, realHash = location.hash;
+  const me = state.classes[0].studentIds[0];
+  const keep = state.submissions.slice();
+  state.submissions = state.submissions.filter(function(s){ return !(s.aid === 'a-post' && s.sid === me); });
+  AAL = null; state.ui.role = me; state.ui.impersonate = null; renderShell();
+  location.hash = '#/aal/a-post'; render();
+
+  const root = document.documentElement;
+  const wasNarrow = root.hasAttribute('data-narrow');
+  root.removeAttribute('data-narrow');
+  const app  = document.querySelector('.app') || document.querySelector('.main').parentElement;
+  const main = document.querySelector('.main');
+  const aal  = document.querySelector('.aal');
+  let need = null;
+  if (aal){
+    const prev = app.style.width;
+    for (let w = 1400; w >= 900; w -= 2){
+      app.style.width = w + 'px';
+      void aal.offsetWidth;
+      const over = aal.scrollWidth > aal.clientWidth + 1 || main.scrollWidth > main.clientWidth + 1;
+      if (over) break;
+      need = w;
+    }
+    app.style.width = prev;
+  }
+  if (wasNarrow) root.setAttribute('data-narrow', '');
+
+  state.submissions = keep;
+  state.ui.role = realRole; state.ui.impersonate = realImp; renderShell();
+  location.hash = realHash || '#/teacher'; render();
+
+  const sb = window.innerWidth - document.documentElement.clientWidth;
+  const wantWindow = need === null ? null : need + sb;
+  const pass = need !== null && NARROW_MIN_PX >= wantWindow;
+  const r = {pass:pass, 容器下限:need, 加捲軸後的視窗下限:wantWindow,
+             捲軸:sb, NARROW_MIN_PX:NARROW_MIN_PX,
+             說明: pass ? '門檻夠寬'
+                        : '門檻比實測需求小 ' + (wantWindow - NARROW_MIN_PX) + 'px，這一段會橫向溢出'};
+  console.log('[assertNarrowThreshold]', r);
+  return r;
+};
