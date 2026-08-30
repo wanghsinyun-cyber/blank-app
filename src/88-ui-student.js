@@ -277,7 +277,7 @@ function viewQuiz(aid){
           '<div class="row" style="justify-content:space-between;margin-bottom:6px">' +
           '<b>第 ' + (idx + 1) + ' 題　非選題</b>' +
           '<span class="row">' + itemPillsStudent(it) + '</span></div>' +
-          '<div class="stem">' + esc(it.stem) + '</div>' +
+          '<div class="stem" id="qStem-' + esc(it.id) + '">' + esc(it.stem) + '</div>' +
           /* label 要有 for、控制項要有 id。原本七個 label 全是裸的：
              報讀器唸到輸入框只說「編輯，空白」，唸到色票只說「色彩選擇器」，
              孩子不知道那一格要放什麼。前測是 ANCOVA 的共變數，這裡量到的
@@ -285,8 +285,9 @@ function viewQuiz(aid){
              同一頁有兩題非選，id 一律綴上題號，否則兩題的 label 會同時
              指向第一題的控制項——點第二題的「筆寬」會跳到第一題去。
              後測（92-ui-aal.js 的 cr 分支）已經是這個形狀，這裡補齊。 */
-          '<div class="field"><label for="qText-' + esc(it.id) + '">請寫出你的解題過程與說明</label>' +
-          '<textarea id="qText-' + esc(it.id) + '" rows="6" style="min-height:9rem" data-act="quiz-text" data-id="' + it.id + '">' + esc(QUIZ.texts[it.id] || '') + '</textarea></div>' +
+          /* 題幹要接進可及名稱，理由同後測的 cr 分支。 */
+          '<div class="field"><label id="qLbl-' + esc(it.id) + '" for="qText-' + esc(it.id) + '">請寫出你的解題過程與說明</label>' +
+          '<textarea id="qText-' + esc(it.id) + '" aria-labelledby="qStem-' + esc(it.id) + ' qLbl-' + esc(it.id) + '" rows="6" style="min-height:9rem" data-act="quiz-text" data-id="' + it.id + '">' + esc(QUIZ.texts[it.id] || '') + '</textarea></div>' +
           '<div class="field" style="margin-top:10px">' +
           '<label for="qPad-' + esc(it.id) + '">也可以直接手寫（老師評閱時看得到）</label>' +
           '<canvas class="pad" id="qPad-' + esc(it.id) + '" data-pad="' + it.id + '" height="240"></canvas>' +

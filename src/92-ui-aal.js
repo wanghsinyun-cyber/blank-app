@@ -343,7 +343,7 @@ function viewAaL(aid){
          受試者看到基準等於拿到解題策略提示。 */
       '<div class="card" id="aalAnswer" tabindex="-1"><div class="card-h"><h3>第 ' + (AAL.idx + 1) + ' 題</h3></div>' +
       '<div class="card-p">' +
-      '<div class="stem">' + esc(it.stem) + '</div>' +
+      '<div class="stem" id="aalStem">' + esc(it.stem) + '</div>' +
       (it.type === 'mc'
         ? '<fieldset class="opts"><legend class="sr-only">' + esc(it.stem) + '</legend>' + it.options.map(function(o, k){
             const on = AAL.answers[it.id] === k;
@@ -377,8 +377,14 @@ function viewAaL(aid){
            作答通道卻不同：平板上四年級的注音輸入遠慢於手寫，偏好手寫的孩子
            後測會寫得比前測短甚至留白，CR 的 Δ 量到的是輸入方式改變。
            而「偏好手寫」與打字能力相關，不是隨機誤差。 */
-        : '<div class="field"><label for="crText">寫出你的答案，並說明你的理由</label>' +
-          '<textarea id="crText" data-act="aal-text" rows="7" style="min-height:11rem" ' +
+        /* 題幹要接進可及名稱。選擇題兩支都已經把題幹綁進群組（fieldset 的
+           sr-only legend／role=radiogroup 的 aria-labelledby），非選題這一支沒跟上：
+           textarea 的可及名稱只有「寫出你的答案」，題幹在它外面。
+           用報讀器作答的孩子要先把題幹背下來再切到焦點模式打字－－
+           這是作答負荷，不是閱讀理解負荷，而 CR 是論述層次評定的來源，
+           前後測同兩題做 Δ 比較，每次各吃一次這個負荷。 */
+        : '<div class="field"><label id="crLbl" for="crText">寫出你的答案，並說明你的理由</label>' +
+          '<textarea id="crText" aria-labelledby="aalStem crLbl" data-act="aal-text" rows="7" style="min-height:11rem" ' +
           'placeholder="先寫你的看法，再寫你是從文章哪一段看出來的">' +
           esc(AAL.texts[it.id] || '') + '</textarea></div>' +
           '<div class="field" style="margin-top:10px">' +
@@ -435,11 +441,18 @@ function aalDialogPane(it, cond, turns, used, maxT){
     '<div class="chat" id="aalChat" role="log" aria-live="polite" aria-relevant="additions"' +
     ' aria-label="我和夥伴的對話" tabindex="0">' +
       '<div class="msg agent"><b>' + esc(cond.name) + '</b>' + esc(cond.frame) + '</div>' +
+      /* 每一則都要有說話者文字。原本只有 agent 帶 <b>老師小葵</b>，
+         學生自己的訊息與系統訊息完全靠「氣泡靠左靠右」與顏色區分。
+         #aalChat 是 role="log"，報讀器逐則唇出來時這兩類完全同形－－
+         額度用完時那句「這一題的對話次數用完了」聽起來像是他自己講的，
+         而那是輸入框忽然不能打字的唯一解釋。用 sr-only：報讀器聽得到，
+         版面完全不變（四條件的幾何對等不受影響）。WCAG 1.3.3 / 1.4.1。 */
       turns.map(function(t){
         return '<div class="msg ' + (t.speaker === 'student' ? 'me' : 'agent') + '">' +
-          (t.speaker === 'agent' ? '<b>' + esc(cond.name) + '</b>' : '') + esc(t.text) + '</div>';
+          (t.speaker === 'agent' ? '<b>' + esc(cond.name) + '</b>'
+                                 : '<b class="sr-only">我說的</b>') + esc(t.text) + '</div>';
       }).join('') +
-      (left <= 0 ? '<div class="msg sys">這一題的對話次數用完了。換下一題會重新計算。</div>' : '') +
+      (left <= 0 ? '<div class="msg sys"><b class="sr-only">系統訊息</b>這一題的對話次數用完了。換下一題會重新計算。</div>' : '') +
     '</div>' +
     /* 代為檢視時輸入框也要鎖上。只在送出時擋的話，老師會打完一整段才被拒絕。 */
     '<label class="sr-only" for="aalSay">對夥伴說一句話</label>' +
@@ -717,7 +730,8 @@ async function aalSay(){
      #aalChat 是 role="log" aria-live="polite"，新訊息會自動被報讀器唸出來。 */
   const chat = document.getElementById('aalChat');
   const sendBtn = document.querySelector('[data-act="aal-say"]');
-  if (chat) chat.insertAdjacentHTML('beforeend', '<div class="msg me">' + esc(text) + '</div>');
+  if (chat) chat.insertAdjacentHTML('beforeend',
+    '<div class="msg me"><b class="sr-only">我說的</b>' + esc(text) + '</div>');
   box.value = '';
   /* 送出去了就不再是草稿。少了這一行，重繪會把已經說過的那句話再填回
      輸入框，孩子很自然會再按一次送出——同一句話扣掉兩次額度。 */
@@ -769,8 +783,18 @@ async function aalSay(){
         reply = {text:g.text, qfn:qfnNow,
                  sub:null, engine:'llm', blocked:g.blocked, hits:g.hits};
       } catch (err) {
+        /* 退回內建規則引擎。fallback 原本只賦值、沒有任何讀取端，於是
+           「因為網路慢而由規則引擎頂上的那一輪」在匯出資料裡與「整場研究
+           刻意跑內建引擎」一模一樣。而退回率不是隨機的：離 AP 遠的位置、
+           下午的節次、四個班不同時段都會讓它系統性偏移，實施忠實度
+           （真正由 LLM 產生的回合比例）與洩答攔截率（builtin 路徑的 blocked
+           恆為 false）都會被算錯，錯的方向與條件／班級共變。
+           更尖銳的是：真正的 LLM 回合 sub 恆為 null，退回的回合卻帶著
+           agentTurn 給的真實子歷程 id——在 llm 引擎下跑的研究，子歷程分佈
+           實際上由「哪幾輪逾時了」決定，也就是由網路延遲決定。
+           所以 logEvent 與 state.dialog 兩邊都要記下 engineWanted 與 fallback。 */
         reply = agentTurn(ctx.cond, it, used);
-        reply.fallback = err.message;
+        reply.fallback = String((err && err.message) || err);
       }
     } else {
       reply = agentTurn(ctx.cond, it, used);
@@ -798,11 +822,16 @@ async function aalSay(){
       logEvent({t:eaT, rel:eaT - ctx.t0, sid:ctx.me, cid:ctx.cid, cond:ctx.cond, lang:'zh',
         aid:ctx.aid, iid:ctx.it.id, proc:ctx.it.process || 'FR', type:'AI', code:'A',
         text:reply.text, qfn:reply.qfn, sub:reply.sub, turn:ctx.turn,
-        engine:reply.engine, blocked: !!reply.blocked});
+        engine:reply.engine, blocked: !!reply.blocked,
+        /* 設定的引擎與這一輪實際跑的引擎不一定相同，事後要分得出來。 */
+        engineWanted: useLlm ? 'llm' : 'builtin',
+        fallback: reply.fallback || null});
     }
     state.dialog.push({t:eaT, sid:ctx.me, cond:ctx.cond, aid:ctx.aid, iid:ctx.it.id,
       proc:ctx.it.process, turn:ctx.turn, speaker:'agent', text:reply.text,
-      qfn:reply.qfn, sub:reply.sub, ucode:reply.process || ctx.it.process, sent:0});
+      qfn:reply.qfn, sub:reply.sub, ucode:reply.process || ctx.it.process, sent:0,
+      engine:reply.engine, engineWanted: useLlm ? 'llm' : 'builtin',
+      fallback: reply.fallback || null});
     save();
     if (AAL) aalSave();   // AAL 可能在等待期間被釋放
   } catch (err) {
@@ -840,8 +869,18 @@ async function aalSay(){
      一個與條件共變的資料汙染。
      同一支函式第 540 行早就有這道 activeElement 守門，只是沒有套到這裡。
      preventScroll 一併補上，理由與下面那一支相同。 */
-  const focusIsOurs = !document.activeElement ||
-    document.activeElement === document.body ||
+  /* 「activeElement 是 body」不等於「焦點在我們手上」。NVDA／JAWS 的
+     瀏覽模式下 DOM 焦點正常就停在 body——孩子用上下鍵在文章那 30–40 顆
+     句子鈕之間閱讀時，activeElement 一直是 body。原本把 body 也算成
+     「可以收回」，於是這道守門對報讀器使用者恆為真，照樣把焦點搶進
+     #aalSay：NVDA 會從瀏覽模式切成焦點模式，他在文章裡讀到哪裡整個消失，
+     接著打的字落進對話框，Enter 一按就送出——扣掉一次額度、以
+     「【學生剛剛說】」進入提示詞、被編碼成 RQ4 語料，而且從他自己的答案裡
+     消失。對照組沒有非同步等待，所以這是只發生在三個 AI 條件、
+     且只打在視障孩子身上的干擾與資料汙染。
+     送出前那一段已經先把 sendBtn 上的焦點移到 box 再 disabled，
+     所以這裡不需要再為「按鈕被停用導致焦點掉到 body」留後路。 */
+  const focusIsOurs =
     document.activeElement === box ||
     document.activeElement === sendBtn;
   if (left > 0){
@@ -855,7 +894,7 @@ async function aalSay(){
        孩子只看到輸入框忽然變灰，解釋原因的那句話在他看不到的地方。 */
     if (chat){
       chat.insertAdjacentHTML('beforeend',
-        '<div class="msg sys" id="turnsDone" tabindex="-1">這一題的對話次數用完了。換下一題會重新計算。</div>');
+        '<div class="msg sys" id="turnsDone" tabindex="-1"><b class="sr-only">系統訊息</b>這一題的對話次數用完了。換下一題會重新計算。</div>');
       chat.scrollTop = chat.scrollHeight;
     }
     const done = document.getElementById('turnsDone');

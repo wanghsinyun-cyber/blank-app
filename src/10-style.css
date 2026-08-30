@@ -578,8 +578,19 @@ input[type=checkbox],input[type=radio]{ width:1.15em; height:1.15em; accent-colo
 .passage .sent.on{
   background:var(--q4-bg); border-bottom:3px solid var(--q4); color:var(--ink);
 }
-.passage .sent::after{ content:"▍"; color:transparent; font-weight:700 }
+/* 佔位記號用「空白的替代文字」語法。CSS 生成內容會進入可及名稱計算，
+   而 color:transparent 不會把它移出無障礙樹——一篇文章 30–40 句，
+   每一句的可及名稱後面都會多掛一個 U+258D 方塊字元，點字顯示器逐句多一格
+   亂碼，逐字檢視也會唸到它。這是閱讀理解測驗的刺激材料，雜訊直接落在
+   被測量的東西上；而標記狀態早就由 aria-pressed 正確傳達，這個記號對報讀器
+   的資訊量是零。content 的 " / \"\"" 是替代文字，讓它只留視覺佔位。 */
+.passage .sent::after{ content:"▍" / ""; color:transparent; font-weight:700 }
 .passage .sent.on::after{ color:var(--q4) }
+/* 舊瀏覽器不認識替代文字語法時，上面那條會整條失效、佔位寬度消失，
+   標記時整段會重新斷行。用 @supports 補一條沒有替代文字的版本當退路。 */
+@supports not (content: "x" / "") {
+  .passage .sent::after{ content:"▍"; color:transparent; font-weight:700 }
+}
 
 /* ---------- 評量即學習事件 ----------
    四條件共用同一份版面幾何：對照組只是把對話卡換成同尺寸的筆記卡，
