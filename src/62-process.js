@@ -17,8 +17,9 @@ function lsa(opts){
 
   // 依「同一位學生、同一題」切段，段與段之間不計轉移
   const seqs = {};
-  allLogs().forEach(function(e){
-    if (!e.code) return;
+  /* 共用取樣：只留真正的行為碼並排掉「取消」。原本只檢查 e.code 有沒有值，
+     於是取消標記／取消檢核與 RESUME 都被當成一次完整動作進入轉移矩陣。 */
+  behaviorSeq(allLogs()).forEach(function(e){
     if (opts.cond && e.cond !== opts.cond) return;
     const k = e.sid + '|' + e.iid;
     (seqs[k] = seqs[k] || []).push(e);

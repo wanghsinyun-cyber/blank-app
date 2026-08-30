@@ -743,6 +743,9 @@ function buildSeedState(){
          原本只硬編碼在函式裡、預設物件沒有這個鍵，也沒有任何 UI 寫得到它——
          正式施測時研究者連調高門檻都做不到。 */
       keyUnlockRatio: 0.5,
+      /* 教師按下的答案卡釋出開關（每份派題一個鍵）。
+         一人一台平板時，這是唯一真的會成立的釋出路徑。 */
+      keyReleased: {},
       a11y: {fontScale: 1, highContrast: false}
     },
     aiCache: {},

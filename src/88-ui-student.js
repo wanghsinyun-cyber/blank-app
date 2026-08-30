@@ -16,7 +16,12 @@ function viewStudent(){
   const unread = notesForViewer().filter(isUnread).length;
 
   const cond = condition(k.condition);
-  const needPre = !surveyOf(me.id, 'pre');
+  /* 課上完之後就不要再邀請他去補填課前問卷（見 surveyGate 的說明）——
+     那是 ANCOVA 的共變數基線，事後補填量到的是處遇後的狀態。
+     卡片仍然出現（老師需要知道誰漏填了），但改成中性敘述、不再是可點的主要動作。 */
+  const preMissing = !surveyOf(me.id, 'pre');
+  const preTooLate = preMissing && submitted('a-post', me.id);
+  const needPre = preMissing;
   return sectionHead('我的作業', me.name + '　·　' + k.name) +
     (cond.id !== 'control'
       ? '<div class="card card-p" style="margin-bottom:16px;border-left:3px solid var(--' +
@@ -39,8 +44,11 @@ function viewStudent(){
         '<p class="muted small cond-card-foot">你寫的字老師之後看得到，不會拿來打分數。' +
         '一題一頁，換題會換新的。</p></div>') +
     (needPre ? '<div class="card card-p" style="margin-bottom:16px;border-left:3px solid var(--warn)">' +
-      '<div class="row" style="justify-content:space-between"><span class="small">還沒填課前問卷。</span>' +
-      '<a class="btn sm primary" href="#/survey/pre">去填課前問卷</a></div></div>' : '') +
+      '<div class="row" style="justify-content:space-between"><span class="small">' +
+      (preTooLate ? '課前問卷沒有填到。這一份要在上課前填，現在先不用填，跟老師說一聲就好。'
+                  : '還沒填課前問卷。') + '</span>' +
+      (preTooLate ? '' : '<a class="btn sm primary" href="#/survey/pre">去填課前問卷</a>') +
+      '</div></div>' : '') +
     /* 側欄徽章在窄版看不見，這裡補一張結構相同的提醒卡。四條件都會出現。 */
     (submitted('a-post', me.id) && !surveyOf(me.id, 'post')
       ? '<div class="card card-p" style="margin-bottom:16px;border-left:3px solid var(--warn)">' +
@@ -53,7 +61,9 @@ function viewStudent(){
       statCard('已完成', asgs.filter(function(a){ return submitted(a.id, me.id); }).length, '') +
       (kbLocked(me)
         ? statCard('我貼的想法', myNotes, '交完卷就可以繼續') +
-          statCard('知識建構空間', '測驗後開放', '交完卷就會打開')
+          statCard('知識建構空間',
+            kbLockReason(me) === 'survey' ? '問卷後開放' : '測驗後開放',
+            kbLockReason(me) === 'survey' ? '問卷填完就會打開' : '交完卷就會打開')
         : statCard('我貼的想法', myNotes, '在知識建構空間') +
           statCard('未讀貼文', unread, '同學的新想法', unread ? 'warn' : '')) +
     '</div>' +
@@ -61,8 +71,16 @@ function viewStudent(){
       const done = submitted(a.id, me.id);
       const n = a.itemIds.length;
       const draftN = (!done && a.aal) ? aalDraftProgress(a.id, me.id) : 0;
-      /* 這節課交了、但課後問卷還沒送出：先不給任何成績訊號 */
-      const surveyPending = submitted('a-post', me.id) && !surveyOf(me.id, 'post');
+      /* 兩個不同的條件，不能共用一個旗標：
+         postPending — 後測還沒交。此時前測那張卡若印「已完成 · 選擇題答對 12」
+           並掛著〈看我這次讀得怎麼樣〉，等於在後測途中把同一份題本的
+           逐題對錯遞給他（見 viewResult 的第三道門）。
+         surveyPending — 後測交了但課後問卷還沒送出（績效回饋先於自陳依變項）。
+         兩者都要藏分數，但「該按什麼」不一樣：前者要他先去把這節課做完，
+         後者才是去填問卷。 */
+      const postPending = !submitted('a-post', me.id);
+      const surveyPending = !postPending && !surveyOf(me.id, 'post');
+      const hideScore = postPending || surveyPending;
       const right = state.responses.filter(function(r){
         return r.aid === a.id && r.sid === me.id && r.correct === true; }).length;
       return '<div class="card"><div class="card-p"><div class="row" style="justify-content:space-between">' +
@@ -78,7 +96,7 @@ function viewStudent(){
           /* 課後問卷還沒送出時，這張卡片本身就不能印分數——
              「已完成 · 選擇題答對 12」是一次績效回饋，而它就擺在
              「去填課後問卷」的旁邊（見 viewResult 的門檻說明）。 */
-          (done ? (surveyPending
+          (done ? (hideScore
                     ? '<span class="pill q1"><span class="dot"></span>已完成</span>'
                     : '<span class="pill q1"><span class="dot"></span>已完成 · 選擇題答對 ' + right + '</span>')
                 : draftN ? '<span class="pill q4"><span class="dot"></span>寫到一半 · 已寫 ' + draftN + ' / ' + n + ' 題</span>'
@@ -88,9 +106,11 @@ function viewStudent(){
            示範模式下補一顆「再走一次」，讓人看得到這套流程長什麼樣子；
            正式施測時 demoSeed 為 false，這顆鈕不會出現。 */
         '<div class="row">' + (done
-          ? (surveyPending
-              ? '<a class="btn primary" href="#/survey/post">去填課後問卷 →</a>'
-              : '<a class="btn" href="#/result/' + a.id + '">看我這次讀得怎麼樣</a>') +
+          ? (postPending
+              ? ''   /* 後測還沒交：這張卡不提供任何通往結果的入口 */
+              : surveyPending
+                ? '<a class="btn primary" href="#/survey/post">去填課後問卷 →</a>'
+                : '<a class="btn" href="#/result/' + a.id + '">看我這次讀得怎麼樣</a>') +
             (state.demoSeed !== false && a.aal && !isImpersonating()
               ? ' <button class="btn sm" data-act="redo-demo" data-id="' + a.id +
                 '">再走一次（示範）</button>' : '')
@@ -148,9 +168,26 @@ function keyUnlocked(aid, sid){
 function classKeyReleased(aid, sid){
   const a = getAssignment(aid);
   if (!a) return false;
-  if (a.due && Date.now() > a.due) return true;
+  /* 教師明確按下的釋出開關。這是**在分開的裝置上唯一真的會成立**的那條路——
+     見下面 every() 的說明。 */
+  const rel = (state.settings && state.settings.keyReleased) || {};
+  if (rel[aid] === true) return true;
+  /* 截止時間只有在教師真的設定過時才算數。
+     原本寫成 `a.due && Date.now() > a.due`，而示範資料的 due 是
+     buildSeedState 在「這台裝置第一次載入那天」＋3 天算出來、之後凍在
+     localStorage，go-live 也沒有重設它——裝機或彩排若在後測日的三天前，
+     這個條件恆為真：第一個交卷的孩子一進逐題檢視就拿到全部 14 題的正解。
+     實際唯一生效的那條路是示範資料的副產品，不是任何人設定過的施測時程。
+     a-pre 的 due 更是恆為過去（now − 9 天）。 */
+  if (a.dueSet && a.due && Date.now() > a.due) return true;
   const k = classOfStudent(sid);
   if (!k || !k.studentIds || !k.studentIds.length) return true;
+  /* 「同班都交完才開」是使用者選定的自動釋出規則，在單機／共用狀態下成立
+     （示範資料、以及所有人用同一個瀏覽器的情境）。
+     但正式施測是每個孩子一台平板、而這個平台沒有伺服器——
+     每台裝置的 state.submissions 只有自己那一筆，這個條件永遠不會成立。
+     所以它保留為自動路徑，真正在教室裡生效的是上面那顆教師開關；
+     等待文案也必須講得出這件事，不能承諾一個架構上不可能達成的條件。 */
   return k.studentIds.every(function(x){ return submitted(aid, x); });
 }
 /* 還沒開的話，是差在誰身上——文案要講得出真正的條件 */
@@ -184,12 +221,21 @@ function viewQuiz(aid){
   if (!QUIZ || QUIZ.aid !== aid) QUIZ = {aid:aid, answers:{}, texts:{}, strokes:{}};
 
   const items = a.itemIds.map(getItem).filter(Boolean);
-  const answered = Object.keys(QUIZ.answers).length;
-  const mcCount = items.filter(function(i){ return i.type === 'mc'; }).length;
+  /* 進度要涵蓋兩種題型。原本分子只數選擇題、分母也只數選擇題，
+     於是兩題非選全空時畫面寫「已作答 14 / 14」、進度條 100%——
+     孩子被告知做完了，交出去的卻是兩題空白的建構反應題，
+     而前測沒有任何補交路徑。 */
+  const answered = items.filter(function(i){
+    return i.type === 'cr'
+      ? !!String(QUIZ.texts[i.id] || '').trim()
+      : QUIZ.answers[i.id] !== undefined;
+  }).length;
+  const total = items.length;
 
   return sectionHead(a.title, a.desc || '', '<a class="btn" href="#/student">← 回作業列表</a>') +
-    '<div class="kb-toolbar"><span class="muted small">已作答 ' + answered + ' / ' + mcCount + ' 題</span>' +
-    '<div class="bar" style="flex:1;max-width:280px"><i style="width:' + (100 * answered / Math.max(1, mcCount)) + '%"></i></div>' +
+    '<div class="kb-toolbar"><span class="muted small" role="status" aria-live="polite">已作答 ' +
+    answered + ' / ' + total + ' 題</span>' +
+    '<div class="bar" style="flex:1;max-width:280px"><i style="width:' + (100 * answered / Math.max(1, total)) + '%"></i></div>' +
     '<div class="spacer"></div><button class="btn primary sm" data-act="quiz-submit" data-id="' + aid + '">交卷</button></div>' +
     /* 前測（以及任何非 AAL 的派題）走這一支，而這一支從來沒有渲染文章。
        16 題全部是文本依賴題——「小昀第一次發現柚子樹位置不對，是在什麼時候？」
@@ -289,6 +335,26 @@ function viewResult(aid){
       (a.aal ? '回去把這節課做完 →' : '回去作答 →') + '</a>' +
       '<a class="btn" href="#/student">回我的作業</a></div></div>';
   }
+  /* 後測還沒交之前，前測的診斷頁一律不開。
+     原本只有兩道門（沒交卷、以及「已交 a-post 但課後問卷未送出」），
+     而後測作答中 submitted('a-post') 為 false，兩道門都不成立。
+     keyLocked 確實藏住了選項與正解，但逐題卡片仍印出題號、題幹與狀態
+     （答對／答錯／「你穩穩答對」／「可惜，你其實讀得懂」），
+     上面還列著「有 N 題很可惜：第 8 題…回去把題目再讀一次」。
+     前後測是同一份題本、displayNo 同源——「第 8 題」兩邊指同一道題。
+     四選一「上次這題錯了」等於刪掉一個選項，「穩穩答對」等於照抄，
+     效果與看到正解同類；而會不會繞這一趟由孩子自選，與作答節奏、
+     投入程度、進而與條件共變，四組被污染的比例不對等。
+     crResultBlock 早就為前測作文設了這道門，選擇題那一半沒有。 */
+  if (!isTeacher() && aid === 'a-pre' && !submitted('a-post', me.id)){
+    return '<div class="empty"><h3>等這節課做完</h3>' +
+      '<p style="max-width:60ch">課前那一份的逐題結果，要等這節課也做完才會打開。' +
+      '兩次用的是同一份題目——先看前一次的對錯，這一次就不算你自己讀出來的了。</p>' +
+      '<div class="row" style="margin-top:14px">' +
+      (submitted('a-post', me.id) ? '' :
+        '<a class="btn primary" href="#/aal/a-post">回去把這節課做完 →</a>') +
+      '<a class="btn" href="#/student">回我的作業</a></div></div>';
+  }
   /* 課後問卷還沒送出之前，這一頁不能開。
      surveyGate() 只擋了一個方向（沒交卷不能填問卷），反方向完全沒有門檻：
      孩子從問卷任何一段按側欄回「我的作業」，同一畫面上「去填課後問卷」旁邊
@@ -382,8 +448,8 @@ function viewResult(aid){
           return '這一次作答的題目不到一半，所以逐題的答案沒有打開。' +
             '想看的話，跟老師說一聲。' + tail;
         const pend = classKeyPending(aid, me.id);
-        if (pend > 0) return '班上還有 ' + pend + ' 位同學在寫。等大家都交完，' +
-          '這裡就會打開，讓你看到每一題的四個選項、正確答案和你當時選的。' + tail;
+        if (pend > 0) return '等大家都交完、老師打開之後，' +
+          '這裡就會讓你看到每一題的四個選項、正確答案和你當時選的。' + tail;
         return '等課後那一份也做完，這裡就會打開，' +
           '讓你看到每一題的四個選項、正確答案和你當時選的。' + tail;
       })() + '</p></div>' : '') +

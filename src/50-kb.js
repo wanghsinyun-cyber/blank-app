@@ -246,7 +246,27 @@ function pendingAssignments(sid){
 function kbLocked(u){
   const me = u || currentUser();
   if (me.role !== 'student') return false;
-  return pendingAssignments(me.id).length > 0;
+  if (pendingAssignments(me.id).length > 0) return true;
+  /* 課後問卷也是一道門。原本只看有沒有未交作業，於是孩子按下交卷那一瞬間
+     pendingAssignments 歸零、這裡立刻為 false：側欄徽章從「測驗後開放」
+     翻成未讀則數，首頁第四張統計卡變成橘色的「未讀貼文 N · 同學的新想法」，
+     就擺在「去填課後問卷」那張卡旁邊。
+     而這裡放的是 kbGate 自己說的「從大家的作答整理出來的全班共同問題」——
+     也就是這節課哪幾題大家答錯了，一次針對本份測驗的績效回饋，
+     加上同學的想法。孩子逛完 21 則貼文再回頭填 cl_ge、eng_b/e/c、SUS
+     與操弄檢核，量到的是共構活動的效果而不是他被分派到的條件；
+     而誰走這一趟由完課速度決定，暴露率與條件系統性共變。
+     成績頁與學習軌跡早就補了這道門（第 5 輪 val5），知識建構空間沒有。 */
+  if (submitted('a-post', me.id) && !surveyOf(me.id, 'post')) return true;
+  return false;
+}
+/* 鎖住的原因。文案與出口要跟著原因走，不能一律說「先把作業交出來」。 */
+function kbLockReason(u){
+  const me = u || currentUser();
+  if (me.role !== 'student') return null;
+  if (pendingAssignments(me.id).length > 0) return 'pending';
+  if (submitted('a-post', me.id) && !surveyOf(me.id, 'post')) return 'survey';
+  return null;
 }
 function scaffold(id){ return SCAFFOLDS.find(function(s){ return s.id === id; }); }
 function scaffoldLabel(id){ const s = scaffold(id); return s ? s.label : ''; }

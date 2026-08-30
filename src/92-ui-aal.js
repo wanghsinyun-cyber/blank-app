@@ -314,10 +314,30 @@ function viewAaL(aid){
              點選寫在前面（那是多數孩子的路徑），鍵盤寫在後面。 */
           '<p class="muted small" style="margin-top:6px">直接點你要的答案就可以。' +
           '用鍵盤的話，上下方向鍵移動、空白鍵選起來。</p>'
+        /* 非選題的作答通道，前後測必須一致。
+           前測（走 viewQuiz）的兩題非選有 textarea ＋ 手寫板＋筆色／筆寬／
+           復原／清空，後測這一支卻只有 textarea——而 aalSubmit 第 879 行
+           一直在讀 PADS['aal-' + it.id]，render() 對 aal 路由也照樣呼叫
+           initPads()：程式三處都假設它存在，只是從來沒有被畫出來。
+           同一份題本、同兩題、同一套評分規準與同一位評閱者，兩次測量的
+           作答通道卻不同：平板上四年級的注音輸入遠慢於手寫，偏好手寫的孩子
+           後測會寫得比前測短甚至留白，CR 的 Δ 量到的是輸入方式改變。
+           而「偏好手寫」與打字能力相關，不是隨機誤差。 */
         : '<div class="field"><label for="crText">寫出你的答案，並說明你的理由</label>' +
           '<textarea id="crText" data-act="aal-text" rows="7" style="min-height:11rem" ' +
           'placeholder="先寫你的看法，再寫你是從文章哪一段看出來的">' +
-          esc(AAL.texts[it.id] || '') + '</textarea></div>') +
+          esc(AAL.texts[it.id] || '') + '</textarea></div>' +
+          '<div class="field" style="margin-top:10px">' +
+          '<label for="aalPad-' + esc(it.id) + '">也可以直接手寫（老師評閱時看得到）</label>' +
+          '<canvas class="pad" id="aalPad-' + esc(it.id) + '" data-pad="aal-' + esc(it.id) + '" height="240"></canvas>' +
+          '<div class="row" style="margin-top:6px">' +
+            '<label class="small muted" for="aalPadC-' + esc(it.id) + '">筆色</label>' +
+            '<input id="aalPadC-' + esc(it.id) + '" type="color" value="#12161c" data-act="pad-color" data-id="aal-' + esc(it.id) + '" style="width:2.2rem;padding:2px">' +
+            '<label class="small muted" for="aalPadW-' + esc(it.id) + '">筆寬</label>' +
+            '<input id="aalPadW-' + esc(it.id) + '" type="range" min="1" max="8" value="2" data-act="pad-width" data-id="aal-' + esc(it.id) + '" style="width:5rem">' +
+            '<button class="btn sm" data-act="pad-undo" data-id="aal-' + esc(it.id) + '">復原</button>' +
+            '<button class="btn sm" data-act="pad-clear" data-id="aal-' + esc(it.id) + '">清空</button>' +
+          '</div></div>') +
       '</div></div>' +
 
       (AAL.cond === 'control' ? aalNotePane(it) : aalDialogPane(it, cond, turns, used, maxT)) +
@@ -975,8 +995,24 @@ function surveyKeys(phase, cond){
    前測不設門檻（它本來就該在課前填）。 */
 function surveyGate(phase){
   const me = currentUser();
-  if (phase === 'pre') return '';
   if (me.role !== 'student') return '';
+  /* 課前問卷也要有時序門檻，而且是反方向的。原本 'pre' 一律直接放行——
+     交完後測之後 needPre 仍為真，首頁那張橘卡「還沒填課前問卷」與側欄
+     「課前問卷 · 待填」會一直邀請他點進去，而課上完之後它常常是側欄
+     唯一還亮著的待辦。
+     那一份是 ANCOVA 的共變數基線，裡面的 eff／anx／mot_in／mot_ex
+     是 phase:'both' 的前後測配對依變項：事後才被平台請回去補填的孩子，
+     回答「我相信我可以在這次閱讀測驗拿到不錯的成績」時，
+     量到的是處遇後的狀態。而誰會漏填、誰會回頭補與投入程度共變。 */
+  if (phase === 'pre'){
+    if (!submitted('a-post', me.id)) return '';
+    return '<div class="empty"><h3>這一份要在上課前填</h3>' +
+      '<p style="max-width:62ch">課前問卷問的是你「還沒上這節課之前」的想法。' +
+      '現在課已經上完了，這時候填出來的就不是那個時候的你了。' +
+      '先不要填，跟老師說一聲就好。</p>' +
+      '<div class="row" style="margin-top:14px">' +
+      '<a class="btn primary" href="#/student">回我的作業</a></div></div>';
+  }
   if (submitted('a-post', me.id)) return '';
   const a = getAssignment('a-post');
   if (!a) return '';
@@ -1150,6 +1186,13 @@ function viewSurvey(phase, page){
       '<span class="pill" role="status" aria-live="polite">已完成 <span id="svDone">' + answered +
       '</span> / 共 ' + total + ' 題</span>') +
 
+    /* 與作答頁的 #aalSaveWarn 同構的常駐警示（送出落地失敗時掀開）。 */
+    '<div class="card card-p" id="svSaveWarn" role="alert"' +
+      (SURVEY._saveOff ? '' : ' hidden') +
+      ' style="margin-bottom:12px;border-left:3px solid var(--crit)">' +
+      '<p class="small" style="margin:0"><strong>你填的答案沒能存起來。</strong>' +
+      '這台平板的儲存空間可能滿了。先不要關掉這個分頁——你選的都還在，' +
+      '請舉手告訴老師。</p></div>' +
     '<div class="card card-p" style="margin-bottom:14px">' +
       '<div class="row" style="justify-content:space-between">' +
       '<b>第 ' + SURVEY.page + ' 段，共 ' + secs.length + ' 段</b>' +
@@ -1271,7 +1314,23 @@ function surveySubmitCommit(phase){
   state.surveys = (state.surveys || []).filter(function(s){
     return !(s.sid === me.id && s.phase === phase); });
   state.surveys.push({sid:me.id, phase:phase, at:Date.now(), resp:resp});
-  save();
+  /* 落地失敗就不能刪草稿、不能說「已送出」——理由與 aalSubmitCommit 完全相同，
+     第 5 輪只補了交卷那一支，問卷這一支的 save() 回傳值還是被整個丟掉。
+     save() 在配額爆掉時回傳 false、不丟例外：紀錄只留在記憶體，
+     而唯一的備份（kairos-survey-draft）在下一行被主動刪掉。
+     回到首頁時 surveyOf() 讀記憶體為真，側欄徽章消失、問卷頁顯示
+     「這份問卷你已經送出了」、成績頁與知識建構空間也跟著解鎖——
+     孩子沒有任何理由再填一次，老師端也沒有任何訊號。
+     而後測問卷裡是操弄檢核那三題：驗證三種角色操弄是否成立的唯一工具。 */
+  if (!save()){
+    state.surveys = (state.surveys || []).filter(function(s){
+      return !(s.sid === me.id && s.phase === phase); });
+    if (SURVEY) SURVEY._saveOff = true;
+    const warn = document.getElementById('svSaveWarn');
+    if (warn) warn.hidden = false;
+    toast('沒能存起來，先不要關掉分頁，請舉手告訴老師。');
+    return;
+  }
   surveyDraftDrop(me.id, phase);
   SURVEY = null;
   toast('問卷已送出，謝謝你。');

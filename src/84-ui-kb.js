@@ -16,6 +16,16 @@ let EDIT = null;                // 編輯中的貼文草稿，closeModal() 時�
 function kbGate(){
   const me = currentUser();
   if (!kbLocked(me)) return '';
+  /* 兩種鎖定原因，兩套文案與出口。與 viewResult／viewMyGrowth 的門檻頁對齊。 */
+  if (kbLockReason(me) === 'survey'){
+    return '<div class="empty"><h3>先把這節課的問卷填完</h3>' +
+      '<p style="max-width:62ch">這裡放的是全班一起想的問題，那些問題是從大家這一次的作答整理出來的。' +
+      '先看到大家哪幾題答錯、同學怎麼想，你填問卷時的感覺就會被那些帶著走——' +
+      '所以我們把這一頁先收起來。填完就會打開。</p>' +
+      '<div class="row" style="margin-top:14px">' +
+      '<a class="btn primary" href="#/survey/post">去填課後問卷 →</a>' +
+      '<a class="btn" href="#/student">回我的作業</a></div></div>';
+  }
   const pend = pendingAssignments(me.id);
   const blocking = pend[0];
   return '<div class="empty">' +

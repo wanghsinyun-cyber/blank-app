@@ -126,9 +126,25 @@ function viewSettings(){
       '<input id="kur" type="number" min="0" max="1" step="0.05" value="' +
       (s.keyUnlockRatio != null ? s.keyUnlockRatio : 0.5) + '" data-act="set-kur">' +
       '<span class="muted small">學生至少要作答到這個比例，答案卡才可能打開（出廠預設 0.5）。' +
-      '另外還要<strong>同班每一位都交卷</strong>才會真的釋出——' +
-      '前後測共用同一份題本，先交卷的孩子把答案攤在螢幕上，' +
-      '旁邊還在寫的同學就看得到。有人缺席時，過了該份派題的截止時間也會自動開。</span></div>' +
+      '前後測共用同一份題本，先交卷的孩子把答案攤在螢幕上，旁邊還在寫的同學就看得到。</span></div>' +
+      /* 「同班都交完就自動開」在單機／共用瀏覽器成立，但正式施測是
+         一人一台平板、而這個平台沒有伺服器：每台裝置只看得到自己那一筆
+         submission，那個條件永遠不會成立。所以要有一顆教師真的按得到的開關，
+         否則畫面會一直承諾一個架構上達不到的條件。 */
+      '<div class="field"><label>答案卡釋出</label>' +
+      '<div class="col" style="gap:6px">' +
+      state.assignments.map(function(a){
+        const on = !!((s.keyReleased || {})[a.id]);
+        return '<button type="button" class="btn sm' + (on ? ' primary' : '') +
+          '" data-act="toggle-key" data-id="' + a.id + '" aria-pressed="' + on + '">' +
+          '<span aria-hidden="true">' + (on ? '☑' : '☐') + '</span>' +
+          esc(a.title) + '　' + (on ? '已開放' : '尚未開放') + '</button>';
+      }).join('') + '</div>' +
+      '<span class="muted small">按下去，這份派題的逐題答案就對已交卷的學生打開。' +
+      '不按也會自動開的情形有兩種：同班每一位都交卷（單機或共用瀏覽器時才成立），' +
+      '或是教師在派題精靈裡設過截止時間而且已經過期。' +
+      '<strong>一人一台平板時請用這顆開關</strong>——每台裝置只看得到自己那一筆交卷紀錄，' +
+      '「全班都交完」在那個情境下永遠不會成立。</span></div>' +
     '</div></div>' +
     '<div class="card"><div class="card-h"><h3>AI 引擎</h3></div><div class="card-p col">' +
       '<div class="field"><label for="eng">目前使用</label><select id="eng" data-act="set-engine">' +

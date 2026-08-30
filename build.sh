@@ -23,7 +23,7 @@ emit_body(){
 }
 
 out=dist/index.html
-{ emit_body; echo '</script>'; } > "$out"
+{ emit_body; echo '</script>'; echo '</html>'; } > "$out"
 echo "built $out ($(wc -c < "$out") bytes)"
 
 dbg=dist/debug.html
@@ -32,5 +32,6 @@ dbg=dist/debug.html
   cat src/zz-debug.js
   echo
   echo '</script>'
+  echo '</html>'
 } > "$dbg"
 echo "built $dbg ($(wc -c < "$dbg") bytes)"

@@ -80,16 +80,44 @@ function foldToggleLog(logs, code, keyField){
    （每題只有 5 個檢核項，卻可能報出 9）。
    必須先依題目分組再折疊：不同題目的 sent／idx 會互相碰撞
    （每一題都有第 0 句、第 0 個檢核項）。 */
-function foldedCount(logs, code, keyField){
-  const byItem = {};
+/* groupBy 決定「同一個切換的作用域」，一定要傳對：
+   標記的作用域是**文本**不是題目——aalMark 寫的是 AAL.marks[it.unit]，
+   句號 s.i 是整篇文本的全域序號，事件本身帶著 textId，畫面還明說
+   「換題也不會消失」（T1 有十題共用一篇）。
+   原本一律用 e.iid 分組：在第 1 題標了第 12 句、翻到第 5 題把它取消，
+   兩筆落在不同組，取消變成 no-op，淨值恆為 1——而依 textId 折疊的
+   inspectMarks 讀同一份日誌會給出另一個數字。
+   而且原本完全不分學生：tutee 班某個孩子的取消動作會扣掉 tutor 班孩子的
+   標記，四個實驗條件的行為污染同一個數字。 */
+function foldedCount(logs, code, keyField, groupBy){
+  const by = {};
   logs.forEach(function(e){
     if (e.code !== code) return;
-    const k = e.iid || '_';
-    (byItem[k] = byItem[k] || []).push(e);
+    const k = groupBy ? groupBy(e) : ((e.sid || '_') + '|' + (e.iid || '_'));
+    (by[k] = by[k] || []).push(e);
   });
-  return Object.keys(byItem).reduce(function(n, k){
-    return n + foldToggleLog(byItem[k], code, keyField).length;
+  return Object.keys(by).reduce(function(n, k){
+    return n + foldToggleLog(by[k], code, keyField).length;
   }, 0);
+}
+/* 兩種切換型事件各自的作用域。呼叫端一律用這兩支，不要自己傳 groupBy。 */
+function markScope(e){ return (e.sid || '_') + '|' + (e.textId || e.iid || '_'); }
+function checkScope(e){ return (e.sid || '_') + '|' + (e.iid || '_'); }
+function foldedMarks(logs){ return foldedCount(logs, 'M', 'sent', markScope); }
+function foldedChecks(logs){ return foldedCount(logs, 'C', 'idx', checkScope); }
+
+/* 行為序列的共用取樣：只留真正的行為碼，並把「取消」排掉。
+   62-process.js 的 enaLines 已經確立這條原則，但 lsa()、toSDIS()、
+   toENACsv() 三個入口都沒有套用——取消標記／取消檢核照樣以一次完整動作
+   進入轉移矩陣、GSEQ 序列檔與 rENA 寬表，M→M 的自轉移被「反覆切換」的孩子
+   灌爆，單一受試者就能位移整個矩陣的調整殘差。
+   RESUME 也一樣：它的 code 是 'R'，不在 BEHAVIOR_ORDER 裡，
+   而那三個入口只檢查 `e.code` 有沒有值，於是它被當成一種行為，
+   且只出現在中途離開再回來的人身上。 */
+function behaviorSeq(logs){
+  return logs.filter(function(e){
+    return BEHAVIOR_ORDER.indexOf(e.code) >= 0 && !(e.on === false || e.off === true);
+  });
 }
 
 /* --- 條件查詢 --- */
@@ -187,7 +215,11 @@ function buildDemoLogs(){
       // 逐句標記
       const nSent = splitSentences(it.stem).length;
       const nMark = 1 + Math.floor(rnd() * Math.min(3, nSent));
-      for (let i = 0; i < nMark; i++) push('MARK', 'M', {sent: Math.floor(rnd() * nSent)});
+      /* textId 一定要帶。真實的 aalMark 帶了，示範產生器沒帶——
+         而標記的折疊作用域是文本（foldedMarks 用 textId），
+         少了它示範資料會退回「依題目分組」的舊行為，
+         教師名單與唯讀重播因此給出兩個不同的數字。 */
+      for (let i = 0; i < nMark; i++) push('MARK', 'M', {sent: Math.floor(rnd() * nSent), textId: it.unit, on: true});
 
       // 對話回合（對照組改為筆記）
       const base = cond === 'tutor' ? 4.2 : cond === 'tutee' ? 3.6 : cond === 'peer' ? 3.2 : 0;
@@ -227,7 +259,7 @@ function buildDemoLogs(){
           dialog.push({t:ea.t, sid:sid, cond:cond, aid:asg.id, iid:it.id, proc:proc,
                        turn:k + 1, speaker:'agent', text:a.text, qfn:a.qfn, sub:a.sub,
                        ucode:a.process, sent:0});
-          if (rnd() < 0.35) push('MARK', 'M', {sent: Math.floor(rnd() * nSent)});
+          if (rnd() < 0.35) push('MARK', 'M', {sent: Math.floor(rnd() * nSent), textId: it.unit, on: true});
         }
       }
 
@@ -291,7 +323,8 @@ function splitSentences(text){
 
 /* GSEQ SDIS：每位學生每一題一段序列，以 / 結束 */
 function toSDIS(){
-  const L = allLogs().filter(function(e){ return e.code; });
+  /* GSEQ 序列檔同樣要走共用取樣（見 behaviorSeq） */
+  const L = behaviorSeq(allLogs());
   const bySeq = {};
   L.forEach(function(e){
     const k = e.sid + '|' + e.iid;
@@ -318,7 +351,8 @@ function toENACsv(){
   const rows = [['sid','name','class','grade','condition','lang','assignment','item','item_process',
                  'turn','speaker','rel_code','utterance',
                  'FR','SI','II','EE','BELOW','AT','ABOVE','POS','NEG','MARK','OPTION','WRITE','CHECK']];
-  const logs = allLogs().slice().sort(function(a, b){ return a.t - b.t; });
+  /* rENA 寬表同樣要走共用取樣（見 behaviorSeq） */
+  const logs = behaviorSeq(allLogs()).slice().sort(function(a, b){ return a.t - b.t; });
   const dial = allDialog();
   const dialKey = {};
   dial.forEach(function(d){ dialKey[d.sid + '|' + d.iid + '|' + d.turn + '|' + d.speaker] = d; });

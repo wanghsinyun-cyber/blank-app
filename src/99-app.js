@@ -710,6 +710,14 @@ function bindEvents(){
       state.surveys   = (state.surveys || []).filter(function(s){ return !s.demo; });
       state.submissions = [];
       state.responses   = [];
+      /* 派題時程也要清。示範資料的 due 是「這台裝置第一次載入那天」＋3 天，
+         之後凍在 localStorage——清場沒有重設它，於是答案卡的「過期就開」
+         那條出口會在施測當天恆為真（見 classKeyReleased）。
+         dueSet 為 false 表示「沒有人設定過」，那條出口就不生效。 */
+      state.assignments.forEach(function(a){
+        a.due = null; a.dueSet = false; a.createdAt = Date.now();
+      });
+      state.settings.keyReleased = {};
       /* 白板也要清。不清的話，施測當天孩子一交卷就走進 21 則示範學童的
          貼文裡——那既是別人的內容，也會直接污染知識建構參與度這個依變項。 */
       state.views = [];
@@ -810,6 +818,15 @@ function bindEvents(){
       return; }
     if (act === 'set-thr'){ state.settings.misThreshold = Math.max(1, Math.min(60, +t.value || 15)); save(); toast('已儲存。'); return; }
     if (act === 'set-minn'){ state.settings.minN = Math.max(3, Math.min(40, +t.value || 3)); save(); render(); return; }
+    if (act === 'toggle-key'){
+      if (!isTeacher()) return;
+      const aid = t.dataset.id;
+      state.settings.keyReleased = state.settings.keyReleased || {};
+      const now = !state.settings.keyReleased[aid];
+      state.settings.keyReleased[aid] = now;
+      save(); render();
+      toast(now ? '已開放這份的答案卡。' : '已收回這份的答案卡。');
+      return; }
     if (act === 'set-kur'){
       const v = parseFloat(t.value);
       state.settings.keyUnlockRatio = isFinite(v) ? Math.max(0, Math.min(1, v)) : 0.5;
@@ -829,11 +846,9 @@ function bindEvents(){
     if (act === 'quiz-pick'){ QUIZ.answers[t.dataset.id] = +t.dataset.k;
       $$('label.opt').forEach(function(l){ const inp = l.querySelector('input'); if (!inp) return;
         if (inp.dataset.id === t.dataset.id) l.classList.toggle('chosen', inp === t); });
-      const done = Object.keys(QUIZ.answers).length;
-      const bar = $('.kb-toolbar .bar i'); const lab = $('.kb-toolbar .muted');
-      const total = getAssignment(QUIZ.aid).itemIds.map(getItem).filter(function(i){ return i.type === 'mc'; }).length;
-      if (bar) bar.style.width = (100 * done / total) + '%';
-      if (lab) lab.textContent = '已作答 ' + done + ' / ' + total + ' 題';
+      /* 「回去寫完」留下的標記，選了就解除 */
+      const pc = t.closest('.card'); if (pc) pc.classList.remove('missing');
+      quizProgressUpdate();
       return; }
     if (act === 'cr-score'){
       const r = state.responses.find(function(x){ return x.aid === t.dataset.aid && x.sid === t.dataset.sid && x.iid === t.dataset.iid; });
@@ -869,7 +884,13 @@ function bindEvents(){
         const box = $('#sq'); if (box){ box.focus(); box.setSelectionRange(box.value.length, box.value.length); }
       }, 380);
       return; }
-    if (act === 'quiz-text'){ QUIZ.texts[t.dataset.id] = t.value; return; }
+    if (act === 'quiz-text'){
+      QUIZ.texts[t.dataset.id] = t.value;
+      /* 非選題現在也算進進度，所以打字要更新那一行；
+         同時把「回去寫完」留下的標記解除。 */
+      quizProgressUpdate();
+      if (t.value.trim()){ const c = t.closest('.card'); if (c) c.classList.remove('missing'); }
+      return; }
     if (act === 'aal-text'){
       const it = aalItem();
       aalTypeTelemetry(it.id, t.value);
@@ -1084,20 +1105,74 @@ async function showViewItems(vid){
 }
 
 /* --- 交卷 --- */
+/* 前測進度的就地更新（高頻互動不重繪整頁）。分子分母都要涵蓋兩種題型——
+   與 viewQuiz 的算法必須一致，否則畫面上兩個地方講不同的話。 */
+function quizProgressUpdate(){
+  if (!QUIZ) return;
+  const a = getAssignment(QUIZ.aid);
+  if (!a) return;
+  const items = a.itemIds.map(getItem).filter(Boolean);
+  const done = items.filter(function(i){
+    return i.type === 'cr'
+      ? !!String(QUIZ.texts[i.id] || '').trim()
+      : QUIZ.answers[i.id] !== undefined;
+  }).length;
+  const total = items.length;
+  const bar = $('.kb-toolbar .bar i'); const lab = $('.kb-toolbar .muted');
+  if (bar) bar.style.width = (100 * done / Math.max(1, total)) + '%';
+  if (lab) lab.textContent = '已作答 ' + done + ' / ' + total + ' 題';
+}
+
 function submitQuiz(aid){
   if (isImpersonating()){ toast('代為檢視時不能替學生交卷。'); return; }
   const a = getAssignment(aid), me = currentUser();
   const items = a.itemIds.map(getItem).filter(Boolean);
-  const mcs = items.filter(function(i){ return i.type === 'mc'; });
-  const missing = mcs.filter(function(i){ return QUIZ.answers[i.id] === undefined; });
-  /* 同 aalSubmit：不可逆那句要放在前面，而且要列出題號。
-     原本這一支更短——「還有 N 題沒作答，確定要交卷嗎？」，連是哪幾題都沒說，
-     孩子按取消之後畫面留在原地，只能自己一題一題找。 */
+  /* 缺答要兩種題型分開判。原本只掃 mcs——兩題非選全空也算「全部答完」，
+     而 viewQuiz 的進度也只數選擇題，於是畫面寫「已作答 14 / 14」、進度條 100%，
+     孩子被告知做完了，交出去的卻是兩題空白的建構反應題。
+     前測 θ 是 ANCOVA 的共變數，而缺失與打字能力、作答節奏共變。 */
+  const missing = items.filter(function(i){
+    return i.type === 'cr'
+      ? !String(QUIZ.texts[i.id] || '').trim()
+      : QUIZ.answers[i.id] === undefined;
+  });
+  /* 這一整支都沒跟上 aalSubmit 的修正：原生 confirm（不吃字級與高對比）、
+     取消之後什麼都不做、落地不檢查 save()。前測沒有任何補交路徑，
+     所以這裡失手的代價與後測一樣重。 */
+  const FINAL = '交出去之後就不能再修改。';
+  function onCancelMissing(){
+    const first = missing[0];
+    if (!first) return;
+    const el = document.querySelector('[data-act="quiz-pick"][data-id="' + first.id + '"], ' +
+                                      '[data-act="quiz-text"][data-id="' + first.id + '"]');
+    if (el){
+      const card = el.closest('.card');
+      if (card) card.classList.add('missing');
+      el.focus({preventScroll:true});
+      el.scrollIntoView({block:'center'});
+    }
+    toast('帶你回到' + itemLabel(aid, first.id) + '。');
+  }
   if (missing.length){
-    const nos = missing.map(function(i){ return itemLabel(aid, i.id); }).join('、');
-    if (!confirm('交出去之後就不能再修改。\n\n還有 ' + missing.length + ' 題沒作答：' +
-                 nos + '。\n\n按「確定」直接交卷，按「取消」回去把它寫完。')) return;
-  } else if (!confirm('交出去之後就不能再修改。\n\n要交卷了嗎？')) return;
+    confirmModal({
+      title: '要交卷了嗎？',
+      body: FINAL + '還有 ' + missing.length + ' 題沒作答：',
+      list: missing.map(function(i){ return itemLabel(aid, i.id); }),
+      note: '按〈回去寫完〉會帶你到第一題沒作答的地方。',
+      yes: '還是要交卷', no: '回去寫完'
+    }, function(){ submitQuizCommit(aid); });
+    confirmModal._onNo = onCancelMissing;
+    return;
+  }
+  confirmModal({title:'要交卷了嗎？', body: FINAL, yes:'交卷', no:'先不要'},
+    function(){ submitQuizCommit(aid); });
+}
+
+/* 前測交卷確認之後真正落地的那一段（切法與 aalSubmitCommit 相同）。 */
+function submitQuizCommit(aid){
+  if (!QUIZ) return;
+  const a = getAssignment(aid), me = currentUser();
+  const items = a.itemIds.map(getItem).filter(Boolean);
   items.forEach(function(it){
     state.responses = state.responses.filter(function(r){
       return !(r.aid === aid && r.sid === me.id && r.iid === it.id); });
@@ -1114,9 +1189,17 @@ function submitQuiz(aid){
   });
   state.submissions = state.submissions.filter(function(s){ return !(s.aid === aid && s.sid === me.id); });
   state.submissions.push({aid:aid, sid:me.id, at:Date.now()});
-  save(); QUIZ = null;
+  /* 落地失敗就不能說「已交卷」，理由與 aalSubmitCommit 相同。
+     前測連草稿都沒有（QUIZ 只在記憶體裡），所以更不能把它清掉。 */
+  if (!save()){
+    state.submissions = state.submissions.filter(function(s){ return !(s.aid === aid && s.sid === me.id); });
+    alert('這一份沒能存起來（裝置的儲存空間可能滿了）。\n\n' +
+          '先不要關掉這個分頁，你寫的東西還在畫面上。請舉手告訴老師。');
+    return;
+  }
+  QUIZ = null;
   toast('已交卷。往下看你的個人診斷。');
-  go('#/result/' + aid);
+  replaceHash('#/result/' + aid);
 }
 
 /* --- 測試連線 --- */

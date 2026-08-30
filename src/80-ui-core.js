@@ -313,10 +313,14 @@ function renderRail(){
     {g:'我的學習'},
     {h:'#/student', g2:'業', t:'我的作業'},
     {h:'#/kb', g2:'構', t:'知識建構空間',
-     b: kbLocked(me) ? '測驗後開放' : (unread ? unread : null)},
+     b: kbLocked(me) ? (kbLockReason(me) === 'survey' ? '問卷後開放' : '測驗後開放')
+          : (unread ? unread : null)},
     {h:'#/mygrowth', g2:'長', t:'我的學習軌跡'},
     {g:'問卷'},
-    {h:'#/survey/pre',  g2:'前', t:'課前問卷', b: surveyOf(me.id, 'pre')  ? null : '待填'},
+    {h:'#/survey/pre',  g2:'前', t:'課前問卷',
+     /* 課上完之後就不再標成可補的待辦（見 surveyGate 對 'pre' 的說明） */
+     b: surveyOf(me.id, 'pre') ? null
+        : (submitted('a-post', me.id) ? '未填' : '待填')},
     {h:'#/survey/post', g2:'後', t:'課後問卷', b: surveyOf(me.id, 'post') ? null : (submitted('a-post', me.id) ? '待填' : '上完課再填')},
     {g:'關於'},
     {h:'#/about', g2:'說', t:'系統說明'}
