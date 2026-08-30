@@ -80,8 +80,18 @@ const ENA_CODES = [
 function enaLines(){
   const lines = [];
   const seqs = {};
-  allLogs().forEach(function(e){
-    if (!e.code) return;
+  /* 走共用取樣。原本這裡是 `if (!e.code) return;`——34-log.js 的
+     behaviorSeq 註解把這一支當成原則的出處，但那次修正只套到 lsa()、
+     toSDIS()、toENACsv() 三個入口，這一支自己沒改。
+     RESUME 的 code 是 'R'，不在 BEHAVIOR_ORDER 裡，所以它照樣進入序列：
+     它自己不產生任何 ENA 編碼，但佔掉序列裡一格，把 ASK 的 EVID 前後 ±2
+     視窗與 OPTION／WRITE 的 REV 往前 3 格視窗各推遠一格。
+     這一格只出現在中途重開的孩子身上，而且正好落在他斷電那一題的序列中間；
+     REV（對話之後改答案）本來就是 tutor 條件被預期產生的行為，而重開後
+     第一個動作往往就是回頭改那一題——AI 回覆一旦被擠出視窗，這個孩子在
+     最該被記到 REV 的地方沒被記到，ENA 的組間投影因此帶進一個與
+     「有沒有被中斷」相關、而非與條件相關的位移。 */
+  behaviorSeq(allLogs()).forEach(function(e){
     const k = e.sid + '|' + e.iid;
     (seqs[k] = seqs[k] || []).push(e);
   });

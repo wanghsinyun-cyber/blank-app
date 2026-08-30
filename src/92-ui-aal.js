@@ -155,6 +155,25 @@ function aalInit(aid){
         t.lastKey = null;
       });
       AAL.t0 = Date.now();
+      /* 沒電或當掉時 aalExitItem 不可能執行，上一次坐下來的那一題只有 ENTER、
+         沒有配對的 EXIT。回來之後 viewAaL 又對同一題寫一筆新的 ENTER，於是
+         visits 變成 [{in:斷電前,out:null},{in:重開後,out:null}]；34-log.js 的
+         EXIT 只閉合「最後一筆還開著的」，斷電前那一筆永遠 out:null，
+         接著在計算 dwell 時被 v.out != null 濾掉。也就是說：孩子在那一題上
+         斷電前坐了多久——通常正是他卡最久、電池才耗完的那一題——整段被丟掉，
+         dwell_ms 對這一題系統性低估，而且沒有任何欄位標記它不完整。
+         草稿的 savedAt 是我們對「他最後一次還在作答」的最佳估計，
+         用它補一筆 EXIT 把那次造訪收掉，並標 est:true 讓分析端可以排除或另計。 */
+      if (d.savedAt && d.idx != null){
+        const prev = AAL.items[Math.min(d.idx, AAL.items.length - 1)];
+        if (prev){
+          const open = allLogs().some(function(e){
+            return e.sid === AAL.me && e.aid === AAL.aid && e.iid === prev.id && e.type === 'ENTER'; });
+          /* rel 設 null：它是「這一次入座起算的毫秒」，而這一筆屬於上一次
+             入座，用新的 t0 去算會得到一個沒有意義的負數。 */
+          if (open) aalLog('EXIT', null, {t:d.savedAt, rel:null, est:true}, prev);
+        }
+      }
       aalLog('RESUME', 'R', {resumed:true, via:AAL_LEFT_VIA, savedAt:d.savedAt || null});
       AAL_LEFT_VIA = 'reload';
     }
