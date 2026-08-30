@@ -173,9 +173,14 @@ select{min-width:0; max-width:100%; text-overflow:ellipsis}
    （230px + 剩下的，右欄只剩十個中文字寬）。
    改成由 --cols 帶欄寬、由這條類別套用，斷點才有機會覆寫。 */
 .grid.split{grid-template-columns:var(--cols)}
-.g2{grid-template-columns:repeat(auto-fit,minmax(340px,1fr))}
-.g3{grid-template-columns:repeat(auto-fit,minmax(250px,1fr))}
-.g4{grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}
+/* 這三條的下限是版面規則裡唯一沒改成 rem 的一組（隔壁的 .aal 用 16.5rem、
+   .rail 用 13.6rem）。auto-fit 依 px 下限決定欄數，不隨字級走——
+   768px 平板開到 175% 時，欄數不變而每一欄的內容是原本的 1.75 倍，
+   統計卡的數字（.stat .v 是 1.8rem）就從欄裡擠出去。
+   換成等值 rem：100% 時與原值等價，字級放大時欄數自動變少而不是把內容擠爆。 */
+.g2{grid-template-columns:repeat(auto-fit,minmax(17rem,1fr))}
+.g3{grid-template-columns:repeat(auto-fit,minmax(12.5rem,1fr))}
+.g4{grid-template-columns:repeat(auto-fit,minmax(10rem,1fr))}
 .row{display:flex; gap:10px; align-items:center; flex-wrap:wrap}
 .col{display:flex; flex-direction:column; gap:10px}
 .eyebrow{font-size:0.8rem; letter-spacing:.16em; color:var(--ink-4); font-family:var(--f-mono)}
@@ -250,7 +255,7 @@ button.pill{font:inherit; font-size:0.8rem; cursor:pointer; border-color:var(--r
 
 .stat{padding:14px 16px; background:var(--card); border:1px solid var(--rule); border-radius:var(--r-l)}
 .stat .k{font-size:0.8rem; letter-spacing:.1em; color:var(--ink-4); font-family:var(--f-mono)}
-.stat .v{font-family:var(--f-mono); font-size:1.8rem; font-weight:600; line-height:1.25; letter-spacing:-.01em}
+.stat .v{font-family:var(--f-mono); font-size:1.8rem; font-weight:600; line-height:1.25; letter-spacing:-.01em; white-space:nowrap}
 .stat .s{font-size:0.8rem; color:var(--ink-3)}
 .stat.crit{border-left:3px solid var(--crit)}
 .stat.good{border-left:3px solid var(--good)}
@@ -309,7 +314,12 @@ td.n,th.n{text-align:right; font-family:var(--f-mono); font-variant-numeric:tabu
 /* ---------- 試題 ---------- */
 .item{border:1px solid var(--rule); border-radius:var(--r-m); background:var(--card); padding:13px 15px}
 .item .stem{margin:6px 0 9px; line-height:1.85}
-.opts{display:grid; gap:6px}
+/* 作答頁的選項容器是全站唯一的 <fieldset>（其餘都是 div），而整份 CSS
+   沒有任何 fieldset 規則——UA 預設的 border、margin、padding 全部留著，
+   於是選項的左緣與題幹對不齊，只有這一頁如此。
+   min-inline-size 一定要一併歸零：fieldset 的 UA 預設是 min-content，
+   長選項會讓它在窄欄裡拒絕縮小。legend 已經是 .sr-only，不佔版面。 */
+.opts{display:grid; gap:6px; border:0; margin:0; padding:0; min-inline-size:0}
 .opt{display:flex; gap:9px; align-items:flex-start; padding:6px 10px; border:1px solid var(--rule-soft); border-radius:var(--r-m); cursor:pointer; background:var(--card)}
 .opt:hover{background:var(--shade)}
 .opt input{margin-top:4px; accent-color:var(--accent)}
@@ -322,10 +332,20 @@ td.n,th.n{text-align:right; font-family:var(--f-mono); font-variant-numeric:tabu
 
 /* ---------- KIDMAP ---------- */
 .kidmap{width:100%; height:auto; display:block; overflow:visible}
-.kidmap text{font-family:var(--f-mono); font-size:0.8rem; fill:var(--ink-3)}
+/* SVG 內的字級要用「使用者單位」，不能用 rem。
+   .kidmap 有 viewBox（0 0 620 400）且 width:100%，所以圖形本身是隨容器寬度縮放的，
+   而 rem 是對根字級解析之後才丟進使用者單位——字級開到 175% 時，
+   軸標與象限標籤變成 28 個使用者單位，而資料點的半徑仍是 9：
+   標籤相對於圖形整整脹了一倍，蓋住彼此也蓋住圓點。
+   圓點裡的題號本來就用使用者單位（9，與 r="9" 對齊），是唯一沒有走鐘的那一個——
+   所以要改的是其餘的字，不是它。
+   低視力使用者取得同一份資訊的可及路徑另有其人：每個圓點都有 <title>、
+   整張圖有 desc、診斷頁還有「可惜的題目」的純文字清單，那三者都吃 --fs。 */
+.kidmap text{font-family:var(--f-mono); font-size:13px; fill:var(--ink-3)}
+.kidmap .dotno{font-size:9px; font-weight:600}
 .kidmap .axis{stroke:var(--rule); stroke-width:1}
 .kidmap .theta{stroke:var(--accent); stroke-width:1.4; stroke-dasharray:5 4}
-.kidmap .qlabel{font-size:0.8rem; letter-spacing:.06em; font-weight:600}
+.kidmap .qlabel{font-size:13px; letter-spacing:.06em; font-weight:600}
 .legend{display:flex; gap:14px; flex-wrap:wrap; font-size:0.8rem; color:var(--ink-3)}
 .legend span{display:inline-flex; align-items:center; gap:6px}
 .swatch{width:10px; height:10px; border-radius:2px; display:inline-block}

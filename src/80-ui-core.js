@@ -468,7 +468,7 @@ function kidmapSVG(diag, ps, student){
     parts.push('<circle cx="' + cx + '" cy="' + cy + '" r="9" fill="' + col + '" fill-opacity="0.9" stroke="var(--card)" stroke-width="1.5"><title>第 ' +
       displayNo(diag.assignment.id, c.iid) + ' 題 · ' + (student ? QUAD_STUDENT[c.q]
         : QUAD[c.q].name + ' · δ=' + fx(c.delta) + ' · 預期答對率 ' + pct(c.p)) + '</title></circle>');
-    parts.push('<text x="' + cx + '" y="' + (cy + 3.2) + '" text-anchor="middle" fill="var(--card)" style="font-size:9px;font-weight:600">' +
+    parts.push('<text x="' + cx + '" y="' + (cy + 3.2) + '" text-anchor="middle" fill="var(--card)" class="dotno">' +
       displayNo(diag.assignment.id, c.iid) + '</text>');
   });
   parts.push('</svg>');
