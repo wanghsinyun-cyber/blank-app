@@ -273,7 +273,15 @@ button.pill{font:inherit; font-size:0.8rem; cursor:pointer; border-color:var(--r
 
 .stat{padding:14px 16px; background:var(--card); border:1px solid var(--rule); border-radius:var(--r-l)}
 .stat .k{font-size:0.8rem; letter-spacing:.1em; color:var(--ink-4); font-family:var(--f-mono)}
-.stat .v{font-family:var(--f-mono); font-size:1.8rem; font-weight:600; line-height:1.25; letter-spacing:-.01em; white-space:nowrap}
+/* 原本帶 white-space:nowrap（為了數字不折行——而數字本來就短），沒有 max-width，
+ 　 兩個窄版區塊也只把 .pill 改成 normal，沒有涵蓋它。首頁第四張卡的值印的是
+ 　 KB_LOCK_TEXT 的七個中文字：1024px 橫放、100% 字級、.g4 四欄時欄內約 203px，
+ 　 而七字 × 1.8rem ＝ 252px；.stat／.grid／.wrap／.stage／body 一路沒有 overflow 控制，
+ 　 溢出直接變成整份文件的橫向捲軸。那是孩子上完課、填完問卷之後回到的最後一個畫面，
+ 　 而那行字是全站唯一解釋「知識建構空間為什麼還打不開」的說法。 */
+.stat .v{font-family:var(--f-mono); font-size:1.8rem; font-weight:600; line-height:1.25; letter-spacing:-.01em; overflow-wrap:anywhere}
+/* 值是一段文字而不是一個數字時：數字卡的視覺重量會把七個字撐成兩三行。 */
+.stat.vtext .v{font-family:var(--f-body); font-size:1.15rem; line-height:1.3; letter-spacing:0}
 .stat .s{font-size:0.8rem; color:var(--ink-3)}
 .stat.crit{border-left:3px solid var(--crit)}
 .stat.good{border-left:3px solid var(--good)}
@@ -786,6 +794,7 @@ pre.prompt{
   .aal-text{position:static; max-height:none}
   .grid.split{grid-template-columns:1fr}
   .pill{white-space:normal}
+  .stat .v{white-space:normal; overflow-wrap:anywhere}
 }
 :root[data-narrow] .main{flex-direction:column; align-items:stretch}
 :root[data-narrow] .rail{position:static; width:100%; flex:0 0 auto; align-self:stretch; min-width:0;
@@ -802,6 +811,7 @@ pre.prompt{
 :root[data-narrow] .aal-text{position:static; max-height:none}
 :root[data-narrow] .grid.split{grid-template-columns:1fr}
 :root[data-narrow] .pill{white-space:normal}
+:root[data-narrow] .stat .v{white-space:normal; overflow-wrap:anywhere}
 @media (prefers-reduced-motion:reduce){*{animation:none!important; transition:none!important}}
 @media print{.rail,.topbar,.kb-toolbar{display:none} .app,.main{display:block} .stage{min-height:0}}
 

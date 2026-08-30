@@ -126,11 +126,28 @@ function analysisDataset(){
 
 /* --- ANCOVA：以條件為因子、前測為共變數 --- */
 function ancova(rows, yGet, xGet){
-  const data = rows.map(function(r){
+  const all = rows.map(function(r){
     return {cond:r.cond, y:yGet(r), x: xGet ? xGet(r) : null};
-  }).filter(function(d){
-    return typeof d.y === 'number' && isFinite(d.y) && (!xGet || (typeof d.x === 'number' && isFinite(d.x)));
   });
+  function usable(d){
+    return typeof d.y === 'number' && isFinite(d.y) &&
+           (!xGet || (typeof d.x === 'number' && isFinite(d.x)));
+  }
+  const data = all.filter(usable);
+  /* 誰被這道過濾刪掉，要說出來。relAboveRate 在 asks.length===0 時回傳 null，
+     而 ASK 只由 aalSay() 產生——對照組結構上不可能有（它寫的是 code 'N'），
+     於是整組被剔除，一個宣稱四條件的檢定實際上只跑三條件，而結果表只印
+     各條件的 n、不說誰不見了。同一道過濾也剔掉三個 AI 條件裡整節課沒發過話
+     的孩子（那是完全合法的走法）——正是最能說明「這個社會框架對誰不管用」
+     的那一批；留下來的是順從者，而拒絕率很可能隨角色不同，
+     這個列表刪除與操弄同向，不是隨機遺失。 */
+  const dropped = {};
+  CONDITIONS.forEach(function(c){
+    const inCond = all.filter(function(d){ return d.cond === c.id; });
+    const bad = inCond.filter(function(d){ return !usable(d); }).length;
+    if (bad) dropped[c.id] = bad;
+  });
+  const droppedN = Object.keys(dropped).reduce(function(a, k){ return a + dropped[k]; }, 0);
   if (data.length < 12) return null;
   const conds = CONDITIONS.map(function(c){ return c.id; })
     .filter(function(c){ return data.some(function(d){ return d.cond === c; }); });
@@ -202,6 +219,7 @@ function ancova(rows, yGet, xGet){
 
   return {conds:conds, ref:ref, F:F, df1:dfEffect, df2:full.df, p:p, eta:eta,
           adj:adj, desc:desc, pairs:pairs, mse:full.mse, n:data.length,
+          dropped:dropped, droppedN:droppedN,
           covariate:withCov, covMean:xbar, r2:full.r2};
 }
 
@@ -285,7 +303,12 @@ function outcomeList(){
       cov: c.phase === 'both' ? function(r){ return r.pre[c.id]; } : null,
       covName: c.phase === 'both' ? c.name + '（前測）' : null});
   });
-  out.push({id:'relAbove', name:'高於題目歷程的發話比例', get:function(r){ return r.relAboveRate; }, cov:null});
+  /* conds：這個變項只在三個對話條件上有定義。對照組沒有 ASK 事件，
+     relAboveRate 恆為 null，ancova 的過濾會把整組刪掉。零回合是否等於
+     relAbove=0 是研究決定，不要靠 filter 默默處理——面板據此改寫 lead。 */
+  out.push({id:'relAbove', name:'高於題目歷程的發話比例', get:function(r){ return r.relAboveRate; }, cov:null,
+    conds:['tutor','tutee','peer'],
+    note:'本變項只在三個對話條件上有定義（對照組不產生發話事件）。'});
   out.push({id:'sent', name:'平均情緒分數', get:function(r){ return r.sentMean; }, cov:null});
   out.push({id:'checks', name:'自我檢核勾選數', get:function(r){ return r.checks; }, cov:null});
   return out;

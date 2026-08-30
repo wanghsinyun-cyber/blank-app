@@ -837,6 +837,45 @@ function bindEvents(){
       }
       return; }
 
+    /* #aalSaveWarn 上的〈再試一次存檔〉。停掉自動存檔之後沒有任何路徑
+       回得去：騰出空間也沒用，那張卡會一直在，而 aalSave 到下課都不再動作。
+       清掉 _saveOff 與計數再試一次；成功就收掉卡片，失敗就照原路重新掀開
+       （aalSave 自己會處理，這裡只負責報告結果）。 */
+    /* 〈全部取消〉。要問一次：三十幾句標記是十分鐘的閱讀歷程，
+       而這個動作沒有復原路徑（每一句都會寫一筆 on:false 事件）。 */
+    if (act === 'aal-unmark-all'){
+      if (!AAL) return;
+      if (isImpersonating()){ toast('代為檢視時不能替學生取消標記。'); return; }
+      const it = aalItem();
+      const n = (AAL.marks[it.unit] || []).length;
+      if (!n){ toast('這一篇還沒有標記。'); return; }
+      confirmModal({
+        title: '要取消這一篇的全部標記嗎？',
+        body: '這一篇目前標了 ' + n + ' 句，取消之後不能復原。',
+        note: '標記不影響分數。只想取消其中幾句的話，點那幾句就好（點第二次就會取消）。',
+        yes: '全部取消', no: '先不要', danger: true
+      }, function(){
+        const k = aalUnmarkAll();
+        toast('已經取消 ' + k + ' 句標記。');
+        /* 焦點不要留在一顆剛剛被 hidden 的按鈕上——那會掉回 <body>。 */
+        const h = document.getElementById('passageTitle');
+        if (h) try { h.focus(); } catch (e) {}
+      });
+      return; }
+    if (act === 'aal-save-retry'){
+      if (!AAL) return;
+      AAL._saveOff = false;
+      aalSave._fails = 0;
+      const ok = aalSave();
+      const warn = document.getElementById('aalSaveWarn');
+      if (ok){
+        if (warn) warn.hidden = true;
+        toast('存起來了。');
+      } else {
+        if (warn) warn.hidden = false;
+        toast('還是存不起來，請舉手告訴老師。');
+      }
+      return; }
     /* 學生按了系統自己寫的「進度會保留」，就要真的把 AAL 收乾淨——
        否則 beforeunload 的守門條件（AAL 還活著）仍成立，他之後在任何一頁
        關分頁都會被警告「變更可能不會被儲存」，與那顆鈕的承諾直接打架。 */

@@ -52,15 +52,72 @@ function lsa(opts){
     (seqs[k] = seqs[k] || []).push(e);
   });
   let nSeq = 0, nEvent = 0;
+  /* 先分人再合併，不要一路累加。原本所有學生的 lag-1 轉移直接堆進同一個 F，
+     於是「把 T1 三十幾句逐句標下去」的孩子，在同一個 sid|iid|visit 段落裡
+     就貢獻 35 筆以上連續的 M→M，而一般只標三五句的孩子貢獻 2–4 筆；
+     每格只有 24 人，單一受試者就可能供應該條件 M 列與 M 欄的三分之一。
+     34-log.js 的註解自己點名要解決的就是「M→M 的自轉移被灌爆，單一受試者
+     就能位移整個矩陣的調整殘差」，但那次修正只排掉「取消」那一半，
+     用正常標記走同一條路完全暢通。
+     後果是 M→Q／M→O（回文本找依據之後才發話，RQ4 的核心宣稱）的期望次數
+     被撐大而被壓到 1.96 以下，而「有沒有十分鐘可以一直點」由完課速度決定、
+     完課速度與條件共變。
+
+     這裡不做強制的 run-length 折疊（那會改動邊際分布，不宜當唯一解），
+     改成每人等權：每位學生的轉移矩陣先各自正規化成總和 1，平均之後再
+     乘回原本的總次數 N，殘差與轉移機率的算式一個字都不用改，
+     而任何一位學生對任何一格的最大貢獻上限變成 1/人數。
+     每格由幾人貢獻、最大單人占比多少，一起回傳給面板印出來。 */
+  const perSid = {};                       // sid -> 轉移次數矩陣
   Object.keys(seqs).forEach(function(k){
     const s = seqs[k].sort(function(a, b){ return a.t - b.t; });
     nSeq++; nEvent += s.length;
+    const sid = (s[0] && s[0].sid) || '_';
+    const M = perSid[sid] || (perSid[sid] = codes.map(function(){ return new Array(n).fill(0); }));
     for (let i = 0; i + 1 < s.length; i++){
       const a = idx[s[i].code], b = idx[s[i + 1].code];
       if (a === undefined || b === undefined) continue;
-      F[a][b]++;
+      M[a][b]++;
     }
   });
+  const sids = Object.keys(perSid);
+  /* 原始（未加權）總次數，用來把等權後的比例乘回真實尺度 */
+  let raw = 0;
+  sids.forEach(function(sid){
+    perSid[sid].forEach(function(r){ r.forEach(function(v){ raw += v; }); });
+  });
+  /* 每格的貢獻人數與最大單人占比（以未加權的原始次數計，才看得出誰在主導） */
+  const contrib = codes.map(function(){ return new Array(n).fill(0); });
+  const topShare = codes.map(function(){ return new Array(n).fill(0); });
+  const cellRaw = codes.map(function(){ return new Array(n).fill(0); });
+  sids.forEach(function(sid){
+    const M = perSid[sid];
+    for (let i = 0; i < n; i++) for (let j = 0; j < n; j++){
+      if (M[i][j] > 0){ contrib[i][j]++; cellRaw[i][j] += M[i][j]; }
+    }
+  });
+  sids.forEach(function(sid){
+    const M = perSid[sid];
+    for (let i = 0; i < n; i++) for (let j = 0; j < n; j++){
+      if (cellRaw[i][j] > 0){
+        const sh = M[i][j] / cellRaw[i][j];
+        if (sh > topShare[i][j]) topShare[i][j] = sh;
+      }
+    }
+  });
+  /* 每人等權合併 */
+  sids.forEach(function(sid){
+    const M = perSid[sid];
+    let tot = 0;
+    M.forEach(function(r){ r.forEach(function(v){ tot += v; }); });
+    if (!tot) return;
+    for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) F[i][j] += M[i][j] / tot;
+  });
+  if (raw > 0){
+    let wsum = 0;
+    F.forEach(function(r){ r.forEach(function(v){ wsum += v; }); });
+    if (wsum > 0) for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) F[i][j] = F[i][j] / wsum * raw;
+  }
 
   const rowT = F.map(function(r){ return r.reduce(function(a, b){ return a + b; }, 0); });
   const colT = codes.map(function(_, j){ return F.reduce(function(a, r){ return a + r[j]; }, 0); });
@@ -85,7 +142,8 @@ function lsa(opts){
   sig.sort(function(a, b){ return Math.abs(b.z) - Math.abs(a.z); });
 
   return {codes:codes, F:F, Z:Z, T:Tr, rowT:rowT, colT:colT, N:N,
-          sig:sig, nSeq:nSeq, nEvent:nEvent};
+          sig:sig, nSeq:nSeq, nEvent:nEvent,
+          nSid:sids.length, contrib:contrib, topShare:topShare, cellRaw:cellRaw, rawN:raw};
 }
 
 /* ==========================================================================

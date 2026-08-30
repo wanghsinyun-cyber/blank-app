@@ -290,7 +290,15 @@ button.pill{font:inherit; font-size:0.8rem; cursor:pointer; border-color:var(--r
 
 .stat{padding:14px 16px; background:var(--card); border:1px solid var(--rule); border-radius:var(--r-l)}
 .stat .k{font-size:0.8rem; letter-spacing:.1em; color:var(--ink-4); font-family:var(--f-mono)}
-.stat .v{font-family:var(--f-mono); font-size:1.8rem; font-weight:600; line-height:1.25; letter-spacing:-.01em; white-space:nowrap}
+/* 原本帶 white-space:nowrap（為了數字不折行——而數字本來就短），沒有 max-width，
+ 　 兩個窄版區塊也只把 .pill 改成 normal，沒有涵蓋它。首頁第四張卡的值印的是
+ 　 KB_LOCK_TEXT 的七個中文字：1024px 橫放、100% 字級、.g4 四欄時欄內約 203px，
+ 　 而七字 × 1.8rem ＝ 252px；.stat／.grid／.wrap／.stage／body 一路沒有 overflow 控制，
+ 　 溢出直接變成整份文件的橫向捲軸。那是孩子上完課、填完問卷之後回到的最後一個畫面，
+ 　 而那行字是全站唯一解釋「知識建構空間為什麼還打不開」的說法。 */
+.stat .v{font-family:var(--f-mono); font-size:1.8rem; font-weight:600; line-height:1.25; letter-spacing:-.01em; overflow-wrap:anywhere}
+/* 值是一段文字而不是一個數字時：數字卡的視覺重量會把七個字撐成兩三行。 */
+.stat.vtext .v{font-family:var(--f-body); font-size:1.15rem; line-height:1.3; letter-spacing:0}
 .stat .s{font-size:0.8rem; color:var(--ink-3)}
 .stat.crit{border-left:3px solid var(--crit)}
 .stat.good{border-left:3px solid var(--good)}
@@ -803,6 +811,7 @@ pre.prompt{
   .aal-text{position:static; max-height:none}
   .grid.split{grid-template-columns:1fr}
   .pill{white-space:normal}
+  .stat .v{white-space:normal; overflow-wrap:anywhere}
 }
 :root[data-narrow] .main{flex-direction:column; align-items:stretch}
 :root[data-narrow] .rail{position:static; width:100%; flex:0 0 auto; align-self:stretch; min-width:0;
@@ -819,6 +828,7 @@ pre.prompt{
 :root[data-narrow] .aal-text{position:static; max-height:none}
 :root[data-narrow] .grid.split{grid-template-columns:1fr}
 :root[data-narrow] .pill{white-space:normal}
+:root[data-narrow] .stat .v{white-space:normal; overflow-wrap:anywhere}
 @media (prefers-reduced-motion:reduce){*{animation:none!important; transition:none!important}}
 @media print{.rail,.topbar,.kb-toolbar{display:none} .app,.main{display:block} .stage{min-height:0}}
 
@@ -1827,10 +1837,20 @@ function processMark(id){ const p = processOf(id); return p ? p.mark : '·'; }
 
 /* --- 19 項子歷程與角色中性的代表性提問句（PIRLS 2011）---
    fit：適用文體，提問庫據此分流，避免對文學性文本提出資訊性文本專用的提問。 */
+/* q 是 F3／F5 直接原句丟給孩子的內容，也被 promptProcessModule 寫進外部模型的
+   「可用的子歷程提問庫」。三句原本用段落尺度講話：FR-1「文章裡哪一段在講
+   這件事？」、FR-5「這一段最重要的一句話是哪一句？」、II-4「這一段讀起來是
+   什麼感覺？」。畫面上沒有任何段落被指名過（題幹、frame、F1、F2 都是題層級），
+   而本站唯一的文本操作單位是逐句標記——對只看得到一篇文章和一道題的
+   四年級孩子，「這一段」既是找不到指涉的指示詞（他會往上捲去找是哪一段），
+   也是「答案落在某一段裡」的收窄暗示。上一輪已經為同一個詞把 tutee 的
+   開場白從「這一段」改成「這一題」，但那次只改了開場白池，而提問庫才是
+   F3／F5 的主要內容。一律改成題層級、全篇層級或句層級。
+   規格由 zz-debug 的 assertQuestionScope 釘住。 */
 const SUBPROCESSES = [
   {id:'FR-1', p:'FR', en:'identifying information relevant to the specific goal of reading',
    zh:'找出與閱讀目標有關的訊息',
-   q:'這一題要找的是什麼？文章裡哪一段在講這件事？', fit:'皆可'},
+   q:'這一題要找的是什麼？文章裡哪一句在講這件事？', fit:'皆可'},
   {id:'FR-2', p:'FR', en:'looking for specific ideas',
    zh:'尋找特定的想法／觀點',
    q:'文章裡有沒有直接說到這件事？在哪裡？', fit:'皆可'},
@@ -1842,7 +1862,7 @@ const SUBPROCESSES = [
    q:'這件事發生在什麼時候、什麼地方？你從哪一句看出來的？', fit:'敘事'},
   {id:'FR-5', p:'FR', en:'finding the topic sentence or main idea (when explicitly stated)',
    zh:'找出主題句或主要觀點（限明確陳述者）',
-   q:'這一段最重要的一句話是哪一句？', fit:'皆可'},
+   q:'這一篇裡最重要的一句話是哪一句？', fit:'皆可'},
 
   {id:'SI-1', p:'SI', en:'inferring that one event caused another event',
    zh:'推論某事件導致另一事件（因果）',
@@ -1871,7 +1891,7 @@ const SUBPROCESSES = [
    q:'前面講的和後面講的有什麼不一樣？', fit:'皆可'},
   {id:'II-4', p:'II', en:"inferring a story's mood or tone",
    zh:'推測故事的情緒或語氣',
-   q:'這一段讀起來是什麼感覺？哪些字讓你有這種感覺？', fit:'敘事'},
+   q:'這一篇讀起來是什麼感覺？哪些字讓你有這種感覺？', fit:'敘事'},
   {id:'II-5', p:'II', en:'interpreting a real-world application of text information',
    zh:'詮釋文中訊息在真實世界的應用',
    q:'這件事在你的生活裡也會發生嗎？什麼時候？', fit:'皆可'},
@@ -4550,15 +4570,72 @@ function lsa(opts){
     (seqs[k] = seqs[k] || []).push(e);
   });
   let nSeq = 0, nEvent = 0;
+  /* 先分人再合併，不要一路累加。原本所有學生的 lag-1 轉移直接堆進同一個 F，
+     於是「把 T1 三十幾句逐句標下去」的孩子，在同一個 sid|iid|visit 段落裡
+     就貢獻 35 筆以上連續的 M→M，而一般只標三五句的孩子貢獻 2–4 筆；
+     每格只有 24 人，單一受試者就可能供應該條件 M 列與 M 欄的三分之一。
+     34-log.js 的註解自己點名要解決的就是「M→M 的自轉移被灌爆，單一受試者
+     就能位移整個矩陣的調整殘差」，但那次修正只排掉「取消」那一半，
+     用正常標記走同一條路完全暢通。
+     後果是 M→Q／M→O（回文本找依據之後才發話，RQ4 的核心宣稱）的期望次數
+     被撐大而被壓到 1.96 以下，而「有沒有十分鐘可以一直點」由完課速度決定、
+     完課速度與條件共變。
+
+     這裡不做強制的 run-length 折疊（那會改動邊際分布，不宜當唯一解），
+     改成每人等權：每位學生的轉移矩陣先各自正規化成總和 1，平均之後再
+     乘回原本的總次數 N，殘差與轉移機率的算式一個字都不用改，
+     而任何一位學生對任何一格的最大貢獻上限變成 1/人數。
+     每格由幾人貢獻、最大單人占比多少，一起回傳給面板印出來。 */
+  const perSid = {};                       // sid -> 轉移次數矩陣
   Object.keys(seqs).forEach(function(k){
     const s = seqs[k].sort(function(a, b){ return a.t - b.t; });
     nSeq++; nEvent += s.length;
+    const sid = (s[0] && s[0].sid) || '_';
+    const M = perSid[sid] || (perSid[sid] = codes.map(function(){ return new Array(n).fill(0); }));
     for (let i = 0; i + 1 < s.length; i++){
       const a = idx[s[i].code], b = idx[s[i + 1].code];
       if (a === undefined || b === undefined) continue;
-      F[a][b]++;
+      M[a][b]++;
     }
   });
+  const sids = Object.keys(perSid);
+  /* 原始（未加權）總次數，用來把等權後的比例乘回真實尺度 */
+  let raw = 0;
+  sids.forEach(function(sid){
+    perSid[sid].forEach(function(r){ r.forEach(function(v){ raw += v; }); });
+  });
+  /* 每格的貢獻人數與最大單人占比（以未加權的原始次數計，才看得出誰在主導） */
+  const contrib = codes.map(function(){ return new Array(n).fill(0); });
+  const topShare = codes.map(function(){ return new Array(n).fill(0); });
+  const cellRaw = codes.map(function(){ return new Array(n).fill(0); });
+  sids.forEach(function(sid){
+    const M = perSid[sid];
+    for (let i = 0; i < n; i++) for (let j = 0; j < n; j++){
+      if (M[i][j] > 0){ contrib[i][j]++; cellRaw[i][j] += M[i][j]; }
+    }
+  });
+  sids.forEach(function(sid){
+    const M = perSid[sid];
+    for (let i = 0; i < n; i++) for (let j = 0; j < n; j++){
+      if (cellRaw[i][j] > 0){
+        const sh = M[i][j] / cellRaw[i][j];
+        if (sh > topShare[i][j]) topShare[i][j] = sh;
+      }
+    }
+  });
+  /* 每人等權合併 */
+  sids.forEach(function(sid){
+    const M = perSid[sid];
+    let tot = 0;
+    M.forEach(function(r){ r.forEach(function(v){ tot += v; }); });
+    if (!tot) return;
+    for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) F[i][j] += M[i][j] / tot;
+  });
+  if (raw > 0){
+    let wsum = 0;
+    F.forEach(function(r){ r.forEach(function(v){ wsum += v; }); });
+    if (wsum > 0) for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) F[i][j] = F[i][j] / wsum * raw;
+  }
 
   const rowT = F.map(function(r){ return r.reduce(function(a, b){ return a + b; }, 0); });
   const colT = codes.map(function(_, j){ return F.reduce(function(a, r){ return a + r[j]; }, 0); });
@@ -4583,7 +4660,8 @@ function lsa(opts){
   sig.sort(function(a, b){ return Math.abs(b.z) - Math.abs(a.z); });
 
   return {codes:codes, F:F, Z:Z, T:Tr, rowT:rowT, colT:colT, N:N,
-          sig:sig, nSeq:nSeq, nEvent:nEvent};
+          sig:sig, nSeq:nSeq, nEvent:nEvent,
+          nSid:sids.length, contrib:contrib, topShare:topShare, cellRaw:cellRaw, rawN:raw};
 }
 
 /* ==========================================================================
@@ -4935,11 +5013,28 @@ function analysisDataset(){
 
 /* --- ANCOVA：以條件為因子、前測為共變數 --- */
 function ancova(rows, yGet, xGet){
-  const data = rows.map(function(r){
+  const all = rows.map(function(r){
     return {cond:r.cond, y:yGet(r), x: xGet ? xGet(r) : null};
-  }).filter(function(d){
-    return typeof d.y === 'number' && isFinite(d.y) && (!xGet || (typeof d.x === 'number' && isFinite(d.x)));
   });
+  function usable(d){
+    return typeof d.y === 'number' && isFinite(d.y) &&
+           (!xGet || (typeof d.x === 'number' && isFinite(d.x)));
+  }
+  const data = all.filter(usable);
+  /* 誰被這道過濾刪掉，要說出來。relAboveRate 在 asks.length===0 時回傳 null，
+     而 ASK 只由 aalSay() 產生——對照組結構上不可能有（它寫的是 code 'N'），
+     於是整組被剔除，一個宣稱四條件的檢定實際上只跑三條件，而結果表只印
+     各條件的 n、不說誰不見了。同一道過濾也剔掉三個 AI 條件裡整節課沒發過話
+     的孩子（那是完全合法的走法）——正是最能說明「這個社會框架對誰不管用」
+     的那一批；留下來的是順從者，而拒絕率很可能隨角色不同，
+     這個列表刪除與操弄同向，不是隨機遺失。 */
+  const dropped = {};
+  CONDITIONS.forEach(function(c){
+    const inCond = all.filter(function(d){ return d.cond === c.id; });
+    const bad = inCond.filter(function(d){ return !usable(d); }).length;
+    if (bad) dropped[c.id] = bad;
+  });
+  const droppedN = Object.keys(dropped).reduce(function(a, k){ return a + dropped[k]; }, 0);
   if (data.length < 12) return null;
   const conds = CONDITIONS.map(function(c){ return c.id; })
     .filter(function(c){ return data.some(function(d){ return d.cond === c; }); });
@@ -5011,6 +5106,7 @@ function ancova(rows, yGet, xGet){
 
   return {conds:conds, ref:ref, F:F, df1:dfEffect, df2:full.df, p:p, eta:eta,
           adj:adj, desc:desc, pairs:pairs, mse:full.mse, n:data.length,
+          dropped:dropped, droppedN:droppedN,
           covariate:withCov, covMean:xbar, r2:full.r2};
 }
 
@@ -5094,7 +5190,12 @@ function outcomeList(){
       cov: c.phase === 'both' ? function(r){ return r.pre[c.id]; } : null,
       covName: c.phase === 'both' ? c.name + '（前測）' : null});
   });
-  out.push({id:'relAbove', name:'高於題目歷程的發話比例', get:function(r){ return r.relAboveRate; }, cov:null});
+  /* conds：這個變項只在三個對話條件上有定義。對照組沒有 ASK 事件，
+     relAboveRate 恆為 null，ancova 的過濾會把整組刪掉。零回合是否等於
+     relAbove=0 是研究決定，不要靠 filter 默默處理——面板據此改寫 lead。 */
+  out.push({id:'relAbove', name:'高於題目歷程的發話比例', get:function(r){ return r.relAboveRate; }, cov:null,
+    conds:['tutor','tutee','peer'],
+    note:'本變項只在三個對話條件上有定義（對照組不產生發話事件）。'});
   out.push({id:'sent', name:'平均情緒分數', get:function(r){ return r.sentMean; }, cov:null});
   out.push({id:'checks', name:'自我檢核勾選數', get:function(r){ return r.checks; }, cov:null});
   return out;
@@ -6671,7 +6772,10 @@ function viewTeacher(){
   const nAll = state.classes.reduce(function(a, c){ return a + c.studentIds.length; }, 0);
 
   return sectionHead('教師後台',
-    k.name + '　·　加入代碼 ' + k.code + '　·　' + k.studentIds.length + ' 位學生　·　夥伴條件：' + cond.name,
+    /* 原本印「加入代碼 k.code」。全庫沒有任何以班級代碼加入的流程，
+       而老師唯一真正需要的那組碼（這台平板的教師代碼）在派題分析頁。
+       一個什麼都打不開的六位數擺在最顯眼的位置，只會被拿去 #/unlock 試。 */
+    k.name + '　·　' + k.studentIds.length + ' 位學生　·　夥伴條件：' + cond.name,
     /* 研究控制台與建立派題屬於研究者的工具，教師端不出現 */
     (isResearcher()
       ? '<a class="btn" href="#/research">研究控制台</a><a class="btn primary" href="#/create">建立派題</a>'
@@ -6878,7 +6982,21 @@ function viewAssign(aid, tab){
         /* 這兩件事原本一個字都沒說，而它們決定老師在教室裡實際要做什麼。 */
         '這個設定只存在<strong>這一台平板</strong>的儲存空間裡——96 台要各按一次。' +
         '施測中要在學生的平板上按，先在網址列打 <code>#/unlock</code> 換成教師身分，' +
-        '按完再換回去。</p></div>';
+        '按完再換回去。</p>' +
+        /* 這台平板的教師代碼。上面那一段（以及 viewUnlock）都在教老師去按
+           #/unlock，而 #/unlock 要的就是這組碼——它原本只出現在兩個地方：
+           清場當下那一則 alertModal（看過就沒了），以及 #/settings，
+           而 settings 屬 RESEARCHER_ONLY，role==='teacher' 進去只會拿到
+           「這一頁只有研究者看得到」。課堂上真正需要換人的是導師，
+           96 台各一組不同的碼，她手上沒有清單就換不了人。
+           顯示給 isTeacher()，〈換一組〉仍只給 isResearcher()（在系統設定頁）。 */
+        '<p class="small" style="margin:10px 0 0;padding-top:10px;border-top:1px solid var(--rule)">' +
+        '這台平板的教師代碼：<strong class="num">' +
+        ((state.settings || {}).teacherCode
+          ? esc(state.settings.teacherCode)
+          : '（還沒有，《清空示範資料，準備施測》時會產生）') +
+        '</strong><br><span class="muted">在 <code>#/unlock</code> 換學生時要打這一組。' +
+        '每一台平板各有各的碼，要換掉請找研究者。</span></p></div>';
     })() +
     '<div class="tabs" role="tablist">' + tabs.map(function(t){
       const on = T === t[0];
@@ -6893,7 +7011,9 @@ function tabOverview(diag){
   const nItems = diag.items.length;
   /* 實際有作答的人數，不要寫死。四格數的是「人 × 題」的格子。 */
   const nAll = diag.perStudent.length;
-  if (!diag.done.length) return '<div class="empty"><h3>還沒有學生作答</h3><p>把班級加入代碼發給學生，作答後這裡會顯示。</p></div>';
+  /* 原本寫「把班級加入代碼發給學生」——那個流程不存在。 */
+  if (!diag.done.length) return '<div class="empty"><h3>還沒有人在這台平板上作答</h3>' +
+    '<p>用 <code>#/unlock</code> 換成第一位同學，作答之後這裡就會顯示。</p></div>';
   return '<div class="grid g4" style="margin-bottom:16px">' +
     statCard('全體平均', fx(mean(scores) / nItems * 100, 1) + '<span style="font-size:0.75em">%</span>', '答對 ' + fx(mean(scores), 1) + ' / ' + nItems + ' 題') +
     statCard('已交作答', diag.done.length, '未完成 ' + (diag.roster.length - diag.done.length) + ' 人') +
@@ -8390,9 +8510,11 @@ function viewStudent(){
          他十五分鐘前就交過卷了。 */
       (kbLocked(me)
         ? statCard('我貼的想法', myNotes, (kbLockLabel(me) || {}).hint || '交完卷就可以繼續') +
+          /* vtext：這一張的值是一段文字（KB_LOCK_TEXT 的七個字），不是數字。
+             套數字卡的 1.8rem 等寬字會在教室平板的預設方向撐出橫向捲軸。 */
           statCard('知識建構空間',
             (kbLockLabel(me) || {}).badge || '測驗後開放',
-            (kbLockLabel(me) || {}).line || '交完卷就會打開')
+            (kbLockLabel(me) || {}).line || '交完卷就會打開', 'vtext')
         : statCard('我貼的想法', myNotes, '在知識建構空間') +
           statCard('未讀貼文', unread, '同學的新想法', unread ? 'warn' : '')) +
     '</div>' +
@@ -9965,8 +10087,11 @@ function viewUnlock(){
     '<div class="row"><button class="btn primary" data-act="device-unlock"' +
     (locked ? ' disabled' : '') + '>解鎖</button>' +
     '<a class="btn" href="#/student">取消</a></div>' +
+    /* 原本只指向系統設定頁，而那一頁屬 RESEARCHER_ONLY——
+       站在平板前面要換人的導師點進去只會被拒絕。改指向她到得了的地方。 */
     '<p class="muted small" style="margin:0">代碼在《清空示範資料，準備施測》時產生，' +
-    '可以在研究控制台的系統設定頁看到或換掉。每一次嘗試都會記錄下來。</p>' +
+    '也印在教師後台的派題分析頁上（研究者可以在系統設定頁換掉）。' +
+    '每一次嘗試都會記錄下來。</p>' +
     '</div></div>';
 }
 
@@ -10079,6 +10204,13 @@ function mergeDraftMaps(prev, mine, keys){
 function aalSave(){
   if (isImpersonating()) return;
   if (!AAL) return;
+  /* 「停掉自動存檔」原本只是一句註解：_saveOff 全庫只有兩個使用點——
+     在下面的 catch 裡寫入，以及決定 #aalSaveWarn 的 hidden——這一支自己
+     從來不讀它。配額爆掉之後每一次呼叫仍照跑 JSON.parse 整份草稿、
+     aalPadsSnapshot、stringify 與註定失敗的 setItem。
+     而逐句標記是全站唯一「每互動一次就存一次」的動作：T1 約 36 句
+     標完就是 36 次失敗。內容仍在記憶體裡，交卷走的是 save()，不受影響。 */
+  if (AAL._saveOff){ AAL.dirty = true; return false; }
   try {
     const all = JSON.parse(localStorage.getItem(AAL_DRAFT_KEY) || '{}');
     /* tele 與 drafts 要存（重整後遙測才接得起來），turns 不存——
@@ -10106,13 +10238,21 @@ function aalSave(){
     /* 加了 tele/drafts 之後這個 key 會變大，配額問題不再是偶發。
        連續兩次失敗就停掉自動存檔並常駐警示，不要只 toast 一次。 */
     aalSave._fails = (aalSave._fails || 0) + 1;
+    /* toast 原本在 catch 最後、不在這個分支裡，於是每一次失敗都再 toast 一次。
+       toast() 每次重寫 #toastRoot 並重新計時（時間隨字數，這一句約 3.7 秒），
+       那條 position:fixed／bottom:26px 的深色膠囊因此常駐在文章底部；
+       #toastRoot 是 role="status"，報讀器每點一句就重播同一句話。
+       畫面上方已經有一張常駐的 #aalSaveWarn 在講同一件事。
+       只說第一次，之後掀開那張卡就好。 */
+    if (aalSave._fails === 1) toast('這一題沒能存起來，先不要關掉分頁。');
     if (aalSave._fails >= 2){
       AAL._saveOff = true;
       const b = document.getElementById('aalSaveWarn');
       if (b) b.hidden = false;
     }
-    toast('這一題沒能存起來，先不要關掉分頁。');
+    return false;
   }
+  return true;
 }
 
 function aalDropDraft(){
@@ -10382,7 +10522,12 @@ function viewAaL(aid){
       ' style="margin-bottom:12px;border-left:3px solid var(--crit)">' +
       '<p class="small" style="margin:0"><strong>你寫的東西沒能存起來。</strong>' +
       '這台平板的儲存空間可能滿了。先不要關掉這個分頁——畫面上的內容還在，' +
-      '請舉手告訴老師。</p></div>' +
+      '請舉手告訴老師。</p>' +
+      /* 出口。停掉自動存檔之後，孩子與老師原本沒有任何辦法讓它再試一次：
+         騰出空間（關掉別的分頁、老師清掉別台的草稿）也沒有用，
+         這張卡會一直在，而自動存檔到下課都不會再啟動。 */
+      '<div class="row" style="margin-top:10px">' +
+      '<button class="btn sm" data-act="aal-save-retry">再試一次存檔</button></div></div>' +
 
     '<div class="aal">' +
     /* ---- 左欄：文本，逐句可標記 ---- */
@@ -10397,14 +10542,23 @@ function viewAaL(aid){
       '<div class="card-h"><h3 id="passageTitle" tabindex="-1">' + esc(text.title) + '</h3>' +
       '<span class="pill">' + esc(text.genre) + '</span>' +
       '<span class="pill" id="markCount"' + (marks.length ? '' : ' hidden') + '>已標記 ' +
-      '<span id="markCountN">' + marks.length + '</span> 句</span></div>' +
+      '<span id="markCountN">' + marks.length + '</span> 句</span>' +
+      /* 標記原本只有入口沒有出口：aalMark 是純 toggle，二次點擊是全站唯一的
+         移除路徑，而 toggle 語意只由 aria-pressed 傳給輔助科技——看得見螢幕的
+         孩子拿不到這個訊息。第一次用平板的四年級孩子誤觸是常態，
+         「先全部標起來看看」也很常見：標完三十幾句之後整篇被同一個底色鋪滿，
+         標記對他自己已經失去區辨力，想回到乾淨狀態只能逐句再點三十幾下。
+         而標記是這個平台唯一的閱讀歷程行為資料，也是教師唯讀重播的依據。
+         隔壁同一張版面裡的筆記面板與手寫板各有一顆〈清空〉。 */
+      '<button class="btn sm" id="unmarkAll" data-act="aal-unmark-all"' +
+      (marks.length ? '' : ' hidden') + '>全部取消</button></div>' +
       '<div class="card-p">' +
       /* 隱私要講實話：老師在唯讀重播裡看得到學生標了哪幾句。 */
       /* text.intro（「請先讀完整篇故事，再回答後面的問題。」）本來是死碼——
          全庫沒有讀取點。那是這一篇的作業指示，應該排在標記說明之前。 */
       '<p class="muted small" id="passageHelp">' +
       (text.intro ? '<strong>' + esc(text.intro) + '</strong> ' : '') +
-      '點一下任何一句，把它標記起來。' +
+      '點一下任何一句，把它標記起來，點第二次就會取消。' +
       /* 全頁原本沒有一句鍵盤說法，而選項區有。用鍵盤的孩子會把焦點停在
          某一顆句子鈕上往下讀，Space 在 button 上是啟用鍵——按一次就把他
          正停著的那一句 toggle 掉（寫一筆 MARK、底色消失）。 */
@@ -10542,7 +10696,17 @@ function viewAaL(aid){
 function aalDialogPane(it, cond, turns, used, maxT){
   const left = maxT - used;
   return '<div class="card aal-chat"><div class="card-h">' +
-    '<h3>我的夥伴：' + esc(cond.name) + '</h3>' +
+    /* 「· 第 N 題」與對照組的筆記卡（同檔 aalNotePane）逐字對位。
+       對照組在兩處講明自己的產出綁在這一題上：卡片頭與工具列那一句
+       「這一題一份，換題會換成新的一頁。」。三個 AI 條件的卡片頭原本只有
+       「我的夥伴：同學小森」，pill 只有「還可以說 6 次」，footer 三句也
+       完全沒提逐題——全站唯一說出「換下一題會重新計算」的那一句，是額度
+       用完之後才追加的系統訊息，沒把 6 次講滿的孩子永遠看不到它。
+       於是他每按一次〈下一題〉，剛講的整段對話就從畫面消失、次數跳回 6。
+       兩種最可能的反應都傷資料：以為話被弄丟而不再開口（處遇劑量被介面
+       自己壓低，壓低程度與換題頻率共變），或回到同一題再問一次白扣額度。
+       這同時是條件間的文案不對等：只有對照組被告知自己的產出是逐題的。 */
+    '<h3>我的夥伴：' + esc(cond.name) + '　·　第 ' + (AAL.idx + 1) + ' 題</h3>' +
     /* 剩餘額度要是「狀態訊息」。原本只是一顆靜態的 pill：
        aalSay 用 textContent 就地更新它（那是對的，不重繪整個面板），
        但沒有 role="status"，報讀器不會播報——只用報讀器的孩子
@@ -10552,6 +10716,9 @@ function aalDialogPane(it, cond, turns, used, maxT){
     '<span class="pill" role="status" aria-live="polite">還可以說 <span id="turnLeft">' +
       Math.max(0, left) + '</span> 次</span></div>' +
     '<div class="card-p">' +
+    /* 與對照組工具列那一句（「這一題一份，換題會換成新的一頁。」16 字）
+       等長的一行。放在對話串之前，沒把 6 次講滿的孩子也讀得到。 */
+    '<p class="muted small" style="margin:0 0 8px">這一題一份，換題會重新算 6 次。</p>' +
     /* role="log" + aria-live：AI 的回覆是非同步送達的，
        沒有這兩個屬性，報讀器使用者永遠不知道夥伴回話了。 */
     '<div class="chat" id="aalChat" role="log" aria-live="polite" aria-relevant="additions"' +
@@ -10654,10 +10821,38 @@ function aalMark(i){
 
   const btn = document.querySelector('.passage .sent[data-i="' + i + '"]');
   if (btn){ btn.classList.toggle('on', on); btn.setAttribute('aria-pressed', String(on)); }
+  aalSyncMarkCount(m.length);
+}
+
+/* 標記數的就地更新（計數 pill 與〈全部取消〉一起）。原本只寫在 aalMark 裡，
+   而 aal-unmark-all 也要用同一條路徑——重繪整頁會把焦點與捲動位置一起丟掉。 */
+function aalSyncMarkCount(len){
   const pill = document.getElementById('markCount');
   const n = document.getElementById('markCountN');
-  if (n) n.textContent = m.length;
-  if (pill){ if (m.length) pill.removeAttribute('hidden'); else pill.setAttribute('hidden', ''); }
+  const btn = document.getElementById('unmarkAll');
+  if (n) n.textContent = len;
+  [pill, btn].forEach(function(el){
+    if (!el) return;
+    if (len) el.removeAttribute('hidden'); else el.setAttribute('hidden', '');
+  });
+}
+
+/* 全部取消。逐句沿用 aalMark 的 on:false 路徑寫事件（foldToggleLog 折疊得掉），
+   就地更新每一顆句子鈕的 .on 與 aria-pressed，不呼叫 render()。 */
+function aalUnmarkAll(){
+  const it = aalItem();
+  const m = AAL.marks[it.unit] || [];
+  if (!m.length) return 0;
+  const gone = m.slice();
+  AAL.marks[it.unit] = [];
+  gone.forEach(function(i){
+    aalLog('MARK', 'M', {sent:i, textId:it.unit, on:false});
+    const btn = document.querySelector('.passage .sent[data-i="' + i + '"]');
+    if (btn){ btn.classList.remove('on'); btn.setAttribute('aria-pressed', 'false'); }
+  });
+  aalSave();
+  aalSyncMarkCount(0);
+  return gone.length;
 }
 
 /* 用方向鍵在四個選項間移動時，原生 radio 每移動一格就觸發一次 change。
@@ -12366,7 +12561,14 @@ function rLSA(){
     CONDITIONS.map(function(c){
       return '<option value="' + c.id + '"' + (sel === c.id ? ' selected' : '') + '>' + esc(c.name) + '</option>';
     }).join('') + '</select>' +
-    '<span class="muted small">序列 ' + r.nSeq + ' 段 · 事件 ' + r.nEvent + ' 次 · 轉移 ' + r.N + ' 次</span></div></div>' +
+    '<span class="muted small">' + r.nSid + ' 位學生 · 序列 ' + r.nSeq + ' 段 · 事件 ' +
+      r.nEvent + ' 次 · 轉移 ' + Math.round(r.rawN) + ' 次</span></div>' +
+    /* 原本只印「序列 N 段 · 事件 N 次」，看不出每一格由幾位學生貢獻。 */
+    '<p class="muted small" style="margin:8px 0 0">轉移次數採<strong>每人等權</strong>合併：' +
+    '每位學生的轉移矩陣先各自正規化，再平均並乘回總次數。' +
+    '不這樣做的話，一位把整篇三十幾句逐句標下去的孩子，光是連續的 M→M 就能' +
+    '供應該條件該格的三分之一（每格只有 24 人），而「有沒有十分鐘可以一直點」' +
+    '由完課速度決定、完課速度與條件共變。滑鼠移到格子上可以看到貢獻人數與最大單人占比。</p></div>' +
 
     '<div class="grid split" style="--cols:minmax(0,1.1fr) minmax(300px,.9fr);gap:16px">' +
     '<div class="card"><div class="card-h"><h3>調整殘差矩陣</h3>' +
@@ -12380,13 +12582,30 @@ function rLSA(){
           const z = r.Z[i][j];
           const on = Math.abs(z) >= 1.96;
           const col = z > 0 ? 'var(--q1)' : 'var(--q2)';
-          return '<td class="n"' + (on ? ' style="font-weight:700;color:' + col + ';background:' +
+          /* 貢獻人數與最大單人占比放在 title 上：格子本身要留給 z，
+             但「這一格是幾個人堆出來的」必須看得到，否則單人主導事後查不出來。
+             ⚠ 標在「一個人就占了一半以上」的格子上。 */
+          const nc = (r.contrib && r.contrib[i][j]) || 0;
+          const sh = (r.topShare && r.topShare[i][j]) || 0;
+          const solo = nc > 0 && sh >= 0.5;
+          const tip = nc
+            ? behaviorName(r.codes[i]) + ' → ' + behaviorName(r.codes[j]) +
+              '：原始 ' + r.cellRaw[i][j] + ' 次，來自 ' + nc + ' 位學生，' +
+              '最大單人占比 ' + (sh * 100).toFixed(0) + '%'
+            : '這一格沒有任何轉移';
+          return '<td class="n" title="' + esc(tip) + '"' +
+            (on ? ' style="font-weight:700;color:' + col + ';background:' +
             (z > 0 ? 'var(--q1-bg)' : 'var(--q2-bg)') + '"' : ' style="color:var(--ink-4)"') + '>' +
-            (r.F[i][j] ? z.toFixed(2) : '—') + '</td>';
+            (r.F[i][j] ? z.toFixed(2) : '—') +
+            (solo ? '<span aria-hidden="true" style="color:var(--warn)">⚠</span>' +
+                    '<span class="sr-only">（' + nc + ' 位學生，最大單人占比 ' +
+                    (sh * 100).toFixed(0) + '%）</span>' : '') + '</td>';
         }).join('') + '</tr>';
     }).join('') + '</tbody></table></div>' +
     '<div class="card-p"><p class="muted small">粗體格子為顯著（|z| ≥ 1.96）。' +
-    '綠色＝促進性轉移，紅色＝抑制性轉移。</p></div></div>' +
+    '綠色＝促進性轉移，紅色＝抑制性轉移。' +
+    '<strong>⚠</strong> 代表這一格有一位學生就占了一半以上的原始次數——' +
+    '即使已經每人等權，這種格子的結論仍不宜單獨引用。</p></div></div>' +
 
     '<div class="col">' +
       '<div class="card"><div class="card-h"><h3>顯著轉移（依 |z| 排序）</h3></div>' +
@@ -12638,7 +12857,10 @@ function rStats(){
 
   return '<div class="card card-p" style="margin-bottom:16px">' +
     '<h3>共變數分析與中介路徑</h3>' +
-    '<p class="lead" style="margin-top:8px">以條件為因子、對應的前測分數為共變數，檢定四條件在結果變項上的差異，' +
+    /* 「四條件」不能寫死：選到只在三個對話條件上有定義的變項時（relAbove），
+       對照組會被 ancova 的 listwise 過濾整組刪掉，而 lead 仍宣稱在檢定四條件。 */
+    '<p class="lead" style="margin-top:8px">以條件為因子、對應的前測分數為共變數，檢定' +
+    (o.conds ? o.conds.length : 4) + ' 個條件在結果變項上的差異，' +
     '報告 F、p、partial η² 與 Bonferroni 校正後的事後比較；再以平行多重中介的路徑分析估計' +
     '「條件 → 動機性變項 → 表現」的間接效果，信賴區間以百分位 bootstrap 求得。</p>' +
     '<p class="muted small">本模組估計的是<strong>觀察變項</strong>路徑模型，不是含潛在變項的結構方程模型；' +
@@ -12649,7 +12871,9 @@ function rStats(){
       return '<option value="' + x.id + '"' + (sel === x.id ? ' selected' : '') + '>' + esc(x.name) + '</option>';
     }).join('') + '</select>' +
     (o.cov ? '<span class="muted small">共變數：' + esc(o.covName) + '</span>'
-           : '<span class="muted small">無共變數（單因子變異數分析）</span>') + '</div></div>' +
+           : '<span class="muted small">無共變數（單因子變異數分析）</span>') + '</div>' +
+    (o.note ? '<p class="small" style="margin:8px 0 0;color:var(--warn)">' + esc(o.note) + '</p>' : '') +
+    '</div>' +
 
     (res ? '<div class="grid split" style="--cols:minmax(0,1fr) minmax(300px,.85fr);gap:16px">' +
     '<div class="card"><div class="card-h"><h3>' + esc(o.name) + '</h3>' +
@@ -12670,7 +12894,18 @@ function rStats(){
         '<td style="min-width:120px"><div class="bar"><i style="width:' + w.toFixed(0) + '%"></i></div></td></tr>';
     }).join('') + '</tbody></table></div>' +
     '<div class="card-p"><p class="muted small">調整後平均＝在共變數的總平均處的預測值。' +
-    'partial η² 的常用參考值：.01 小、.06 中、.14 大。</p></div></div>' +
+    'partial η² 的常用參考值：.01 小、.06 中、.14 大。</p>' +
+    /* 被 listwise 刪掉的人要印出來。刪掉的正是拒絕互動的孩子——最能說明
+       「這個社會框架對誰不管用」的那一批；留下來的是順從者，三個 AI 條件的
+       平均因此系統性往上偏。事後從匯出檔看不出來，所以固定印在表下方。 */
+    (res.droppedN
+      ? '<p class="small" style="margin:8px 0 0;color:var(--warn)"><strong>本次分析排除了 ' +
+        res.droppedN + ' 位在此變項上沒有數值的學生</strong>（' +
+        Object.keys(res.dropped).map(function(c){
+          return esc(condition(c).name) + ' ' + res.dropped[c] + ' 位';
+        }).join('、') + '）。這是 listwise 刪除，不是隨機遺失：' +
+        '沒有發話的孩子正是最能說明這個社會框架對誰不管用的那一批。</p>'
+      : '') + '</div></div>' +
 
     '<div class="card"><div class="card-h"><h3>事後比較</h3>' +
     '<span class="muted small">Bonferroni 校正</span></div>' +
@@ -13692,6 +13927,45 @@ function bindEvents(){
       }
       return; }
 
+    /* #aalSaveWarn 上的〈再試一次存檔〉。停掉自動存檔之後沒有任何路徑
+       回得去：騰出空間也沒用，那張卡會一直在，而 aalSave 到下課都不再動作。
+       清掉 _saveOff 與計數再試一次；成功就收掉卡片，失敗就照原路重新掀開
+       （aalSave 自己會處理，這裡只負責報告結果）。 */
+    /* 〈全部取消〉。要問一次：三十幾句標記是十分鐘的閱讀歷程，
+       而這個動作沒有復原路徑（每一句都會寫一筆 on:false 事件）。 */
+    if (act === 'aal-unmark-all'){
+      if (!AAL) return;
+      if (isImpersonating()){ toast('代為檢視時不能替學生取消標記。'); return; }
+      const it = aalItem();
+      const n = (AAL.marks[it.unit] || []).length;
+      if (!n){ toast('這一篇還沒有標記。'); return; }
+      confirmModal({
+        title: '要取消這一篇的全部標記嗎？',
+        body: '這一篇目前標了 ' + n + ' 句，取消之後不能復原。',
+        note: '標記不影響分數。只想取消其中幾句的話，點那幾句就好（點第二次就會取消）。',
+        yes: '全部取消', no: '先不要', danger: true
+      }, function(){
+        const k = aalUnmarkAll();
+        toast('已經取消 ' + k + ' 句標記。');
+        /* 焦點不要留在一顆剛剛被 hidden 的按鈕上——那會掉回 <body>。 */
+        const h = document.getElementById('passageTitle');
+        if (h) try { h.focus(); } catch (e) {}
+      });
+      return; }
+    if (act === 'aal-save-retry'){
+      if (!AAL) return;
+      AAL._saveOff = false;
+      aalSave._fails = 0;
+      const ok = aalSave();
+      const warn = document.getElementById('aalSaveWarn');
+      if (ok){
+        if (warn) warn.hidden = true;
+        toast('存起來了。');
+      } else {
+        if (warn) warn.hidden = false;
+        toast('還是存不起來，請舉手告訴老師。');
+      }
+      return; }
     /* 學生按了系統自己寫的「進度會保留」，就要真的把 AAL 收乾淨——
        否則 beforeunload 的守門條件（AAL 還活著）仍成立，他之後在任何一頁
        關分頁都會被警告「變更可能不會被儲存」，與那顆鈕的承諾直接打架。 */

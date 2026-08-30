@@ -159,9 +159,11 @@ function viewStudent(){
          他十五分鐘前就交過卷了。 */
       (kbLocked(me)
         ? statCard('我貼的想法', myNotes, (kbLockLabel(me) || {}).hint || '交完卷就可以繼續') +
+          /* vtext：這一張的值是一段文字（KB_LOCK_TEXT 的七個字），不是數字。
+             套數字卡的 1.8rem 等寬字會在教室平板的預設方向撐出橫向捲軸。 */
           statCard('知識建構空間',
             (kbLockLabel(me) || {}).badge || '測驗後開放',
-            (kbLockLabel(me) || {}).line || '交完卷就會打開')
+            (kbLockLabel(me) || {}).line || '交完卷就會打開', 'vtext')
         : statCard('我貼的想法', myNotes, '在知識建構空間') +
           statCard('未讀貼文', unread, '同學的新想法', unread ? 'warn' : '')) +
     '</div>' +

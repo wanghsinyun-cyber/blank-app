@@ -18,7 +18,10 @@ function viewTeacher(){
   const nAll = state.classes.reduce(function(a, c){ return a + c.studentIds.length; }, 0);
 
   return sectionHead('教師後台',
-    k.name + '　·　加入代碼 ' + k.code + '　·　' + k.studentIds.length + ' 位學生　·　夥伴條件：' + cond.name,
+    /* 原本印「加入代碼 k.code」。全庫沒有任何以班級代碼加入的流程，
+       而老師唯一真正需要的那組碼（這台平板的教師代碼）在派題分析頁。
+       一個什麼都打不開的六位數擺在最顯眼的位置，只會被拿去 #/unlock 試。 */
+    k.name + '　·　' + k.studentIds.length + ' 位學生　·　夥伴條件：' + cond.name,
     /* 研究控制台與建立派題屬於研究者的工具，教師端不出現 */
     (isResearcher()
       ? '<a class="btn" href="#/research">研究控制台</a><a class="btn primary" href="#/create">建立派題</a>'
@@ -225,7 +228,21 @@ function viewAssign(aid, tab){
         /* 這兩件事原本一個字都沒說，而它們決定老師在教室裡實際要做什麼。 */
         '這個設定只存在<strong>這一台平板</strong>的儲存空間裡——96 台要各按一次。' +
         '施測中要在學生的平板上按，先在網址列打 <code>#/unlock</code> 換成教師身分，' +
-        '按完再換回去。</p></div>';
+        '按完再換回去。</p>' +
+        /* 這台平板的教師代碼。上面那一段（以及 viewUnlock）都在教老師去按
+           #/unlock，而 #/unlock 要的就是這組碼——它原本只出現在兩個地方：
+           清場當下那一則 alertModal（看過就沒了），以及 #/settings，
+           而 settings 屬 RESEARCHER_ONLY，role==='teacher' 進去只會拿到
+           「這一頁只有研究者看得到」。課堂上真正需要換人的是導師，
+           96 台各一組不同的碼，她手上沒有清單就換不了人。
+           顯示給 isTeacher()，〈換一組〉仍只給 isResearcher()（在系統設定頁）。 */
+        '<p class="small" style="margin:10px 0 0;padding-top:10px;border-top:1px solid var(--rule)">' +
+        '這台平板的教師代碼：<strong class="num">' +
+        ((state.settings || {}).teacherCode
+          ? esc(state.settings.teacherCode)
+          : '（還沒有，《清空示範資料，準備施測》時會產生）') +
+        '</strong><br><span class="muted">在 <code>#/unlock</code> 換學生時要打這一組。' +
+        '每一台平板各有各的碼，要換掉請找研究者。</span></p></div>';
     })() +
     '<div class="tabs" role="tablist">' + tabs.map(function(t){
       const on = T === t[0];
@@ -240,7 +257,9 @@ function tabOverview(diag){
   const nItems = diag.items.length;
   /* 實際有作答的人數，不要寫死。四格數的是「人 × 題」的格子。 */
   const nAll = diag.perStudent.length;
-  if (!diag.done.length) return '<div class="empty"><h3>還沒有學生作答</h3><p>把班級加入代碼發給學生，作答後這裡會顯示。</p></div>';
+  /* 原本寫「把班級加入代碼發給學生」——那個流程不存在。 */
+  if (!diag.done.length) return '<div class="empty"><h3>還沒有人在這台平板上作答</h3>' +
+    '<p>用 <code>#/unlock</code> 換成第一位同學，作答之後這裡就會顯示。</p></div>';
   return '<div class="grid g4" style="margin-bottom:16px">' +
     statCard('全體平均', fx(mean(scores) / nItems * 100, 1) + '<span style="font-size:0.75em">%</span>', '答對 ' + fx(mean(scores), 1) + ' / ' + nItems + ' 題') +
     statCard('已交作答', diag.done.length, '未完成 ' + (diag.roster.length - diag.done.length) + ' 人') +

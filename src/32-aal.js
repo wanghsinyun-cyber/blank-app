@@ -84,10 +84,20 @@ function processMark(id){ const p = processOf(id); return p ? p.mark : '·'; }
 
 /* --- 19 項子歷程與角色中性的代表性提問句（PIRLS 2011）---
    fit：適用文體，提問庫據此分流，避免對文學性文本提出資訊性文本專用的提問。 */
+/* q 是 F3／F5 直接原句丟給孩子的內容，也被 promptProcessModule 寫進外部模型的
+   「可用的子歷程提問庫」。三句原本用段落尺度講話：FR-1「文章裡哪一段在講
+   這件事？」、FR-5「這一段最重要的一句話是哪一句？」、II-4「這一段讀起來是
+   什麼感覺？」。畫面上沒有任何段落被指名過（題幹、frame、F1、F2 都是題層級），
+   而本站唯一的文本操作單位是逐句標記——對只看得到一篇文章和一道題的
+   四年級孩子，「這一段」既是找不到指涉的指示詞（他會往上捲去找是哪一段），
+   也是「答案落在某一段裡」的收窄暗示。上一輪已經為同一個詞把 tutee 的
+   開場白從「這一段」改成「這一題」，但那次只改了開場白池，而提問庫才是
+   F3／F5 的主要內容。一律改成題層級、全篇層級或句層級。
+   規格由 zz-debug 的 assertQuestionScope 釘住。 */
 const SUBPROCESSES = [
   {id:'FR-1', p:'FR', en:'identifying information relevant to the specific goal of reading',
    zh:'找出與閱讀目標有關的訊息',
-   q:'這一題要找的是什麼？文章裡哪一段在講這件事？', fit:'皆可'},
+   q:'這一題要找的是什麼？文章裡哪一句在講這件事？', fit:'皆可'},
   {id:'FR-2', p:'FR', en:'looking for specific ideas',
    zh:'尋找特定的想法／觀點',
    q:'文章裡有沒有直接說到這件事？在哪裡？', fit:'皆可'},
@@ -99,7 +109,7 @@ const SUBPROCESSES = [
    q:'這件事發生在什麼時候、什麼地方？你從哪一句看出來的？', fit:'敘事'},
   {id:'FR-5', p:'FR', en:'finding the topic sentence or main idea (when explicitly stated)',
    zh:'找出主題句或主要觀點（限明確陳述者）',
-   q:'這一段最重要的一句話是哪一句？', fit:'皆可'},
+   q:'這一篇裡最重要的一句話是哪一句？', fit:'皆可'},
 
   {id:'SI-1', p:'SI', en:'inferring that one event caused another event',
    zh:'推論某事件導致另一事件（因果）',
@@ -128,7 +138,7 @@ const SUBPROCESSES = [
    q:'前面講的和後面講的有什麼不一樣？', fit:'皆可'},
   {id:'II-4', p:'II', en:"inferring a story's mood or tone",
    zh:'推測故事的情緒或語氣',
-   q:'這一段讀起來是什麼感覺？哪些字讓你有這種感覺？', fit:'敘事'},
+   q:'這一篇讀起來是什麼感覺？哪些字讓你有這種感覺？', fit:'敘事'},
   {id:'II-5', p:'II', en:'interpreting a real-world application of text information',
    zh:'詮釋文中訊息在真實世界的應用',
    q:'這件事在你的生活裡也會發生嗎？什麼時候？', fit:'皆可'},

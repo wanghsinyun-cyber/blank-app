@@ -228,7 +228,14 @@ function rLSA(){
     CONDITIONS.map(function(c){
       return '<option value="' + c.id + '"' + (sel === c.id ? ' selected' : '') + '>' + esc(c.name) + '</option>';
     }).join('') + '</select>' +
-    '<span class="muted small">序列 ' + r.nSeq + ' 段 · 事件 ' + r.nEvent + ' 次 · 轉移 ' + r.N + ' 次</span></div></div>' +
+    '<span class="muted small">' + r.nSid + ' 位學生 · 序列 ' + r.nSeq + ' 段 · 事件 ' +
+      r.nEvent + ' 次 · 轉移 ' + Math.round(r.rawN) + ' 次</span></div>' +
+    /* 原本只印「序列 N 段 · 事件 N 次」，看不出每一格由幾位學生貢獻。 */
+    '<p class="muted small" style="margin:8px 0 0">轉移次數採<strong>每人等權</strong>合併：' +
+    '每位學生的轉移矩陣先各自正規化，再平均並乘回總次數。' +
+    '不這樣做的話，一位把整篇三十幾句逐句標下去的孩子，光是連續的 M→M 就能' +
+    '供應該條件該格的三分之一（每格只有 24 人），而「有沒有十分鐘可以一直點」' +
+    '由完課速度決定、完課速度與條件共變。滑鼠移到格子上可以看到貢獻人數與最大單人占比。</p></div>' +
 
     '<div class="grid split" style="--cols:minmax(0,1.1fr) minmax(300px,.9fr);gap:16px">' +
     '<div class="card"><div class="card-h"><h3>調整殘差矩陣</h3>' +
@@ -242,13 +249,30 @@ function rLSA(){
           const z = r.Z[i][j];
           const on = Math.abs(z) >= 1.96;
           const col = z > 0 ? 'var(--q1)' : 'var(--q2)';
-          return '<td class="n"' + (on ? ' style="font-weight:700;color:' + col + ';background:' +
+          /* 貢獻人數與最大單人占比放在 title 上：格子本身要留給 z，
+             但「這一格是幾個人堆出來的」必須看得到，否則單人主導事後查不出來。
+             ⚠ 標在「一個人就占了一半以上」的格子上。 */
+          const nc = (r.contrib && r.contrib[i][j]) || 0;
+          const sh = (r.topShare && r.topShare[i][j]) || 0;
+          const solo = nc > 0 && sh >= 0.5;
+          const tip = nc
+            ? behaviorName(r.codes[i]) + ' → ' + behaviorName(r.codes[j]) +
+              '：原始 ' + r.cellRaw[i][j] + ' 次，來自 ' + nc + ' 位學生，' +
+              '最大單人占比 ' + (sh * 100).toFixed(0) + '%'
+            : '這一格沒有任何轉移';
+          return '<td class="n" title="' + esc(tip) + '"' +
+            (on ? ' style="font-weight:700;color:' + col + ';background:' +
             (z > 0 ? 'var(--q1-bg)' : 'var(--q2-bg)') + '"' : ' style="color:var(--ink-4)"') + '>' +
-            (r.F[i][j] ? z.toFixed(2) : '—') + '</td>';
+            (r.F[i][j] ? z.toFixed(2) : '—') +
+            (solo ? '<span aria-hidden="true" style="color:var(--warn)">⚠</span>' +
+                    '<span class="sr-only">（' + nc + ' 位學生，最大單人占比 ' +
+                    (sh * 100).toFixed(0) + '%）</span>' : '') + '</td>';
         }).join('') + '</tr>';
     }).join('') + '</tbody></table></div>' +
     '<div class="card-p"><p class="muted small">粗體格子為顯著（|z| ≥ 1.96）。' +
-    '綠色＝促進性轉移，紅色＝抑制性轉移。</p></div></div>' +
+    '綠色＝促進性轉移，紅色＝抑制性轉移。' +
+    '<strong>⚠</strong> 代表這一格有一位學生就占了一半以上的原始次數——' +
+    '即使已經每人等權，這種格子的結論仍不宜單獨引用。</p></div></div>' +
 
     '<div class="col">' +
       '<div class="card"><div class="card-h"><h3>顯著轉移（依 |z| 排序）</h3></div>' +
@@ -500,7 +524,10 @@ function rStats(){
 
   return '<div class="card card-p" style="margin-bottom:16px">' +
     '<h3>共變數分析與中介路徑</h3>' +
-    '<p class="lead" style="margin-top:8px">以條件為因子、對應的前測分數為共變數，檢定四條件在結果變項上的差異，' +
+    /* 「四條件」不能寫死：選到只在三個對話條件上有定義的變項時（relAbove），
+       對照組會被 ancova 的 listwise 過濾整組刪掉，而 lead 仍宣稱在檢定四條件。 */
+    '<p class="lead" style="margin-top:8px">以條件為因子、對應的前測分數為共變數，檢定' +
+    (o.conds ? o.conds.length : 4) + ' 個條件在結果變項上的差異，' +
     '報告 F、p、partial η² 與 Bonferroni 校正後的事後比較；再以平行多重中介的路徑分析估計' +
     '「條件 → 動機性變項 → 表現」的間接效果，信賴區間以百分位 bootstrap 求得。</p>' +
     '<p class="muted small">本模組估計的是<strong>觀察變項</strong>路徑模型，不是含潛在變項的結構方程模型；' +
@@ -511,7 +538,9 @@ function rStats(){
       return '<option value="' + x.id + '"' + (sel === x.id ? ' selected' : '') + '>' + esc(x.name) + '</option>';
     }).join('') + '</select>' +
     (o.cov ? '<span class="muted small">共變數：' + esc(o.covName) + '</span>'
-           : '<span class="muted small">無共變數（單因子變異數分析）</span>') + '</div></div>' +
+           : '<span class="muted small">無共變數（單因子變異數分析）</span>') + '</div>' +
+    (o.note ? '<p class="small" style="margin:8px 0 0;color:var(--warn)">' + esc(o.note) + '</p>' : '') +
+    '</div>' +
 
     (res ? '<div class="grid split" style="--cols:minmax(0,1fr) minmax(300px,.85fr);gap:16px">' +
     '<div class="card"><div class="card-h"><h3>' + esc(o.name) + '</h3>' +
@@ -532,7 +561,18 @@ function rStats(){
         '<td style="min-width:120px"><div class="bar"><i style="width:' + w.toFixed(0) + '%"></i></div></td></tr>';
     }).join('') + '</tbody></table></div>' +
     '<div class="card-p"><p class="muted small">調整後平均＝在共變數的總平均處的預測值。' +
-    'partial η² 的常用參考值：.01 小、.06 中、.14 大。</p></div></div>' +
+    'partial η² 的常用參考值：.01 小、.06 中、.14 大。</p>' +
+    /* 被 listwise 刪掉的人要印出來。刪掉的正是拒絕互動的孩子——最能說明
+       「這個社會框架對誰不管用」的那一批；留下來的是順從者，三個 AI 條件的
+       平均因此系統性往上偏。事後從匯出檔看不出來，所以固定印在表下方。 */
+    (res.droppedN
+      ? '<p class="small" style="margin:8px 0 0;color:var(--warn)"><strong>本次分析排除了 ' +
+        res.droppedN + ' 位在此變項上沒有數值的學生</strong>（' +
+        Object.keys(res.dropped).map(function(c){
+          return esc(condition(c).name) + ' ' + res.dropped[c] + ' 位';
+        }).join('、') + '）。這是 listwise 刪除，不是隨機遺失：' +
+        '沒有發話的孩子正是最能說明這個社會框架對誰不管用的那一批。</p>'
+      : '') + '</div></div>' +
 
     '<div class="card"><div class="card-h"><h3>事後比較</h3>' +
     '<span class="muted small">Bonferroni 校正</span></div>' +

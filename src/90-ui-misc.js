@@ -499,7 +499,10 @@ function viewUnlock(){
     '<div class="row"><button class="btn primary" data-act="device-unlock"' +
     (locked ? ' disabled' : '') + '>解鎖</button>' +
     '<a class="btn" href="#/student">取消</a></div>' +
+    /* 原本只指向系統設定頁，而那一頁屬 RESEARCHER_ONLY——
+       站在平板前面要換人的導師點進去只會被拒絕。改指向她到得了的地方。 */
     '<p class="muted small" style="margin:0">代碼在《清空示範資料，準備施測》時產生，' +
-    '可以在研究控制台的系統設定頁看到或換掉。每一次嘗試都會記錄下來。</p>' +
+    '也印在教師後台的派題分析頁上（研究者可以在系統設定頁換掉）。' +
+    '每一次嘗試都會記錄下來。</p>' +
     '</div></div>';
 }

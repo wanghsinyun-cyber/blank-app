@@ -106,6 +106,13 @@ function mergeDraftMaps(prev, mine, keys){
 function aalSave(){
   if (isImpersonating()) return;
   if (!AAL) return;
+  /* 「停掉自動存檔」原本只是一句註解：_saveOff 全庫只有兩個使用點——
+     在下面的 catch 裡寫入，以及決定 #aalSaveWarn 的 hidden——這一支自己
+     從來不讀它。配額爆掉之後每一次呼叫仍照跑 JSON.parse 整份草稿、
+     aalPadsSnapshot、stringify 與註定失敗的 setItem。
+     而逐句標記是全站唯一「每互動一次就存一次」的動作：T1 約 36 句
+     標完就是 36 次失敗。內容仍在記憶體裡，交卷走的是 save()，不受影響。 */
+  if (AAL._saveOff){ AAL.dirty = true; return false; }
   try {
     const all = JSON.parse(localStorage.getItem(AAL_DRAFT_KEY) || '{}');
     /* tele 與 drafts 要存（重整後遙測才接得起來），turns 不存——
@@ -133,13 +140,21 @@ function aalSave(){
     /* 加了 tele/drafts 之後這個 key 會變大，配額問題不再是偶發。
        連續兩次失敗就停掉自動存檔並常駐警示，不要只 toast 一次。 */
     aalSave._fails = (aalSave._fails || 0) + 1;
+    /* toast 原本在 catch 最後、不在這個分支裡，於是每一次失敗都再 toast 一次。
+       toast() 每次重寫 #toastRoot 並重新計時（時間隨字數，這一句約 3.7 秒），
+       那條 position:fixed／bottom:26px 的深色膠囊因此常駐在文章底部；
+       #toastRoot 是 role="status"，報讀器每點一句就重播同一句話。
+       畫面上方已經有一張常駐的 #aalSaveWarn 在講同一件事。
+       只說第一次，之後掀開那張卡就好。 */
+    if (aalSave._fails === 1) toast('這一題沒能存起來，先不要關掉分頁。');
     if (aalSave._fails >= 2){
       AAL._saveOff = true;
       const b = document.getElementById('aalSaveWarn');
       if (b) b.hidden = false;
     }
-    toast('這一題沒能存起來，先不要關掉分頁。');
+    return false;
   }
+  return true;
 }
 
 function aalDropDraft(){
@@ -409,7 +424,12 @@ function viewAaL(aid){
       ' style="margin-bottom:12px;border-left:3px solid var(--crit)">' +
       '<p class="small" style="margin:0"><strong>你寫的東西沒能存起來。</strong>' +
       '這台平板的儲存空間可能滿了。先不要關掉這個分頁——畫面上的內容還在，' +
-      '請舉手告訴老師。</p></div>' +
+      '請舉手告訴老師。</p>' +
+      /* 出口。停掉自動存檔之後，孩子與老師原本沒有任何辦法讓它再試一次：
+         騰出空間（關掉別的分頁、老師清掉別台的草稿）也沒有用，
+         這張卡會一直在，而自動存檔到下課都不會再啟動。 */
+      '<div class="row" style="margin-top:10px">' +
+      '<button class="btn sm" data-act="aal-save-retry">再試一次存檔</button></div></div>' +
 
     '<div class="aal">' +
     /* ---- 左欄：文本，逐句可標記 ---- */
@@ -424,14 +444,23 @@ function viewAaL(aid){
       '<div class="card-h"><h3 id="passageTitle" tabindex="-1">' + esc(text.title) + '</h3>' +
       '<span class="pill">' + esc(text.genre) + '</span>' +
       '<span class="pill" id="markCount"' + (marks.length ? '' : ' hidden') + '>已標記 ' +
-      '<span id="markCountN">' + marks.length + '</span> 句</span></div>' +
+      '<span id="markCountN">' + marks.length + '</span> 句</span>' +
+      /* 標記原本只有入口沒有出口：aalMark 是純 toggle，二次點擊是全站唯一的
+         移除路徑，而 toggle 語意只由 aria-pressed 傳給輔助科技——看得見螢幕的
+         孩子拿不到這個訊息。第一次用平板的四年級孩子誤觸是常態，
+         「先全部標起來看看」也很常見：標完三十幾句之後整篇被同一個底色鋪滿，
+         標記對他自己已經失去區辨力，想回到乾淨狀態只能逐句再點三十幾下。
+         而標記是這個平台唯一的閱讀歷程行為資料，也是教師唯讀重播的依據。
+         隔壁同一張版面裡的筆記面板與手寫板各有一顆〈清空〉。 */
+      '<button class="btn sm" id="unmarkAll" data-act="aal-unmark-all"' +
+      (marks.length ? '' : ' hidden') + '>全部取消</button></div>' +
       '<div class="card-p">' +
       /* 隱私要講實話：老師在唯讀重播裡看得到學生標了哪幾句。 */
       /* text.intro（「請先讀完整篇故事，再回答後面的問題。」）本來是死碼——
          全庫沒有讀取點。那是這一篇的作業指示，應該排在標記說明之前。 */
       '<p class="muted small" id="passageHelp">' +
       (text.intro ? '<strong>' + esc(text.intro) + '</strong> ' : '') +
-      '點一下任何一句，把它標記起來。' +
+      '點一下任何一句，把它標記起來，點第二次就會取消。' +
       /* 全頁原本沒有一句鍵盤說法，而選項區有。用鍵盤的孩子會把焦點停在
          某一顆句子鈕上往下讀，Space 在 button 上是啟用鍵——按一次就把他
          正停著的那一句 toggle 掉（寫一筆 MARK、底色消失）。 */
@@ -569,7 +598,17 @@ function viewAaL(aid){
 function aalDialogPane(it, cond, turns, used, maxT){
   const left = maxT - used;
   return '<div class="card aal-chat"><div class="card-h">' +
-    '<h3>我的夥伴：' + esc(cond.name) + '</h3>' +
+    /* 「· 第 N 題」與對照組的筆記卡（同檔 aalNotePane）逐字對位。
+       對照組在兩處講明自己的產出綁在這一題上：卡片頭與工具列那一句
+       「這一題一份，換題會換成新的一頁。」。三個 AI 條件的卡片頭原本只有
+       「我的夥伴：同學小森」，pill 只有「還可以說 6 次」，footer 三句也
+       完全沒提逐題——全站唯一說出「換下一題會重新計算」的那一句，是額度
+       用完之後才追加的系統訊息，沒把 6 次講滿的孩子永遠看不到它。
+       於是他每按一次〈下一題〉，剛講的整段對話就從畫面消失、次數跳回 6。
+       兩種最可能的反應都傷資料：以為話被弄丟而不再開口（處遇劑量被介面
+       自己壓低，壓低程度與換題頻率共變），或回到同一題再問一次白扣額度。
+       這同時是條件間的文案不對等：只有對照組被告知自己的產出是逐題的。 */
+    '<h3>我的夥伴：' + esc(cond.name) + '　·　第 ' + (AAL.idx + 1) + ' 題</h3>' +
     /* 剩餘額度要是「狀態訊息」。原本只是一顆靜態的 pill：
        aalSay 用 textContent 就地更新它（那是對的，不重繪整個面板），
        但沒有 role="status"，報讀器不會播報——只用報讀器的孩子
@@ -579,6 +618,9 @@ function aalDialogPane(it, cond, turns, used, maxT){
     '<span class="pill" role="status" aria-live="polite">還可以說 <span id="turnLeft">' +
       Math.max(0, left) + '</span> 次</span></div>' +
     '<div class="card-p">' +
+    /* 與對照組工具列那一句（「這一題一份，換題會換成新的一頁。」16 字）
+       等長的一行。放在對話串之前，沒把 6 次講滿的孩子也讀得到。 */
+    '<p class="muted small" style="margin:0 0 8px">這一題一份，換題會重新算 6 次。</p>' +
     /* role="log" + aria-live：AI 的回覆是非同步送達的，
        沒有這兩個屬性，報讀器使用者永遠不知道夥伴回話了。 */
     '<div class="chat" id="aalChat" role="log" aria-live="polite" aria-relevant="additions"' +
@@ -681,10 +723,38 @@ function aalMark(i){
 
   const btn = document.querySelector('.passage .sent[data-i="' + i + '"]');
   if (btn){ btn.classList.toggle('on', on); btn.setAttribute('aria-pressed', String(on)); }
+  aalSyncMarkCount(m.length);
+}
+
+/* 標記數的就地更新（計數 pill 與〈全部取消〉一起）。原本只寫在 aalMark 裡，
+   而 aal-unmark-all 也要用同一條路徑——重繪整頁會把焦點與捲動位置一起丟掉。 */
+function aalSyncMarkCount(len){
   const pill = document.getElementById('markCount');
   const n = document.getElementById('markCountN');
-  if (n) n.textContent = m.length;
-  if (pill){ if (m.length) pill.removeAttribute('hidden'); else pill.setAttribute('hidden', ''); }
+  const btn = document.getElementById('unmarkAll');
+  if (n) n.textContent = len;
+  [pill, btn].forEach(function(el){
+    if (!el) return;
+    if (len) el.removeAttribute('hidden'); else el.setAttribute('hidden', '');
+  });
+}
+
+/* 全部取消。逐句沿用 aalMark 的 on:false 路徑寫事件（foldToggleLog 折疊得掉），
+   就地更新每一顆句子鈕的 .on 與 aria-pressed，不呼叫 render()。 */
+function aalUnmarkAll(){
+  const it = aalItem();
+  const m = AAL.marks[it.unit] || [];
+  if (!m.length) return 0;
+  const gone = m.slice();
+  AAL.marks[it.unit] = [];
+  gone.forEach(function(i){
+    aalLog('MARK', 'M', {sent:i, textId:it.unit, on:false});
+    const btn = document.querySelector('.passage .sent[data-i="' + i + '"]');
+    if (btn){ btn.classList.remove('on'); btn.setAttribute('aria-pressed', 'false'); }
+  });
+  aalSave();
+  aalSyncMarkCount(0);
+  return gone.length;
 }
 
 /* 用方向鍵在四個選項間移動時，原生 radio 每移動一格就觸發一次 change。

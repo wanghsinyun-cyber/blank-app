@@ -2041,3 +2041,430 @@ window.assertScaleKeyCopy = function(){
   console.log('[assertScaleKeyCopy]', r);
   return r;
 };
+
+/* ==========================================================================
+   第 9 輪 B2：提問庫不得用段落尺度講話
+   SUBPROCESSES 的 q 是 F3／F5 直接原句丟給孩子的內容，也被
+   promptProcessModule 寫進外部模型的「可用的子歷程提問庫」。
+   畫面上沒有任何段落被指名過，而本站唯一的文本操作單位是逐句標記。
+
+   console 一行：assertQuestionScope()
+   ========================================================================== */
+window.assertQuestionScope = function(){
+  const fails = [], hits = {};
+  SUBPROCESSES.forEach(function(s){
+    const q = s.q || '';
+    if (q.indexOf('段') >= 0){
+      hits[s.id] = q;
+      fails.push(s.id + ' 的提問句用段落尺度講話：' + q);
+    }
+    POINTER_WORDS.forEach(function(w){
+      if (q.indexOf(w) >= 0) fails.push(s.id + ' 的提問句含指路語「' + w + '」：' + q);
+    });
+    VERDICT_WORDS.concat(VERDICT_SOFT).forEach(function(w){
+      if (q.indexOf(w) >= 0) fails.push(s.id + ' 的提問句含判定語「' + w + '」：' + q);
+    });
+    if (!q) fails.push(s.id + ' 沒有提問句');
+  });
+  /* 三個角色的開場白池與 stem 也走同一條規則（上一輪只改了 tutee 那一句）。 */
+  ['tutor', 'tutee', 'peer'].forEach(function(c){
+    const pool = []
+      .concat((typeof ROLE_OPENER !== 'undefined' && ROLE_OPENER[c]) ? [].concat(ROLE_OPENER[c].first || [], ROLE_OPENER[c].later || []) : [])
+      .concat((typeof ROLE_STEM !== 'undefined' && ROLE_STEM[c]) ? [ROLE_STEM[c]] : []);
+    pool.forEach(function(t){
+      if (String(t).indexOf('這一段') >= 0 || String(t).indexOf('那一段') >= 0)
+        fails.push(c + ' 的開場白／stem 仍含「這一段／那一段」：' + t);
+    });
+  });
+  const r = {pass: fails.length === 0, fails: fails, 命中: hits};
+  console.log('[assertQuestionScope]', r);
+  return r;
+};
+
+/* ==========================================================================
+   第 9 輪 B2：結果變項的適用條件與 listwise 刪除都要說出來
+   relAboveRate 在 asks.length===0 時回傳 null，而 ASK 只由 aalSay() 產生——
+   對照組結構上不可能有。ancova 的過濾把整組刪掉，於是一個宣稱四條件的
+   檢定實際上只跑三條件；同一道過濾也剔掉三個 AI 條件裡整節課沒發過話的
+   孩子——正是最能說明「這個社會框架對誰不管用」的那一批。
+
+   console 一行：assertOutcomeScope()
+   ========================================================================== */
+window.assertOutcomeScope = function(){
+  const fails = [], seen = {};
+  const rows = analysisDataset();
+  const outs = outcomeList();
+  const rel = outs.find(function(o){ return o.id === 'relAbove'; });
+  if (!rel){ const r = {pass:false, fails:['outcomeList 裡找不到 relAbove']}; console.log('[assertOutcomeScope]', r); return r; }
+  if (!rel.conds || rel.conds.length !== 3)
+    fails.push('relAbove 沒有標記適用條件（應為三個對話條件）');
+  if (rel.conds && rel.conds.indexOf('control') >= 0)
+    fails.push('relAbove 把對照組列進適用條件，但它結構上不可能有 ASK 事件');
+  if (!rel.note) fails.push('relAbove 沒有給面板可印的說明文字');
+
+  const res = ancova(rows, rel.get, rel.cov);
+  if (!res){ fails.push('relAbove 的 ancova 回傳 null'); }
+  else {
+    seen.conds = res.conds;
+    seen.dropped = res.dropped;
+    seen.droppedN = res.droppedN;
+    if (res.conds.indexOf('control') >= 0)
+      fails.push('對照組居然進了分析——測具或資料變了，下面幾條不算數');
+    if (!res.dropped || typeof res.droppedN !== 'number')
+      fails.push('ancova 沒有回傳被剔除的人數，面板就印不出來');
+    else {
+      const nCtl = state.classes.filter(function(c){ return c.condition === 'control'; })
+        .reduce(function(a, c){ return a + c.studentIds.length; }, 0);
+      if ((res.dropped.control || 0) !== nCtl)
+        fails.push('對照組應該整組被剔除（' + nCtl + ' 位），實際記到 ' + (res.dropped.control || 0) + ' 位');
+      if (res.droppedN < nCtl) fails.push('droppedN 小於對照組人數');
+    }
+  }
+  /* 對照組有定義的變項不可以被誤標 */
+  const sent = outs.find(function(o){ return o.id === 'sent'; });
+  if (sent && sent.conds) fails.push('平均情緒分數四條件都有定義，不該標 conds');
+  const r = {pass: fails.length === 0, fails: fails, 觀察: seen};
+  console.log('[assertOutcomeScope]', r);
+  return r;
+};
+
+/* ==========================================================================
+   第 9 輪 B2：單一重度標記者不得主導轉移矩陣
+   注入一位「整篇逐句標」的孩子與四位「只標三句」的孩子，
+   驗證每人等權之後，重度者對 M→M 那一格的加權貢獻不超過 1/人數，
+   而貢獻人數與最大單人占比看得到。
+
+   console 一行：assertLsaWeighting()
+   ========================================================================== */
+window.assertLsaWeighting = function(){
+  const fails = [], seen = {};
+  const kept = (state.logs || []).slice();
+  try {
+    const t0 = Date.now();
+    /* cond 用一個真實資料裡不存在的值，lsa({cond:'__probe'}) 就只看得到探針，
+       不會被種子裡 28 位對照組學生的 423 筆 M→M 稀釋掉。 */
+    const add = [];
+    function ev(sid, code, type, i, dt){
+      add.push({sid:sid, cond:'__probe', aid:'a-post', iid:'__lsaProbe', textId:'__t',
+                type:type, code:code, sent:i, t:t0 + dt});
+    }
+    /* 一位「整篇逐句標」的孩子：40 次 MARK ＝ 39 筆 M→M */
+    for (let i = 0; i < 40; i++) ev('__heavy', 'M', 'MARK', i, i * 1000);
+    /* 四位只做自我檢核的孩子：各 3 次 ＝ 各 2 筆 C→C */
+    for (let s = 0; s < 4; s++)
+      for (let i = 0; i < 3; i++) ev('__light' + s, 'C', 'CHECK', i, i * 1000);
+    state.logs = kept.concat(add);
+
+    const r = lsa({cond:'__probe'});
+    const mi = r.codes.indexOf('M'), ci = r.codes.indexOf('C');
+    seen.nSid = r.nSid;
+    seen.MM貢獻人數 = r.contrib[mi][mi];
+    seen.MM最大單人占比 = +(r.topShare[mi][mi]).toFixed(3);
+    seen.原始總轉移 = r.rawN;
+
+    if (r.nSid !== 5){ fails.push('探針沒生效：lsa 只看到 ' + r.nSid + ' 位學生'); }
+    else {
+      const rawShare = r.cellRaw[mi][mi] / r.rawN;      // 未加權：39/47 ≈ .83
+      const wShare   = r.F[mi][mi] / r.rawN;            // 每人等權：應為 1/5
+      seen.未加權MM占比 = +rawShare.toFixed(3);
+      seen.加權後MM占比 = +wShare.toFixed(3);
+      seen.加權後CC占比 = +(r.F[ci][ci] / r.rawN).toFixed(3);
+      if (rawShare < 0.7)
+        fails.push('探針沒生效：未加權時 M→M 只占 ' + (rawShare * 100).toFixed(0) +
+                   '%，這一條測不到單人主導');
+      if (Math.abs(wShare - 1 / r.nSid) > 0.02)
+        fails.push('每人等權沒生效：一位學生的 39 筆 M→M 在加權後仍占 ' +
+                   (wShare * 100).toFixed(0) + '%（五位學生，應為 20%）');
+      if (r.contrib[mi][mi] !== 1)
+        fails.push('M→M 的貢獻人數記成 ' + r.contrib[mi][mi] + '，應為 1');
+      if (Math.abs(r.topShare[mi][mi] - 1) > 0.001)
+        fails.push('M→M 的最大單人占比記成 ' + r.topShare[mi][mi].toFixed(3) + '，應為 1');
+      if (r.contrib[ci][ci] !== 4)
+        fails.push('C→C 的貢獻人數記成 ' + r.contrib[ci][ci] + '，應為 4');
+      /* 總量守恆：加權只重新分配，不可以憑空生出或吃掉轉移 */
+      let tot = 0; r.F.forEach(function(row){ row.forEach(function(v){ tot += v; }); });
+      if (Math.abs(tot - r.rawN) > 0.001)
+        fails.push('加權後的總轉移是 ' + tot.toFixed(2) + '，原始是 ' + r.rawN);
+    }
+
+    /* 把重度者換成與其他人一樣輕，加權後的矩陣不該有大的位移 */
+    const light = add.filter(function(e){ return e.sid !== '__heavy' || e.sent < 3; });
+    state.logs = kept.concat(light);
+    const r2 = lsa({cond:'__probe'});
+    const d = Math.abs(r.F[mi][mi] / r.rawN - r2.F[mi][mi] / r2.rawN);
+    seen.重度者變輕之後的位移 = +d.toFixed(3);
+    if (d > 0.05)
+      fails.push('把重度標記者換成一般人之後，M→M 的加權占比位移 ' + d.toFixed(3) +
+                 '——單一受試者仍在推動整個矩陣');
+  } catch (e) {
+    fails.push('擲出例外：' + (e && e.message));
+  } finally {
+    state.logs = kept;
+  }
+  const r = {pass: fails.length === 0, fails: fails, 觀察: seen};
+  console.log('[assertLsaWeighting]', r);
+  return r;
+};
+
+/* ==========================================================================
+   第 9 輪 B2：存檔失敗要真的停下來，而且要有出口
+   「連續兩次失敗就停掉自動存檔」原本只是註解：_saveOff 從來沒有被讀過，
+   而 toast 在 catch 最後、不在計數分支裡。逐句標記是全站唯一「每互動一次
+   就存一次」的動作，T1 約 36 句標完就是 36 次失敗、36 次 toast，
+   那條 fixed／bottom 的深色膠囊因此常駐畫面底部、擋住文章最後幾行。
+
+   console 一行：assertSaveOff()
+   ========================================================================== */
+window.assertSaveOff = function(){
+  const fails = [], seen = {};
+  const realRole = state.ui.role, realHash = location.hash;
+  const keptSub = state.submissions.slice();
+  const keptLog = (state.logs || []).slice();
+  const keptDraft = (function(){ try { return localStorage.getItem(AAL_DRAFT_KEY); } catch (e) { return null; } })();
+  const realSet = localStorage.setItem;
+  const realToast = window.toast;
+  let toasts = 0;
+
+  function fin(){
+    try { localStorage.setItem = realSet; } catch (e) {}
+    window.toast = realToast;
+    state.submissions = keptSub;
+    state.logs = keptLog;
+    try {
+      if (keptDraft === null) localStorage.removeItem(AAL_DRAFT_KEY);
+      else localStorage.setItem(AAL_DRAFT_KEY, keptDraft);
+    } catch (e) {}
+    state.ui.role = realRole; renderShell();
+    QUIZ = null; AAL = null;
+    location.hash = realHash || '#/teacher'; render();
+    const r = {pass: fails.length === 0, fails: fails, 觀察: seen};
+    console.log('[assertSaveOff]', r);
+    return r;
+  }
+
+  const k = state.classes.find(function(c){ return c.condition === 'control'; }) || state.classes[0];
+  const sid = k.studentIds[0];
+  state.submissions = keptSub.filter(function(x){ return !(x.sid === sid && x.aid === 'a-post'); });
+  state.ui.role = sid; renderShell();
+  QUIZ = null; AAL = null; location.hash = '#/aal/a-post'; render();
+  if (!AAL){ fails.push('後測頁沒有開起來'); return fin(); }
+
+  aalSave._fails = 0;
+  AAL._saveOff = false;
+  window.toast = function(){ toasts++; };
+  /* 只讓草稿那一把鑰匙失敗，其餘照舊（否則會把整份 state 一起弄壞） */
+  localStorage.setItem = function(key, val){
+    if (key === AAL_DRAFT_KEY) throw new Error('QuotaExceededError(probe)');
+    return realSet.call(localStorage, key, val);
+  };
+
+  const calls = [];
+  for (let i = 0; i < 8; i++) calls.push(aalSave());
+  seen.八次呼叫的回傳 = calls;
+  seen.toast次數 = toasts;
+  seen.失敗計數 = aalSave._fails;
+  seen.已停用 = AAL._saveOff;
+
+  if (toasts !== 1) fails.push('八次失敗跳了 ' + toasts + ' 次 toast（只該跳第一次）');
+  if (!AAL._saveOff) fails.push('連續失敗之後沒有停掉自動存檔');
+  if (aalSave._fails > 2)
+    fails.push('停用之後仍在累計失敗次數（' + aalSave._fails + '）——代表它還在硬存');
+  if (calls.some(function(v){ return v === true; })) fails.push('失敗的呼叫回傳了 true');
+  const warn = document.getElementById('aalSaveWarn');
+  seen.警示卡可見 = !!(warn && !warn.hidden);
+  if (!warn) fails.push('找不到 #aalSaveWarn');
+  else if (warn.hidden) fails.push('停用之後常駐警示沒有掀開');
+  else if (!warn.querySelector('[data-act="aal-save-retry"]'))
+    fails.push('警示卡上沒有〈再試一次存檔〉——孩子與老師沒有出口');
+
+  /* 恢復之後按〈再試一次〉要真的成功 */
+  localStorage.setItem = realSet;
+  AAL._saveOff = false; aalSave._fails = 0;
+  const ok = aalSave();
+  seen.修好之後再存 = ok;
+  if (ok !== true) fails.push('儲存空間恢復之後仍存不起來');
+  return fin();
+};
+
+/* ==========================================================================
+   第 9 輪 B2：標記要有出口，對話卡要說自己是逐題的
+   ‧ 標記原本只有入口：aalMark 是純 toggle，二次點擊是唯一的移除路徑，
+     而那個語意只由 aria-pressed 傳給輔助科技。
+   ‧ 對話卡原本沒有一個字說「這一題一份」，而對照組的筆記卡說了兩次——
+     孩子每按一次〈下一題〉整段對話就消失、次數跳回 6。
+
+   console 一行：assertMarkExitAndPaneParity()
+   ========================================================================== */
+window.assertMarkExitAndPaneParity = function(){
+  const fails = [], seen = {};
+  const realRole = state.ui.role, realHash = location.hash;
+  const keptSub = state.submissions.slice();
+  const keptLog = (state.logs || []).slice();
+  const keptDraft = (function(){ try { return localStorage.getItem(AAL_DRAFT_KEY); } catch (e) { return null; } })();
+
+  function fin(){
+    state.submissions = keptSub;
+    state.logs = keptLog;
+    try {
+      if (keptDraft === null) localStorage.removeItem(AAL_DRAFT_KEY);
+      else localStorage.setItem(AAL_DRAFT_KEY, keptDraft);
+    } catch (e) {}
+    state.ui.role = realRole; renderShell();
+    QUIZ = null; AAL = null;
+    location.hash = realHash || '#/teacher'; render();
+    const r = {pass: fails.length === 0, fails: fails, 觀察: seen};
+    console.log('[assertMarkExitAndPaneParity]', r);
+    return r;
+  }
+
+  function open(cond){
+    const k = state.classes.find(function(c){ return c.condition === cond; });
+    const sid = k.studentIds[0];
+    state.submissions = keptSub.filter(function(x){ return !(x.sid === sid && x.aid === 'a-post'); });
+    state.ui.role = sid; renderShell();
+    QUIZ = null; AAL = null; location.hash = '#/aal/a-post'; render();
+    return sid;
+  }
+
+  /* --- 標記的出口（對照組版面最單純） --- */
+  open('control');
+  if (!AAL){ fails.push('後測頁沒有開起來'); return fin(); }
+  const help = document.getElementById('passageHelp');
+  seen.說明 = help ? help.textContent.slice(0, 40) : '(沒有)';
+  if (!help || help.textContent.indexOf('點第二次') < 0)
+    fails.push('文章說明沒有講「點第二次就會取消」——toggle 語意只有輔助科技拿得到');
+
+  const it = aalItem();
+  AAL.marks[it.unit] = [];
+  render();
+  let btn = document.getElementById('unmarkAll');
+  if (!btn) fails.push('找不到〈全部取消〉');
+  else if (!btn.hidden) fails.push('一句都沒標的時候〈全部取消〉不該出現');
+
+  const sents = document.querySelectorAll('.passage .sent[data-i]');
+  seen.句數 = sents.length;
+  if (sents.length < 5) fails.push('文章裡只找到 ' + sents.length + ' 顆句子鈕');
+  const logs0 = (state.logs || []).length;
+  [0, 1, 2, 3].forEach(function(i){ aalMark(i); });
+  btn = document.getElementById('unmarkAll');
+  seen.標四句後鈕可見 = !!(btn && !btn.hidden);
+  if (!btn || btn.hidden) fails.push('標了四句之後〈全部取消〉沒有出現');
+  const n = document.getElementById('markCountN');
+  if (!n || n.textContent !== '4') fails.push('計數不是 4，是 ' + (n && n.textContent));
+
+  const removed = aalUnmarkAll();
+  seen.取消句數 = removed;
+  if (removed !== 4) fails.push('全部取消回報 ' + removed + ' 句，應為 4');
+  if ((AAL.marks[it.unit] || []).length) fails.push('全部取消之後 marks 還有東西');
+  const nAfter = document.getElementById('markCountN');
+  if (!nAfter || nAfter.textContent !== '0') fails.push('計數沒有就地歸零');
+  const btnAfter = document.getElementById('unmarkAll');
+  if (btnAfter && !btnAfter.hidden) fails.push('歸零之後〈全部取消〉還在');
+  const stillOn = document.querySelectorAll('.passage .sent.on, .passage .sent[aria-pressed="true"]').length;
+  seen.仍亮著的句子 = stillOn;
+  if (stillOn) fails.push('畫面上還有 ' + stillOn + ' 句是亮的（沒有就地更新）');
+  const wrote = (state.logs || []).length - logs0;
+  seen.寫入事件數 = wrote;
+  if (wrote < 8) fails.push('取消沒有逐句寫事件（只多了 ' + wrote + ' 筆，標 4 + 取消 4 應為 8）');
+  const offs = (state.logs || []).slice(logs0).filter(function(e){ return e.on === false; }).length;
+  if (offs !== 4) fails.push('on:false 的事件有 ' + offs + ' 筆，應為 4');
+
+  /* --- 對話卡與筆記卡的逐題宣告要對等 --- */
+  const noteHead = document.querySelector('.aal-chat .card-h h3');
+  seen.對照組卡片頭 = noteHead && noteHead.textContent;
+  if (!noteHead || noteHead.textContent.indexOf('第 ') < 0)
+    fails.push('對照組的筆記卡頭沒有題號（這一條原本就成立，測具壞了）');
+
+  ['tutor', 'tutee', 'peer'].forEach(function(c){
+    open(c);
+    if (!AAL){ fails.push(c + '：後測頁沒有開起來'); return; }
+    const h = document.querySelector('.aal-chat .card-h h3');
+    const pane = document.querySelector('.aal-chat');
+    const txt = pane ? pane.textContent : '';
+    seen[c + '卡片頭'] = h && h.textContent;
+    if (!h || h.textContent.indexOf('第 ') < 0)
+      fails.push(c + ' 的對話卡頭沒有題號——只有對照組被告知自己的產出是逐題的');
+    if (txt.indexOf('這一題一份') < 0)
+      fails.push(c + ' 的對話面板沒有一句說「這一題一份」');
+  });
+  return fin();
+};
+
+/* ==========================================================================
+   第 9 輪 B2：統計卡的值不得撐破卡片、導師要拿得到教師代碼
+   ‧ .stat .v 原本是 1.8rem + white-space:nowrap 且沒有 max-width，
+     而首頁第四張卡的值印的是 KB_LOCK_TEXT 的七個中文字：教室平板的
+     預設方向、預設字級就會把首頁變成要左右捲的頁面。
+   ‧ 課堂上真正需要按 #/unlock 換人的是導師，而那組六位數原本只出現在
+     清場當下的 alertModal 與 RESEARCHER_ONLY 的 #/settings。
+
+   console 一行：assertStatFitAndCode()
+   ========================================================================== */
+window.assertStatFitAndCode = function(){
+  const fails = [], seen = {};
+  const realRole = state.ui.role, realHash = location.hash;
+  const realFs = document.documentElement.style.getPropertyValue('--fs');
+  const realNarrow = document.documentElement.getAttribute('data-narrow');
+  const keptSub = state.submissions.slice();
+
+  /* --- 統計卡：kbLocked 的學生首頁，四個字級 × 窄版都不可以溢出 --- */
+  const k = state.classes.find(function(c){ return c.condition === 'tutor'; }) || state.classes[0];
+  const sid = k.studentIds[0];
+  state.submissions = keptSub.filter(function(x){ return x.sid !== sid; });   // 沒交卷 → kbLocked
+  state.ui.role = sid; renderShell();
+  location.hash = '#/student'; render();
+  document.documentElement.setAttribute('data-narrow', '');
+
+  const over = {};
+  ['1', '1.25', '1.5', '1.75'].forEach(function(fs){
+    document.documentElement.style.setProperty('--fs', fs);
+    let worst = 0, who = '';
+    Array.prototype.forEach.call(document.querySelectorAll('#view .stat'), function(st){
+      const v = st.querySelector('.v');
+      if (!v) return;
+      const d = v.scrollWidth - st.clientWidth;
+      if (d > worst){ worst = d; who = v.textContent.slice(0, 12); }
+    });
+    over[fs] = worst ? worst + 'px（' + who + '）' : '—';
+    if (worst > 2) fails.push('字級 ' + fs + '（窄版）：統計卡的值溢出卡片 ' + worst + 'px：' + who);
+  });
+  seen.溢出 = over;
+  document.documentElement.style.setProperty('--fs', realFs || '1');
+  if (realNarrow === null) document.documentElement.removeAttribute('data-narrow');
+  const css = Array.prototype.slice.call(document.styleSheets).some(function(s){
+    try { return Array.prototype.slice.call(s.cssRules).some(function(r){
+      return r.selectorText && /\.stat\s+\.v$/.test(r.selectorText) &&
+             /nowrap/.test(r.style.whiteSpace || '');
+    }); } catch (e) { return false; }
+  });
+  if (css) fails.push('.stat .v 還帶著 white-space:nowrap');
+
+  /* --- 教師代碼：導師（不是研究者）要在派題分析頁看得到 --- */
+  state.submissions = keptSub;
+  const code = (state.settings || {}).teacherCode;
+  seen.教師代碼 = code || '(還沒產生)';
+  const t = state.users.find(function(u){ return u.role === 'teacher'; });
+  if (!t) fails.push('找不到教師身分');
+  else {
+    state.ui.role = t.id; renderShell();
+    location.hash = '#/assign/a-post'; render();
+    const txt = document.getElementById('view').textContent;
+    seen.導師看到的抬頭 = txt.slice(0, 60);
+    if (txt.indexOf('這台平板的教師代碼') < 0)
+      fails.push('導師在派題分析頁看不到這台平板的教師代碼');
+    if (code && txt.indexOf(code) < 0)
+      fails.push('代碼欄位沒有印出實際的代碼');
+    if (txt.indexOf('加入代碼') >= 0)
+      fails.push('抬頭還印著「加入代碼」——全庫沒有以班級代碼加入的流程');
+    location.hash = '#/unlock'; render();
+    const u = document.getElementById('view').textContent;
+    if (u.indexOf('系統設定頁') >= 0 && u.indexOf('派題分析頁') < 0)
+      fails.push('#/unlock 的指路語仍只指向 RESEARCHER_ONLY 的系統設定頁');
+  }
+
+  state.ui.role = realRole; renderShell();
+  location.hash = realHash || '#/teacher'; render();
+  const r = {pass: fails.length === 0, fails: fails, 觀察: seen};
+  console.log('[assertStatFitAndCode]', r);
+  return r;
+};
