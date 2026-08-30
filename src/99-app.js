@@ -1005,7 +1005,7 @@ function openItemStrategy(iid){
   const diag = diagnose(state, ROUTE.args[0]);
   const pi = diag.perItem.find(function(p){ return p.item.id === iid; });
   const it = pi.item;
-  modal('<div class="modal-h"><h3>第 ' + it.no + ' 題 · 教學策略</h3>' +
+  modal('<div class="modal-h"><h3>' + itemLabel(INSPECT && INSPECT.aid ? INSPECT.aid : 'a-post', it.id) + ' · 教學策略</h3>' +
     '<span class="pill">' + esc(engineLabel()) + '</span>' +
     '<button class="btn sm ghost" data-act="close-modal">關閉</button></div>' +
     '<div class="modal-b"><div class="item" style="margin-bottom:12px"><div class="stem">' + esc(it.stem) + '</div>' +

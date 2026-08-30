@@ -78,7 +78,7 @@ function viewTeacher(){
         const it = getItem(v.origin.iid);
         return '<div class="row" style="justify-content:space-between;border-bottom:1px solid var(--rule-soft);padding-bottom:8px">' +
           '<div><a href="#/kb/' + v.id + '"><b>' + esc(v.title) + '</b></a>' +
-          '<div class="muted small">源自 ' + (it ? '第 ' + it.no + ' 題' : '—') + '　·　' + notesOfView(v.id).length + ' 則貼文</div></div>' +
+          '<div class="muted small">源自 ' + (it ? itemLabel(v.origin.aid, it.id) : '—') + '　·　' + notesOfView(v.id).length + ' 則貼文</div></div>' +
           '<a class="btn sm" href="#/kb/' + v.id + '">進入</a></div>';
       }).join('') || '<div class="muted small">還沒有由迷思開啟的視圖。到「派題分析 → 迷思橋接」按下〈開啟共構視圖〉。</div>') +
     '</div></div>' +
@@ -426,7 +426,7 @@ function tabKidmap(diag){
       (ps.q[2] ? '<div class="ai-out" style="margin-top:12px"><p><strong>這位學生的迷思題：</strong></p><ul>' +
         ps.cells.filter(function(c){ return c.q === 2; }).map(function(c){
           const it = getItem(c.iid);
-          return '<li>第 ' + it.no + ' 題（' + esc(shortStem(it.stem)) + '）——他選了 ' +
+          return '<li>' + itemLabel(diag.assignment.id, it.id) + '（' + esc(shortStem(it.stem)) + '）——他選了 ' +
             (c.choice != null ? String.fromCharCode(65 + c.choice) + '. ' + esc(it.options[c.choice]) : '未作答') +
             '，正解是 ' + String.fromCharCode(65 + it.answer) + '。預期答對率 ' + pct(c.p) + '。</li>';
         }).join('') + '</ul></div>' : '<p class="small muted" style="margin-top:12px">這位學生沒有落在迷思象限的題目。</p>') +
@@ -443,7 +443,7 @@ function tabItems(diag){
     rows.map(function(pi){
       const it = pi.item;
       const m = pi.misCode ? MISCONCEPTIONS.find(function(x){ return x.id === pi.misCode; }) : null;
-      return '<tr><td><b>第 ' + it.no + ' 題</b><div class="muted small">' + esc(processName(it.process)) + ' · ' + esc(it.diff) + '</div></td>' +
+      return '<tr><td><b>' + itemLabel(diag.assignment.id, it.id) + '</b><div class="muted small">' + esc(processName(it.process)) + ' · ' + esc(it.diff) + '</div></td>' +
         '<td class="small">' + esc(unitName(it.unit)) + '</td>' +
         '<td class="n">' + fx(pi.delta) + '</td><td class="n">' + pct(pi.pass) + '</td>' +
         '<td style="min-width:120px">' + quadBar(pi.q, pi.n) + '</td>' +
@@ -485,7 +485,7 @@ function tabBridge(diag){
       const v = bridgeExists(diag.assignment.id, it.id);
       const m = pi.misCode ? MISCONCEPTIONS.find(function(x){ return x.id === pi.misCode; }) : null;
       return '<div class="card" style="margin-bottom:14px"><div class="card-h">' +
-        '<h3>第 ' + it.no + ' 題　<span class="pill q2"><span class="dot"></span>迷思 ' + pi.q[2] + ' 人 · ' + pct(pi.misRate) + '</span></h3>' +
+        '<h3>' + itemLabel(diag.assignment.id, it.id) + '　<span class="pill q2"><span class="dot"></span>迷思 ' + pi.q[2] + ' 人 · ' + pct(pi.misRate) + '</span></h3>' +
         (v ? '<a class="btn sm" href="#/kb/' + v.id + '">進入共構視圖 →</a>'
            : '<button class="btn primary sm" data-act="bridge" data-id="' + it.id + '">開啟共構視圖</button>') + '</div>' +
         '<div class="card-p"><div class="item" style="margin-bottom:12px"><div class="stem">' + esc(it.stem) + '</div>' +
@@ -535,7 +535,7 @@ function tabCR(diag){
   });
 
   return '<div class="row" style="margin-bottom:12px">' + crs.map(function(c){
-      return '<button class="btn sm' + (c.id === sel ? ' primary' : '') + '" data-act="cr-sel" data-id="' + c.id + '">非選第 ' + c.no + ' 題</button>';
+      return '<button class="btn sm' + (c.id === sel ? ' primary' : '') + '" data-act="cr-sel" data-id="' + c.id + '">' + itemLabel(diag.assignment.id, c.id) + '</button>';
     }).join('') + '</div>' +
     '<div class="card" style="margin-bottom:14px"><div class="card-h"><h3>題目</h3>' +
       itemPills(it) + '</div>' +

@@ -383,7 +383,7 @@ function kidmapSVG(diag, ps, student){
      裡面的象限標籤、刻度與所有資料點文字全部從可及性樹消失。
      改用 title + desc，並在 desc 裡寫出老師真正要的摘要（迷思題號）。 */
   const q2list = ps.cells.filter(function(c){ return c.q === 2; })
-    .map(function(c){ return '第 ' + getItem(c.iid).no + ' 題'; });
+    .map(function(c){ return itemLabel(diag.assignment.id, c.iid); });
   const qn = [1,2,3,4].map(function(k){ return ps.cells.filter(function(c){ return c.q === k; }).length; });
   const desc = (student ? '你這次的閱讀地圖：' : 'KIDMAP 四象限圖。能力估計值 θ = ' + fx(ps.theta) + '。')
     + (student ? '' : '優勢概念 ' + qn[0] + ' 題、迷思概念 ' + qn[1] + ' 題、合理答錯 ' + qn[2] +
@@ -427,10 +427,10 @@ function kidmapSVG(diag, ps, student){
     const cx = base + off, cy = Y(c.delta);
     const col = 'var(--' + QUAD[c.q].key + ')';
     parts.push('<circle cx="' + cx + '" cy="' + cy + '" r="9" fill="' + col + '" fill-opacity="0.9" stroke="var(--card)" stroke-width="1.5"><title>第 ' +
-      getItem(c.iid).no + ' 題 · ' + (student ? QUAD_STUDENT[c.q]
+      displayNo(diag.assignment.id, c.iid) + ' 題 · ' + (student ? QUAD_STUDENT[c.q]
         : QUAD[c.q].name + ' · δ=' + fx(c.delta) + ' · 預期答對率 ' + pct(c.p)) + '</title></circle>');
     parts.push('<text x="' + cx + '" y="' + (cy + 3.2) + '" text-anchor="middle" fill="var(--card)" style="font-size:9px;font-weight:600">' +
-      getItem(c.iid).no + '</text>');
+      displayNo(diag.assignment.id, c.iid) + '</text>');
   });
   parts.push('</svg>');
   return parts.join('');

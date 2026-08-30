@@ -147,6 +147,33 @@ function resetState(){
 
 /* --- 查詢輔助 --- */
 function getItem(id){ return ITEMS.find(function(i){ return i.id === id; }); }
+
+/* 顯示用的題號＝這一題在這份派題裡的位置。
+   題目改成依文本分組之後（見 30-data.js 的 allIds），ITEMS 宣告順序裡的
+   it.no 就不再等於孩子看到的順序：R10–R14 的 it.no 是 10–14、位置是 11–15；
+   兩題非選的 it.no 各自從 1 起算，位置卻是 10 與 16。
+   作答畫面用的是位置（AAL.idx + 1），而診斷頁、知識建構空間、教師端與
+   AI 提示詞用的是 it.no——於是從第 10 題開始整整差一號。前 9 題剛好對得上，
+   所以不容易被發現。
+   最痛的一條是「可惜的題目：第 12 題 → 全班正在討論這題」：那是診斷頁
+   唯一要孩子採取的行動，而它會把他送去他當時看到的第 13 題；老師在課堂上
+   說「我們看第 12 題」時講的也不是孩子螢幕上那一題。
+   診斷 → 回去重讀 → 白板討論這條迴圈正是這個平台的主軸，題號在中間斷掉。
+   一律以「位置」為顯示的單一真相來源；it.no 只留給題庫維護畫面。 */
+function displayNo(aid, iid){
+  const a = getAssignment(aid);
+  if (a){
+    const i = a.itemIds.indexOf(iid);
+    if (i >= 0) return i + 1;
+  }
+  const it = getItem(iid);
+  return it ? it.no : '?';
+}
+/* 「第 N 題」；非選題加註記，不要再用它自己那套從 1 起算的編號 */
+function itemLabel(aid, iid){
+  const it = getItem(iid);
+  return '第 ' + displayNo(aid, iid) + ' 題' + (it && it.type === 'cr' ? '（非選）' : '');
+}
 function getUnit(id){ return UNITS.find(function(u){ return u.id === id; }); }
 /* unitName() 定義在 30-data.js（本平台的「單元」＝「文本」）。
    這裡曾有一份讀 u.name 的舊定義，會蓋掉正確版本並印出 undefined，已移除。 */
@@ -378,7 +405,7 @@ function buildInquiryPrompt(pi, diag, klass){
   const n2 = only(pi.q2Students), n1 = only(pi.q1Students);
   /* 這一題本班沒有人讀法不同時，整句不要輸出——原本只有 n1 有守門。 */
   if (n2){
-    lines.push('「' + diag.assignment.title + '」第 ' + it.no + ' 題（' + textTitle(it.unit) + '）有 ' +
+    lines.push('「' + diag.assignment.title + '」' + itemLabel(diag.assignment.id, it.id) + '（' + textTitle(it.unit) + '）有 ' +
       n2 + ' 位同學的讀法跟答案不一樣。我們一起看看，是哪一句話讓大家想得不同。');
     /* topDistractorN 同樣是全樣本，一起改成本班計數——
        只改兩個數字會留下第三個。 */
@@ -393,7 +420,7 @@ function buildInquiryPrompt(pi, diag, klass){
     }
     if (mis) lines.push('這常常跟「' + mis.name + '」有關：' + mis.desc);
   } else {
-    lines.push('「' + diag.assignment.title + '」第 ' + it.no + ' 題（' + textTitle(it.unit) +
+    lines.push('「' + diag.assignment.title + '」' + itemLabel(diag.assignment.id, it.id) + '（' + textTitle(it.unit) +
       '）值得我們一起再看一次。');
   }
   if (n1) lines.push('另外有 ' + n1 + ' 位同學這一題讀得很穩，請他們先把自己的想法貼出來，讓大家看得到不同的思路。');
@@ -417,11 +444,11 @@ function createBridgeView(diag, pi){
 
   // 視圖標題刻意寫成一個「問題」而不是一個「主題」——知識建構的起點是問題。
   const v = createView({
-    title: mis ? '「' + mis.name + '」什麼時候會出錯？' : ('第 ' + it.no + ' 題：我們卡在哪裡？'),
+    title: mis ? '「' + mis.name + '」什麼時候會出錯？' : (itemLabel(diag.assignment.id, it.id) + '：我們卡在哪裡？'),
     /* desc 是存下來的資料，學生在視圖列表與畫布抬頭都會直接讀到，
        isTeacher() 分岔救不了。教師需要的溯源資訊已經結構化存在 v.origin，
        顯示端要講 KIDMAP 就從 origin 現算。 */
-    desc: '從「' + diag.assignment.title + '」第 ' + it.no + ' 題長出來的共同問題。',
+    desc: '從「' + diag.assignment.title + '」' + itemLabel(diag.assignment.id, it.id) + '長出來的共同問題。',
     classId: k.id,
     origin: {aid: diag.assignment.id, iid: it.id, mis: pi.misCode || null}
   });

@@ -2787,6 +2787,33 @@ function resetState(){
 
 /* --- 查詢輔助 --- */
 function getItem(id){ return ITEMS.find(function(i){ return i.id === id; }); }
+
+/* 顯示用的題號＝這一題在這份派題裡的位置。
+   題目改成依文本分組之後（見 30-data.js 的 allIds），ITEMS 宣告順序裡的
+   it.no 就不再等於孩子看到的順序：R10–R14 的 it.no 是 10–14、位置是 11–15；
+   兩題非選的 it.no 各自從 1 起算，位置卻是 10 與 16。
+   作答畫面用的是位置（AAL.idx + 1），而診斷頁、知識建構空間、教師端與
+   AI 提示詞用的是 it.no——於是從第 10 題開始整整差一號。前 9 題剛好對得上，
+   所以不容易被發現。
+   最痛的一條是「可惜的題目：第 12 題 → 全班正在討論這題」：那是診斷頁
+   唯一要孩子採取的行動，而它會把他送去他當時看到的第 13 題；老師在課堂上
+   說「我們看第 12 題」時講的也不是孩子螢幕上那一題。
+   診斷 → 回去重讀 → 白板討論這條迴圈正是這個平台的主軸，題號在中間斷掉。
+   一律以「位置」為顯示的單一真相來源；it.no 只留給題庫維護畫面。 */
+function displayNo(aid, iid){
+  const a = getAssignment(aid);
+  if (a){
+    const i = a.itemIds.indexOf(iid);
+    if (i >= 0) return i + 1;
+  }
+  const it = getItem(iid);
+  return it ? it.no : '?';
+}
+/* 「第 N 題」；非選題加註記，不要再用它自己那套從 1 起算的編號 */
+function itemLabel(aid, iid){
+  const it = getItem(iid);
+  return '第 ' + displayNo(aid, iid) + ' 題' + (it && it.type === 'cr' ? '（非選）' : '');
+}
 function getUnit(id){ return UNITS.find(function(u){ return u.id === id; }); }
 /* unitName() 定義在 30-data.js（本平台的「單元」＝「文本」）。
    這裡曾有一份讀 u.name 的舊定義，會蓋掉正確版本並印出 undefined，已移除。 */
@@ -3018,7 +3045,7 @@ function buildInquiryPrompt(pi, diag, klass){
   const n2 = only(pi.q2Students), n1 = only(pi.q1Students);
   /* 這一題本班沒有人讀法不同時，整句不要輸出——原本只有 n1 有守門。 */
   if (n2){
-    lines.push('「' + diag.assignment.title + '」第 ' + it.no + ' 題（' + textTitle(it.unit) + '）有 ' +
+    lines.push('「' + diag.assignment.title + '」' + itemLabel(diag.assignment.id, it.id) + '（' + textTitle(it.unit) + '）有 ' +
       n2 + ' 位同學的讀法跟答案不一樣。我們一起看看，是哪一句話讓大家想得不同。');
     /* topDistractorN 同樣是全樣本，一起改成本班計數——
        只改兩個數字會留下第三個。 */
@@ -3033,7 +3060,7 @@ function buildInquiryPrompt(pi, diag, klass){
     }
     if (mis) lines.push('這常常跟「' + mis.name + '」有關：' + mis.desc);
   } else {
-    lines.push('「' + diag.assignment.title + '」第 ' + it.no + ' 題（' + textTitle(it.unit) +
+    lines.push('「' + diag.assignment.title + '」' + itemLabel(diag.assignment.id, it.id) + '（' + textTitle(it.unit) +
       '）值得我們一起再看一次。');
   }
   if (n1) lines.push('另外有 ' + n1 + ' 位同學這一題讀得很穩，請他們先把自己的想法貼出來，讓大家看得到不同的思路。');
@@ -3057,11 +3084,11 @@ function createBridgeView(diag, pi){
 
   // 視圖標題刻意寫成一個「問題」而不是一個「主題」——知識建構的起點是問題。
   const v = createView({
-    title: mis ? '「' + mis.name + '」什麼時候會出錯？' : ('第 ' + it.no + ' 題：我們卡在哪裡？'),
+    title: mis ? '「' + mis.name + '」什麼時候會出錯？' : (itemLabel(diag.assignment.id, it.id) + '：我們卡在哪裡？'),
     /* desc 是存下來的資料，學生在視圖列表與畫布抬頭都會直接讀到，
        isTeacher() 分岔救不了。教師需要的溯源資訊已經結構化存在 v.origin，
        顯示端要講 KIDMAP 就從 origin 現算。 */
-    desc: '從「' + diag.assignment.title + '」第 ' + it.no + ' 題長出來的共同問題。',
+    desc: '從「' + diag.assignment.title + '」' + itemLabel(diag.assignment.id, it.id) + '長出來的共同問題。',
     classId: k.id,
     origin: {aid: diag.assignment.id, iid: it.id, mis: pi.misCode || null}
   });
@@ -4014,7 +4041,7 @@ function materialClass(diag){
   L.push('【主要迷思題】');
   diag.flagged.forEach(function(pi){
     const it = pi.item;
-    L.push('- 第 ' + it.no + ' 題（' + unitName(it.unit) + '，' + processName(it.process) + '，' + it.diff + '）');
+    L.push('- ' + itemLabel(diag.assignment.id, it.id) + '（' + unitName(it.unit) + '，' + processName(it.process) + '，' + it.diff + '）');
     L.push('  題幹：' + it.stem);
     L.push('  選項：' + it.options.map(function(o, i){ return String.fromCharCode(65 + i) + '. ' + o; }).join('　'));
     L.push('  正解：' + String.fromCharCode(65 + it.answer) + '　難度 δ=' + fx(pi.delta) + '　全體（四班合計）答對率 ' + pct(pi.pass));
@@ -4097,7 +4124,7 @@ function builtinClassReport(diag){
     const students = uniq(g.reduce(function(a, pi){ return a.concat(pi.q2Students); }, []));
     L.push('**' + (m ? m.name : '其他錯誤型態') + '**（' + g.length + ' 題受影響，涉及 ' + students.length + ' 位學生）');
     if (m) L.push('- 概念描述：' + m.desc);
-    L.push('- 相關題號：' + g.map(function(pi){ return '第 ' + pi.item.no + ' 題（迷思 ' + pct(pi.misRate) + '）'; }).join('、'));
+    L.push('- 相關題號：' + g.map(function(pi){ return itemLabel(diag.assignment.id, pi.item.id) + '（迷思 ' + pct(pi.misRate) + '）'; }).join('、'));
     L.push('- 落在此迷思的學生：' + students.slice(0, 12).map(userName).join('、') + (students.length > 12 ? ' 等' : ''));
     L.push('');
   });
@@ -4105,7 +4132,7 @@ function builtinClassReport(diag){
   L.push('#### 2. 每一題的迷思解釋');
   diag.flagged.forEach(function(pi){
     const it = pi.item;
-    L.push('**第 ' + it.no + ' 題**（' + unitName(it.unit) + ' · ' + processName(it.process) + ' · δ=' + fx(pi.delta) + '）');
+    L.push('**' + itemLabel(diag.assignment.id, it.id) + '**（' + unitName(it.unit) + ' · ' + processName(it.process) + ' · δ=' + fx(pi.delta) + '）');
     L.push('- ' + it.stem);
     if (pi.topDistractor != null){
       L.push('- 迷思學生最常選 **' + String.fromCharCode(65 + pi.topDistractor) + '. ' + it.options[pi.topDistractor] + '**（' + pi.topDistractorN + ' 人）。');
@@ -4134,7 +4161,7 @@ function builtinClassReport(diag){
     L.push('目前沒有需要立即開啟共構的迷思題。');
   }
   top.forEach(function(pi){
-    L.push('**第 ' + pi.item.no + ' 題 → 可直接貼到知識建構空間的問題敘述**');
+    L.push('**' + itemLabel(diag.assignment.id, pi.item.id) + ' → 可直接貼到知識建構空間的問題敘述**');
     L.push('');
     L.push('> ' + buildInquiryPrompt(pi, diag, currentClass()).split('\n').join('\n> '));
     L.push('');
@@ -4149,7 +4176,7 @@ function builtinClassReport(diag){
     L.push('- 建議在共構討論結束後，用相同題組施測一次（本系統的「共構後測」），並比較每位學生的 θ 變化與論述參與，看討論是否真的轉成理解。');
   }
   const weakest = diag.perItem.slice().sort(function(a, b){ return a.pass - b.pass; })[0];
-  if (weakest) L.push('- 全體（四班合計）答對率最低的是第 ' + weakest.item.no + ' 題（' + pct(weakest.pass) + '），若其迷思比例不高，代表是難度而非概念問題，可先做鷹架式練習。');
+  if (weakest) L.push('- 全體（四班合計）答對率最低的是' + itemLabel(diag.assignment.id, weakest.item.id) + '（' + pct(weakest.pass) + '），若其迷思比例不高，代表是難度而非概念問題，可先做鷹架式練習。');
   L.push('');
   L.push('---');
   L.push('*本報告由內建規則引擎產生：所有數字直接來自 Rasch 估計與誘答選項標記，不含語言模型生成內容，可重現。*');
@@ -5018,7 +5045,7 @@ function kidmapSVG(diag, ps, student){
      裡面的象限標籤、刻度與所有資料點文字全部從可及性樹消失。
      改用 title + desc，並在 desc 裡寫出老師真正要的摘要（迷思題號）。 */
   const q2list = ps.cells.filter(function(c){ return c.q === 2; })
-    .map(function(c){ return '第 ' + getItem(c.iid).no + ' 題'; });
+    .map(function(c){ return itemLabel(diag.assignment.id, c.iid); });
   const qn = [1,2,3,4].map(function(k){ return ps.cells.filter(function(c){ return c.q === k; }).length; });
   const desc = (student ? '你這次的閱讀地圖：' : 'KIDMAP 四象限圖。能力估計值 θ = ' + fx(ps.theta) + '。')
     + (student ? '' : '優勢概念 ' + qn[0] + ' 題、迷思概念 ' + qn[1] + ' 題、合理答錯 ' + qn[2] +
@@ -5062,10 +5089,10 @@ function kidmapSVG(diag, ps, student){
     const cx = base + off, cy = Y(c.delta);
     const col = 'var(--' + QUAD[c.q].key + ')';
     parts.push('<circle cx="' + cx + '" cy="' + cy + '" r="9" fill="' + col + '" fill-opacity="0.9" stroke="var(--card)" stroke-width="1.5"><title>第 ' +
-      getItem(c.iid).no + ' 題 · ' + (student ? QUAD_STUDENT[c.q]
+      displayNo(diag.assignment.id, c.iid) + ' 題 · ' + (student ? QUAD_STUDENT[c.q]
         : QUAD[c.q].name + ' · δ=' + fx(c.delta) + ' · 預期答對率 ' + pct(c.p)) + '</title></circle>');
     parts.push('<text x="' + cx + '" y="' + (cy + 3.2) + '" text-anchor="middle" fill="var(--card)" style="font-size:9px;font-weight:600">' +
-      getItem(c.iid).no + '</text>');
+      displayNo(diag.assignment.id, c.iid) + '</text>');
   });
   parts.push('</svg>');
   return parts.join('');
@@ -5315,7 +5342,7 @@ function viewTeacher(){
         const it = getItem(v.origin.iid);
         return '<div class="row" style="justify-content:space-between;border-bottom:1px solid var(--rule-soft);padding-bottom:8px">' +
           '<div><a href="#/kb/' + v.id + '"><b>' + esc(v.title) + '</b></a>' +
-          '<div class="muted small">源自 ' + (it ? '第 ' + it.no + ' 題' : '—') + '　·　' + notesOfView(v.id).length + ' 則貼文</div></div>' +
+          '<div class="muted small">源自 ' + (it ? itemLabel(v.origin.aid, it.id) : '—') + '　·　' + notesOfView(v.id).length + ' 則貼文</div></div>' +
           '<a class="btn sm" href="#/kb/' + v.id + '">進入</a></div>';
       }).join('') || '<div class="muted small">還沒有由迷思開啟的視圖。到「派題分析 → 迷思橋接」按下〈開啟共構視圖〉。</div>') +
     '</div></div>' +
@@ -5663,7 +5690,7 @@ function tabKidmap(diag){
       (ps.q[2] ? '<div class="ai-out" style="margin-top:12px"><p><strong>這位學生的迷思題：</strong></p><ul>' +
         ps.cells.filter(function(c){ return c.q === 2; }).map(function(c){
           const it = getItem(c.iid);
-          return '<li>第 ' + it.no + ' 題（' + esc(shortStem(it.stem)) + '）——他選了 ' +
+          return '<li>' + itemLabel(diag.assignment.id, it.id) + '（' + esc(shortStem(it.stem)) + '）——他選了 ' +
             (c.choice != null ? String.fromCharCode(65 + c.choice) + '. ' + esc(it.options[c.choice]) : '未作答') +
             '，正解是 ' + String.fromCharCode(65 + it.answer) + '。預期答對率 ' + pct(c.p) + '。</li>';
         }).join('') + '</ul></div>' : '<p class="small muted" style="margin-top:12px">這位學生沒有落在迷思象限的題目。</p>') +
@@ -5680,7 +5707,7 @@ function tabItems(diag){
     rows.map(function(pi){
       const it = pi.item;
       const m = pi.misCode ? MISCONCEPTIONS.find(function(x){ return x.id === pi.misCode; }) : null;
-      return '<tr><td><b>第 ' + it.no + ' 題</b><div class="muted small">' + esc(processName(it.process)) + ' · ' + esc(it.diff) + '</div></td>' +
+      return '<tr><td><b>' + itemLabel(diag.assignment.id, it.id) + '</b><div class="muted small">' + esc(processName(it.process)) + ' · ' + esc(it.diff) + '</div></td>' +
         '<td class="small">' + esc(unitName(it.unit)) + '</td>' +
         '<td class="n">' + fx(pi.delta) + '</td><td class="n">' + pct(pi.pass) + '</td>' +
         '<td style="min-width:120px">' + quadBar(pi.q, pi.n) + '</td>' +
@@ -5722,7 +5749,7 @@ function tabBridge(diag){
       const v = bridgeExists(diag.assignment.id, it.id);
       const m = pi.misCode ? MISCONCEPTIONS.find(function(x){ return x.id === pi.misCode; }) : null;
       return '<div class="card" style="margin-bottom:14px"><div class="card-h">' +
-        '<h3>第 ' + it.no + ' 題　<span class="pill q2"><span class="dot"></span>迷思 ' + pi.q[2] + ' 人 · ' + pct(pi.misRate) + '</span></h3>' +
+        '<h3>' + itemLabel(diag.assignment.id, it.id) + '　<span class="pill q2"><span class="dot"></span>迷思 ' + pi.q[2] + ' 人 · ' + pct(pi.misRate) + '</span></h3>' +
         (v ? '<a class="btn sm" href="#/kb/' + v.id + '">進入共構視圖 →</a>'
            : '<button class="btn primary sm" data-act="bridge" data-id="' + it.id + '">開啟共構視圖</button>') + '</div>' +
         '<div class="card-p"><div class="item" style="margin-bottom:12px"><div class="stem">' + esc(it.stem) + '</div>' +
@@ -5772,7 +5799,7 @@ function tabCR(diag){
   });
 
   return '<div class="row" style="margin-bottom:12px">' + crs.map(function(c){
-      return '<button class="btn sm' + (c.id === sel ? ' primary' : '') + '" data-act="cr-sel" data-id="' + c.id + '">非選第 ' + c.no + ' 題</button>';
+      return '<button class="btn sm' + (c.id === sel ? ' primary' : '') + '" data-act="cr-sel" data-id="' + c.id + '">' + itemLabel(diag.assignment.id, c.id) + '</button>';
     }).join('') + '</div>' +
     '<div class="card" style="margin-bottom:14px"><div class="card-h"><h3>題目</h3>' +
       itemPills(it) + '</div>' +
@@ -5971,7 +5998,7 @@ function viewKBList(){
       /* 同上：學生版用中性色與中性語彙，不用紅色的迷思 pill。 */
       (it ? '<div class="pill ' + (isTeacher() ? 'q2' : '') + '" style="margin-bottom:8px">' +
             '<span class="dot"></span>' +
-            (isTeacher() ? '源自迷思題：第 ' : '大家在討論：第 ') + it.no + ' 題</div>' : '') +
+            (isTeacher() ? '源自迷思題：' : '大家在討論：') + itemLabel(v.origin.aid, it.id) + '</div>' : '') +
       '<div class="row small muted" style="gap:14px">' +
         '<span>' + ns.length + ' 則貼文</span>' +
         '<span>' + ns.filter(function(n){ return n.buildOn; }).length + ' 則延伸</span>' +
@@ -6071,8 +6098,8 @@ function viewKBCanvas(vid){
       /* 「迷思」是教師與研究端的術語，不放在學生每天要進來的社群空間裡。
          在這裡把一張視圖標成「源自迷思題」，等於當著全班的面宣告這是
          「大家答錯的那題」——與知識建構論「真實想法、真實問題」的預設相反。 */
-      (isTeacher() ? ' 第 ' + it.no + ' 題的 KIDMAP 迷思象限。</p>'
-                   : ' 第 ' + it.no + ' 題。這一題有不少同學讀法不一樣，所以拿出來一起想。</p>') +
+      (isTeacher() ? ' ' + itemLabel(v.origin.aid, it.id) + '的 KIDMAP 迷思象限。</p>'
+                   : ' ' + itemLabel(v.origin.aid, it.id) + '。這一題有不少同學讀法不一樣，所以拿出來一起想。</p>') +
       '<div class="item"><div class="stem">' + esc(it.stem) + '</div>' +
       '<div class="muted small">' + it.options.map(function(o, k){ return String.fromCharCode(65 + k) + '. ' + esc(o); }).join('　') + '</div></div>' +
       '</div>' : '') +
@@ -7009,7 +7036,7 @@ function viewResult(aid){
           /* 只找本班的視圖。掃全站的話，c-3 的孩子會看到「全班正在討論這題 →」
              指向 c-1 的白板，點下去被守門擋掉——而那句話是對他說的。 */
           const v = viewsForViewer().find(function(v){ return v.origin && v.origin.iid === it.id; });
-          return '<li>第 ' + it.no + ' 題：' + esc(shortStem(it.stem)) +
+          return '<li>' + itemLabel(aid, it.id) + '：' + esc(shortStem(it.stem)) +
             (v ? '　<a href="#/kb/' + v.id + '">全班正在討論這題 →</a>' : '') + '</li>';
         }).join('') + '</ul></div>' : '') +
       (ps.q[1] ? '<div class="ai-out" style="margin-top:10px"><p><strong>有 ' + ps.q[1] +
@@ -7027,7 +7054,7 @@ function viewResult(aid){
       const r = mine.find(function(x){ return x.iid === it.id; });
       const c = diag && diag.ready && ps ? ps.cells.find(function(x){ return x.iid === it.id; }) : null;
       return '<div class="item"><div class="row" style="justify-content:space-between">' +
-        '<b>第 ' + it.no + ' 題</b>' +
+        '<b>' + itemLabel(aid, it.id) + '</b>' +
         /* 三態，不是兩態：沒作答不等於答錯。把缺答畫成紅色的「答錯」，
            孩子會以為自己寫了而且寫壞了。 */
         (!r || r.choice == null
@@ -7060,7 +7087,7 @@ function crResultBlock(aid, sid, keyLocked){
   return '<div class="card"><div class="card-h"><h3>非選題</h3></div><div class="card-p col">' +
     crs.map(function(it){
       const r = state.responses.find(function(x){ return x.aid === aid && x.sid === sid && x.iid === it.id; });
-      return '<div class="note-full"><b>非選第 ' + it.no + ' 題</b>' +
+      return '<div class="note-full"><b>' + itemLabel(aid, it.id) + '</b>' +
         '<div class="stem">' + esc(it.stem) + '</div>' +
         /* 前測與後測是同兩題建構反應題。在後測交卷前把自己前測寫的整段
            作文讀回來，等於直接抄一次——兩題的 Δ 會歸零。 */
@@ -8219,9 +8246,26 @@ async function aalSay(){
   if (pill) pill.textContent = Math.max(0, left);
   box.readOnly = false;
   box.removeAttribute('aria-busy');
+  /* 回覆抵達時只在「焦點還在對話面板、或已經掉到 body」的情況下才收回焦點。
+     原本是無條件 box.focus()：LLM 引擎下這一段等待可達數秒（見上方註解），
+     而那正是孩子回去讀文章、點句子、或在 #crText 打非選題答案的時間窗。
+     焦點被拉走之後他繼續打的字會落進對話框，順手按 Enter 就整段送出去
+     （#aalSay 的 Enter 綁在 99-app.js 上）——那一段話會：
+       · 扣掉這一題 6 次額度裡的一次
+       · 以「【學生剛剛說】」進到提示詞，實質繞過「AI 不可讀作答欄位」
+       · 被編碼成 RQ4 的語料
+       · 而且從他自己的答案裡消失
+     這條路徑只存在於三個 AI 條件，對照組沒有非同步等待——所以它同時是
+     一個與條件共變的資料汙染。
+     同一支函式第 540 行早就有這道 activeElement 守門，只是沒有套到這裡。
+     preventScroll 一併補上，理由與下面那一支相同。 */
+  const focusIsOurs = !document.activeElement ||
+    document.activeElement === document.body ||
+    document.activeElement === box ||
+    document.activeElement === sendBtn;
   if (left > 0){
     if (sendBtn) sendBtn.disabled = false;
-    box.focus();
+    if (focusIsOurs) box.focus({preventScroll:true});
   } else {
     box.placeholder = '這一題已經聊完了';
     box.disabled = true;
@@ -8235,9 +8279,15 @@ async function aalSay(){
     }
     const done = document.getElementById('turnsDone');
     const next = document.querySelector('[data-act="aal-next"]:not([disabled])');
-    /* preventScroll 要留著——拿掉會把整個頁面捲走 */
-    if (done) done.focus({preventScroll:true});
-    else if (next) next.focus({preventScroll:true});
+    /* preventScroll 要留著——拿掉會把整個頁面捲走。
+       activeElement 守門的理由同上：孩子可能正在別的地方打字，
+       額度用完不是把他從答案裡拉走的理由。焦點不收回時，
+       #aalChat 是 role="log" aria-live="polite"，那句話仍會被報讀出來，
+       而 toast 也照樣出現。 */
+    if (focusIsOurs){
+      if (done) done.focus({preventScroll:true});
+      else if (next) next.focus({preventScroll:true});
+    }
     toast('這一題的對話次數用完了，可以按下一題。');
   }
 }
@@ -10535,7 +10585,7 @@ function openItemStrategy(iid){
   const diag = diagnose(state, ROUTE.args[0]);
   const pi = diag.perItem.find(function(p){ return p.item.id === iid; });
   const it = pi.item;
-  modal('<div class="modal-h"><h3>第 ' + it.no + ' 題 · 教學策略</h3>' +
+  modal('<div class="modal-h"><h3>' + itemLabel(INSPECT && INSPECT.aid ? INSPECT.aid : 'a-post', it.id) + ' · 教學策略</h3>' +
     '<span class="pill">' + esc(engineLabel()) + '</span>' +
     '<button class="btn sm ghost" data-act="close-modal">關閉</button></div>' +
     '<div class="modal-b"><div class="item" style="margin-bottom:12px"><div class="stem">' + esc(it.stem) + '</div>' +

@@ -76,7 +76,7 @@ function viewKBList(){
       /* 同上：學生版用中性色與中性語彙，不用紅色的迷思 pill。 */
       (it ? '<div class="pill ' + (isTeacher() ? 'q2' : '') + '" style="margin-bottom:8px">' +
             '<span class="dot"></span>' +
-            (isTeacher() ? '源自迷思題：第 ' : '大家在討論：第 ') + it.no + ' 題</div>' : '') +
+            (isTeacher() ? '源自迷思題：' : '大家在討論：') + itemLabel(v.origin.aid, it.id) + '</div>' : '') +
       '<div class="row small muted" style="gap:14px">' +
         '<span>' + ns.length + ' 則貼文</span>' +
         '<span>' + ns.filter(function(n){ return n.buildOn; }).length + ' 則延伸</span>' +
@@ -176,8 +176,8 @@ function viewKBCanvas(vid){
       /* 「迷思」是教師與研究端的術語，不放在學生每天要進來的社群空間裡。
          在這裡把一張視圖標成「源自迷思題」，等於當著全班的面宣告這是
          「大家答錯的那題」——與知識建構論「真實想法、真實問題」的預設相反。 */
-      (isTeacher() ? ' 第 ' + it.no + ' 題的 KIDMAP 迷思象限。</p>'
-                   : ' 第 ' + it.no + ' 題。這一題有不少同學讀法不一樣，所以拿出來一起想。</p>') +
+      (isTeacher() ? ' ' + itemLabel(v.origin.aid, it.id) + '的 KIDMAP 迷思象限。</p>'
+                   : ' ' + itemLabel(v.origin.aid, it.id) + '。這一題有不少同學讀法不一樣，所以拿出來一起想。</p>') +
       '<div class="item"><div class="stem">' + esc(it.stem) + '</div>' +
       '<div class="muted small">' + it.options.map(function(o, k){ return String.fromCharCode(65 + k) + '. ' + esc(o); }).join('　') + '</div></div>' +
       '</div>' : '') +

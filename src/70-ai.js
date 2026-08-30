@@ -60,7 +60,7 @@ function materialClass(diag){
   L.push('【主要迷思題】');
   diag.flagged.forEach(function(pi){
     const it = pi.item;
-    L.push('- 第 ' + it.no + ' 題（' + unitName(it.unit) + '，' + processName(it.process) + '，' + it.diff + '）');
+    L.push('- ' + itemLabel(diag.assignment.id, it.id) + '（' + unitName(it.unit) + '，' + processName(it.process) + '，' + it.diff + '）');
     L.push('  題幹：' + it.stem);
     L.push('  選項：' + it.options.map(function(o, i){ return String.fromCharCode(65 + i) + '. ' + o; }).join('　'));
     L.push('  正解：' + String.fromCharCode(65 + it.answer) + '　難度 δ=' + fx(pi.delta) + '　全體（四班合計）答對率 ' + pct(pi.pass));
@@ -143,7 +143,7 @@ function builtinClassReport(diag){
     const students = uniq(g.reduce(function(a, pi){ return a.concat(pi.q2Students); }, []));
     L.push('**' + (m ? m.name : '其他錯誤型態') + '**（' + g.length + ' 題受影響，涉及 ' + students.length + ' 位學生）');
     if (m) L.push('- 概念描述：' + m.desc);
-    L.push('- 相關題號：' + g.map(function(pi){ return '第 ' + pi.item.no + ' 題（迷思 ' + pct(pi.misRate) + '）'; }).join('、'));
+    L.push('- 相關題號：' + g.map(function(pi){ return itemLabel(diag.assignment.id, pi.item.id) + '（迷思 ' + pct(pi.misRate) + '）'; }).join('、'));
     L.push('- 落在此迷思的學生：' + students.slice(0, 12).map(userName).join('、') + (students.length > 12 ? ' 等' : ''));
     L.push('');
   });
@@ -151,7 +151,7 @@ function builtinClassReport(diag){
   L.push('#### 2. 每一題的迷思解釋');
   diag.flagged.forEach(function(pi){
     const it = pi.item;
-    L.push('**第 ' + it.no + ' 題**（' + unitName(it.unit) + ' · ' + processName(it.process) + ' · δ=' + fx(pi.delta) + '）');
+    L.push('**' + itemLabel(diag.assignment.id, it.id) + '**（' + unitName(it.unit) + ' · ' + processName(it.process) + ' · δ=' + fx(pi.delta) + '）');
     L.push('- ' + it.stem);
     if (pi.topDistractor != null){
       L.push('- 迷思學生最常選 **' + String.fromCharCode(65 + pi.topDistractor) + '. ' + it.options[pi.topDistractor] + '**（' + pi.topDistractorN + ' 人）。');
@@ -180,7 +180,7 @@ function builtinClassReport(diag){
     L.push('目前沒有需要立即開啟共構的迷思題。');
   }
   top.forEach(function(pi){
-    L.push('**第 ' + pi.item.no + ' 題 → 可直接貼到知識建構空間的問題敘述**');
+    L.push('**' + itemLabel(diag.assignment.id, pi.item.id) + ' → 可直接貼到知識建構空間的問題敘述**');
     L.push('');
     L.push('> ' + buildInquiryPrompt(pi, diag, currentClass()).split('\n').join('\n> '));
     L.push('');
@@ -195,7 +195,7 @@ function builtinClassReport(diag){
     L.push('- 建議在共構討論結束後，用相同題組施測一次（本系統的「共構後測」），並比較每位學生的 θ 變化與論述參與，看討論是否真的轉成理解。');
   }
   const weakest = diag.perItem.slice().sort(function(a, b){ return a.pass - b.pass; })[0];
-  if (weakest) L.push('- 全體（四班合計）答對率最低的是第 ' + weakest.item.no + ' 題（' + pct(weakest.pass) + '），若其迷思比例不高，代表是難度而非概念問題，可先做鷹架式練習。');
+  if (weakest) L.push('- 全體（四班合計）答對率最低的是' + itemLabel(diag.assignment.id, weakest.item.id) + '（' + pct(weakest.pass) + '），若其迷思比例不高，代表是難度而非概念問題，可先做鷹架式練習。');
   L.push('');
   L.push('---');
   L.push('*本報告由內建規則引擎產生：所有數字直接來自 Rasch 估計與誘答選項標記，不含語言模型生成內容，可重現。*');

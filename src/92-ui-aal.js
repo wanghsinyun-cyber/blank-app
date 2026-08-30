@@ -624,9 +624,26 @@ async function aalSay(){
   if (pill) pill.textContent = Math.max(0, left);
   box.readOnly = false;
   box.removeAttribute('aria-busy');
+  /* 回覆抵達時只在「焦點還在對話面板、或已經掉到 body」的情況下才收回焦點。
+     原本是無條件 box.focus()：LLM 引擎下這一段等待可達數秒（見上方註解），
+     而那正是孩子回去讀文章、點句子、或在 #crText 打非選題答案的時間窗。
+     焦點被拉走之後他繼續打的字會落進對話框，順手按 Enter 就整段送出去
+     （#aalSay 的 Enter 綁在 99-app.js 上）——那一段話會：
+       · 扣掉這一題 6 次額度裡的一次
+       · 以「【學生剛剛說】」進到提示詞，實質繞過「AI 不可讀作答欄位」
+       · 被編碼成 RQ4 的語料
+       · 而且從他自己的答案裡消失
+     這條路徑只存在於三個 AI 條件，對照組沒有非同步等待——所以它同時是
+     一個與條件共變的資料汙染。
+     同一支函式第 540 行早就有這道 activeElement 守門，只是沒有套到這裡。
+     preventScroll 一併補上，理由與下面那一支相同。 */
+  const focusIsOurs = !document.activeElement ||
+    document.activeElement === document.body ||
+    document.activeElement === box ||
+    document.activeElement === sendBtn;
   if (left > 0){
     if (sendBtn) sendBtn.disabled = false;
-    box.focus();
+    if (focusIsOurs) box.focus({preventScroll:true});
   } else {
     box.placeholder = '這一題已經聊完了';
     box.disabled = true;
@@ -640,9 +657,15 @@ async function aalSay(){
     }
     const done = document.getElementById('turnsDone');
     const next = document.querySelector('[data-act="aal-next"]:not([disabled])');
-    /* preventScroll 要留著——拿掉會把整個頁面捲走 */
-    if (done) done.focus({preventScroll:true});
-    else if (next) next.focus({preventScroll:true});
+    /* preventScroll 要留著——拿掉會把整個頁面捲走。
+       activeElement 守門的理由同上：孩子可能正在別的地方打字，
+       額度用完不是把他從答案裡拉走的理由。焦點不收回時，
+       #aalChat 是 role="log" aria-live="polite"，那句話仍會被報讀出來，
+       而 toast 也照樣出現。 */
+    if (focusIsOurs){
+      if (done) done.focus({preventScroll:true});
+      else if (next) next.focus({preventScroll:true});
+    }
     toast('這一題的對話次數用完了，可以按下一題。');
   }
 }

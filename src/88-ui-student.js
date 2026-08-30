@@ -302,7 +302,7 @@ function viewResult(aid){
           /* 只找本班的視圖。掃全站的話，c-3 的孩子會看到「全班正在討論這題 →」
              指向 c-1 的白板，點下去被守門擋掉——而那句話是對他說的。 */
           const v = viewsForViewer().find(function(v){ return v.origin && v.origin.iid === it.id; });
-          return '<li>第 ' + it.no + ' 題：' + esc(shortStem(it.stem)) +
+          return '<li>' + itemLabel(aid, it.id) + '：' + esc(shortStem(it.stem)) +
             (v ? '　<a href="#/kb/' + v.id + '">全班正在討論這題 →</a>' : '') + '</li>';
         }).join('') + '</ul></div>' : '') +
       (ps.q[1] ? '<div class="ai-out" style="margin-top:10px"><p><strong>有 ' + ps.q[1] +
@@ -320,7 +320,7 @@ function viewResult(aid){
       const r = mine.find(function(x){ return x.iid === it.id; });
       const c = diag && diag.ready && ps ? ps.cells.find(function(x){ return x.iid === it.id; }) : null;
       return '<div class="item"><div class="row" style="justify-content:space-between">' +
-        '<b>第 ' + it.no + ' 題</b>' +
+        '<b>' + itemLabel(aid, it.id) + '</b>' +
         /* 三態，不是兩態：沒作答不等於答錯。把缺答畫成紅色的「答錯」，
            孩子會以為自己寫了而且寫壞了。 */
         (!r || r.choice == null
@@ -353,7 +353,7 @@ function crResultBlock(aid, sid, keyLocked){
   return '<div class="card"><div class="card-h"><h3>非選題</h3></div><div class="card-p col">' +
     crs.map(function(it){
       const r = state.responses.find(function(x){ return x.aid === aid && x.sid === sid && x.iid === it.id; });
-      return '<div class="note-full"><b>非選第 ' + it.no + ' 題</b>' +
+      return '<div class="note-full"><b>' + itemLabel(aid, it.id) + '</b>' +
         '<div class="stem">' + esc(it.stem) + '</div>' +
         /* 前測與後測是同兩題建構反應題。在後測交卷前把自己前測寫的整段
            作文讀回來，等於直接抄一次——兩題的 Δ 會歸零。 */
