@@ -622,10 +622,23 @@ function viewResult(aid){
            「需要更多人完成」，孩子會以為再等一下就會出現。 */
         !mc.length ? '這一次作答的題目太少，畫不出來'
                    : (ps ? '和所有做過的同學比起來的位置' : '要等老師把大家的資料合起來')) +
-      statCard('可惜的題目', ps ? ps.q[2] : '—', '這幾題你其實讀得懂，只是這次沒答對') +
-      statCard('厲害的題目', ps ? ps.q[1] : '—', '這幾題比較難，你答對了', 'good') +
+      /* 這兩張卡與下面整張閱讀地圖也吃 keyLocked。原本只有那顆逐題 pill 與
+         <div class="opts"> 被擋——而閱讀地圖把 displayNo 印在每顆圓點上、
+         x 軸兩欄標籤就是「答錯」與「答對」、每顆點的 <title> 寫「第 8 題 ·
+         你穩穩答對」、<desc> 再把「可惜的題目：第 8 題、第 12 題。」念給
+         報讀器，下面還用 <li> 逐條列出所有 q===2 的題號與題幹；鎖定說明的
+         結尾甚至主動把孩子指過去看那張圖。
+         三個出口裡只修了最不顯眼的一個，等於沒修：孩子記得自己每題選了
+         什麼，「第 8 題 答對」＝正解、「答錯」＝刪掉一個選項，而同教室
+         二十幾人正在同一份題本上作答。前測那一份在後測釋出前同樣照印，
+         Δθ 直接混入記憶效應。 */
+      statCard('可惜的題目', (ps && !keyLocked) ? ps.q[2] : '—',
+        keyLocked ? '答案打開之後才會算給你看' : '這幾題你其實讀得懂，只是這次沒答對') +
+      statCard('厲害的題目', (ps && !keyLocked) ? ps.q[1] : '—',
+        keyLocked ? '答案打開之後才會算給你看' : '這幾題比較難，你答對了',
+        keyLocked ? '' : 'good') +
     '</div>' +
-    (ps ? '<div class="card" style="margin-bottom:16px"><div class="card-h"><h3>你這次的閱讀地圖</h3>' +
+    ((ps && !keyLocked) ? '<div class="card" style="margin-bottom:16px"><div class="card-h"><h3>你這次的閱讀地圖</h3>' +
       '<span class="muted small">每一個圓點是一題</span></div><div class="card-p">' +
       kidmapSVG(diag, ps, true) + '<div class="row" style="margin-top:10px">' + quadLegendStudent() + '</div>' +
       (ps.q[2] ? '<div class="ai-out" style="margin-top:12px"><p><strong>有 ' + ps.q[2] +
@@ -647,8 +660,13 @@ function viewResult(aid){
          自己那一筆，同班別人交不交都不會讓這裡長出東西。真正的條件是
          老師把四個班的資料合併起來跑一次共同校準——講清楚它，孩子才不會
          一直回來看一個永遠不會變的畫面。 */
-      : '<div class="card card-p" style="margin-bottom:16px"><p class="muted small">閱讀地圖要把四個班的作答放在一起才算得出來，' +
-        '老師還沒把大家的資料合起來。這一頁下面的逐題檢視現在就可以看。</p></div>') +
+      : '<div class="card card-p" style="margin-bottom:16px"><p class="muted small">' +
+        (keyLocked
+          ? '閱讀地圖要等答案打開之後才會出現——它會直接指出你哪幾題答錯，' +
+            '而班上還有同學正在做同一份題目。'
+          : '閱讀地圖要把四個班的作答放在一起才算得出來，' +
+            '老師還沒把大家的資料合起來。這一頁下面的逐題檢視現在就可以看。') +
+        '</p></div>') +
     '<div class="card" style="margin-bottom:16px"><div class="card-h"><h3>逐題檢視</h3>' +
     (keyLocked ? '<span class="pill"><span class="dot"></span>答案還沒打開</span>' : '') + '</div>' +
     /* 文案要講真正的條件。原本寫「這一節課上完之後」，而實際條件是
@@ -656,7 +674,8 @@ function viewResult(aid){
        孩子會以為壞掉了。 */
     (keyLocked ? '<div class="card-p"><p class="small" style="max-width:70ch;margin:0">' +
       (function(){
-        const tail = '現在先看上面的閱讀地圖——它已經告訴你哪幾題值得回去重讀。';
+        /* 鎖著的時候閱讀地圖也不會出現了（見上面），所以不能再把孩子指過去。 */
+        const tail = '這一頁下面的題目與你寫的字現在就可以回頭看。';
         /* 三種鎖定原因要講清楚是哪一種。原本一律說「這一節課上完之後」，
            而作答不到門檻的孩子課已經上完了、也沒有補答路徑——
            那句話對他永遠是假的，畫面卻一直承諾它會打開。 */
@@ -852,8 +871,18 @@ function padPayload(padId){
      那個座標系裡，strokesSvg 的 viewBox 用它才對得起來。記成當下尺寸的話，
      孩子在 100% 寫、交卷前把字級調到 175%，viewBox 就會比座標大一圈，
      評閱端看到的字擠在左上角。 */
-  return {w: p.w0 || p.w || (p.cv && p.cv.clientWidth) || 600,
-    h: p.h0 || p.h || padBaseHeight(),
+  /* viewBox 至少要涵蓋所有落下的墨水。size() 已經讓 w0／h0 涵蓋可寫範圍，
+     這一層是保險：日後任何一條路徑讓座標跑到盒子外，交出去的那一份
+     也不會把它裁掉——評閱端寧可看到一張比較空的圖，也不要看到缺一角的字。 */
+  const used = p.strokes.reduce(function(m, s){
+    (s.pts || []).forEach(function(pt){
+      if (pt[0] > m.x) m.x = pt[0];
+      if (pt[1] > m.y) m.y = pt[1];
+    });
+    return m;
+  }, {x:0, y:0});
+  return {w: Math.ceil(Math.max(p.w0 || p.w || (p.cv && p.cv.clientWidth) || 600, used.x + 4)),
+    h: Math.ceil(Math.max(p.h0 || p.h || padBaseHeight(), used.y + 4)),
     lines: p.strokes.filter(function(s){ return s.pts && s.pts.length > 1; })
       .map(function(s){
         return {color:s.color, width:s.width, pts:s.pts.map(function(pt){ return pt.slice(); })};
@@ -984,7 +1013,6 @@ function initPads(){
     const id = cv.dataset.pad;
     if (cv._init) return;
     cv._init = true;
-    const dpr = window.devicePixelRatio || 1;
     function size(){
       /* 量不到寬度時什麼都不要做。原本 `cv.clientWidth || 600` 在畫布已經
          脫離文件（交卷、換題、換頁之後）時會退回 600，然後拿它去換算座標，
@@ -1005,11 +1033,36 @@ function initPads(){
          就是愈來愈小、愈來愈細的字，而他無從復原。
          改成：w0/h0 記下「這些座標是在多大的板子上寫的」，之後永遠不動。 */
       if (p && !p.w0){ p.w0 = w; p.h0 = h; }
+      /* 書寫座標系必須涵蓋「現在寫得到的每一個點」。
+         k = min(w/w0, h/h0) 是單一等比因子，但畫布的長寬比並不固定
+         （width:100% 由版面決定、height:11rem 跟著 --fs 走），取 min 之後
+         必有一軸的可寫範圍嚴格大於 w0／h0：字級 100%→175% 時寬度不變、
+         k=1，y 寫得到 385 而 h0 還是 220；橫轉直 k=0.733，y 寫得到 300。
+         而 padPayload 記 w0／h0、strokesSvg 的 viewBox 就是 0 0 w0 h0
+         （svg 預設 overflow:hidden），那些點在教師評閱、學生成績頁、
+         唯讀重播與匯出檔全部被裁掉——孩子寫的時候畫布上看得到，
+         所以他不會舉手；老師拿到一張缺了下半截的圖，只能給低分。
+         盒子只長不縮：長到涵蓋當下可寫範圍就停（一步到不動點），
+         座標仍然永遠不動，而 k 對同一個盒子仍是可逆的。
+         代價是「用過比較高的板子之後回到矮的」會整體縮小顯示——
+         那是誠實的：內容確實比視窗高，縮到看得完才對，總比裁掉好。 */
+      if (p && p.w0 && p.h0){
+        const k0 = Math.min(w / p.w0, h / p.h0);
+        if (isFinite(k0) && k0 > 0){
+          p.w0 = Math.max(p.w0, w / k0);
+          p.h0 = Math.max(p.h0, h / k0);
+        }
+      }
       /* 筆畫是 CSS px 絕對座標。原本 resize 只重設畫布尺寸就直接重畫舊座標，
          平板由橫轉直（約 1024→768）之後，寫在右半邊的字整片落在畫布外——
          資料還在、畫面沒了，而孩子最可能的反應是按〈清空〉整題重寫。
          這裡依新舊寬度比例換算，字跟著縮，不會掉出去。 */
       if (p){ p.w = w; p.h = h; }
+      /* dpr 要即時讀，不能用 initPads 當下擷取的那一個。backing store 用舊值、
+         redraw 的 setTransform 用新值的話（Chromebook 顯示縮放、瀏覽器頁面
+         縮放、視窗換到不同 DPI 的螢幕都會觸發 resize），筆跡會以
+         dprNew/dprOld 的倍率偏離筆尖，右／下緣被切掉。 */
+      const dpr = window.devicePixelRatio || 1;
       cv.width = w * dpr; cv.height = h * dpr;
       /* 變換交給 redraw 每次自己算——它要跟著當下的 w0→w 比例走，
          而那個比例會隨字級與轉向改變。 */
@@ -1047,7 +1100,11 @@ function initPads(){
     cv.addEventListener('pointerdown', function(e){
       if (!drawableFrom(e)) return;
       e.preventDefault();
-      cv.setPointerCapture(e.pointerId);
+      /* setPointerCapture 對某些指標會丟 NotFoundError（指標已經抬起、
+         或事件不是來自真的硬體）。原本沒有防護，一丟例外整筆就沒被推進去——
+         孩子按下去卻什麼都沒畫出來，而他不會知道發生什麼事。
+         抓不到捕獲只是「指標離開畫布時不再收到事件」，不該連筆畫都放棄。 */
+      try { cv.setPointerCapture(e.pointerId); } catch (err) {}
       cur = {color:PADS[id].color, width:PADS[id].width, pts:[at(e)]};
       PADS[id].strokes.push(cur);
     });

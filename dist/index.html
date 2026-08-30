@@ -1905,8 +1905,12 @@ const PROMPT_BACKBONE =
 const PROMPT_ROLE = {
   tutor: '【社會框架】你是陪學生讀的老師。用「我想確認你是怎麼看的」這種語氣，' +
          '把問題丟回去給學生，不要幫他整理答案。',
+  /* 引用句原本是「我不太懂……你可以說給我聽嗎？」，含『可以』——而『可以』
+     在 LETTER_NEAR 裡，與 peer 那一句「我們對一下」是同一個形狀：
+     骨幹強制第一句回應學生剛講的內容，孩子報 A–D 是常態，
+     兩者同段就被攔成「選項代號＋判定語」。指定語氣可以，指定字句不行。 */
   tutee: '【社會框架】你是剛讀完這篇、但很多地方沒看懂的同學。你想請這位學生講給你聽，' +
-         '所以你的問題都要像「我不太懂……你可以說給我聽嗎？」而不是像在考他。',
+         '所以你的問題都要像「我不太懂……你說給我聽好不好？」而不是像在考他。',
   /* 「先簡短說一句你自己讀到哪裡」已經拿掉。tutor 與 tutee 的角色模組
      都沒有任何自報進度的要求，只有 peer 有——而且括號只禁「第幾段第幾句」，
      擋不住「我讀到中間」「我卡在後面那段」這種軟位置線索。
@@ -1923,8 +1927,25 @@ const PROMPT_ROLE = {
      忠實度報表也看不見。而三個角色裡只有 peer 被要求產生內容。
      內建引擎那一側上一輪已經把 PEER_SHARE 收斂成「只講閱讀動作、不碰文本」，
      提示詞這一側現在跟上：只描述對等關係，不要求任何內容。 */
-  peer:  '【社會框架】你是跟學生同時在讀這一篇的同學。語氣是對等的討論，' +
-         '用「我們對一下」這種說法，把同一個問題拋回去問他，不要替他整理答案。'
+  /* 兩件事都要避開。
+     (a) 不可以指定一句含 LETTER_NEAR 詞的口頭禪。上一版寫「用『我們對一下』
+         這種說法」——『對』就是 LETTER_NEAR 的第一個詞，而骨幹又強制
+         「第一句回應學生剛剛說的內容」、選項在學生端就是 A–D 標籤，
+         孩子報字母是常態：「你覺得是B啊，我們對一下——那你呢？」在同一個
+         segment 內同時有 [A-D] 與『對』（分句只切 。！？，逗號不切），
+         整則被攔成罐頭替換文。那與這一輪剛在 tutee 身上修掉的失效模式
+         是同一個形狀，只是換一個條件重演。指定語氣可以，指定字句不行。
+     (b) 「對一下」在台灣國小教室的固定搭配是「對答案」。tutor 與 tutee 的
+         引用句都明確宣告自己沒有答案，只有它宣告了一個可供比對的參照物——
+         操弄檢核問「你覺得小森知道答案嗎」時，peer 的對等關係會最弱。
+     同時把互惠分享要回來：內建引擎的 PEER_SHARE 一直在做這件事
+     （「我是讀了兩次，才想通它在講什麼。」），只講自己的閱讀動作、
+     一個字都不碰文本——那是模型讀不到文章也產得出來的。上一版把
+     「限制內容」直接改成「不要求任何內容」，於是 LLM 路徑上的 peer 與
+     tutor 幾乎只差一句引用語，而走哪一條路徑由網路逾時決定。 */
+  peer:  '【社會框架】你是跟學生同時在讀這一篇的同學，語氣是對等的討論。' +
+         '每一輪先用一句話講你自己剛剛做的閱讀動作（像是又從頭讀了一遍、先看了題目），' +
+         '不要講文章的內容、位置或答案，再把同一個問題拋回去問他。'
 };
 
 /* --- 歷程提示模組（模組 4–7）：提問功能與子歷程提問庫 --- */
@@ -3472,18 +3493,19 @@ function mergeOntoDisk(disk){
     if (added && typeof console !== 'undefined' && console.info)
       console.info('[KAIROS] 合併：' + kind + ' 補回 ' + added + ' 列');
   });
-  /* ui 是「這台裝置現在是誰在用」，不是分頁自己的事。
-     施測中的分頁依設計拒絕同步外部更新（見 measuringNow），那它也必須
-     拒絕把自己的 ui 寫出去——否則老師在另一個分頁用 #/unlock 換成下一位
-     同學之後，那個還停在作答頁、沒關掉的舊分頁只要再落地一次
-     （關掉它就會：beforeunload 無條件 flushLogs → save），磁碟上的 ui.role
-     與 deviceUnlock 就被寫回上一位；活著的那個分頁不在施測狀態，
-     收到 storage 事件立刻 adoptForeignState，身分整個倒退，
-     而施測中頂列的身分下拉是隱藏的，孩子看不到自己變成誰。
-     下一位同學整節課的作答會記在上一位的 sid 與條件底下，兩個人的資料
-     同時作廢——這條路徑還完全繞過 #/unlock 的教師代碼、退避鎖與 UNLOCK 日誌。 */
-  const measuring = typeof measuringNow === 'function' ? measuringNow() : null;
-  if (!measuring || !out.ui) out.ui = state.ui;
+  /* ui 一律以本頁為準。這一行同時做兩件事，兩件都不能少：
+     (1) 不讓磁碟那一份 ui 被帶進記憶體——save() 的合併分支是
+         `state = mergeOntoDisk(disk)`，整份 state 被這個回傳值取代，
+         所以只要這裡不覆寫，磁碟的 ui.role 就會直接成為 state.ui.role。
+         第 9 輪 P1 曾經改成「施測中不寫」，結果就是把 storage 監聽器
+         擋下來的災難搬進 save()：老師在另一個分頁換成下一位之後，
+         孩子這一頁只要有任何一筆日誌（logEvent → flushLogs → save）
+         就翻面，而 save() 不 renderShell、不 toast，施測中身分下拉又是
+         隱藏的——下一次 render 走到 AAL.me !== me.id 就重跑 aalInit，
+         這一場的作答、標記、遙測全部被換人重建，AAL.cond 跟著翻面。
+     (2) 「不要把自己的 ui 寫出去」是另一件事，屬於 save() 的序列化那一步
+         （見 save() 裡的 payloadUi）——不能靠這一行順便達成。 */
+  out.ui = state.ui;
   if (out.settings && state.settings) out.settings.a11y = state.settings.a11y;
   return out;
 }
@@ -3571,10 +3593,14 @@ function save(){
   /* 別的分頁在我們這一份之後寫過東西時，不要整份蓋回去（見 mergeOntoDisk）。
      合併結果同時套回記憶體，否則這個分頁會一直拿著舊的那一份，
      下一次存檔又把剛補回去的東西再蓋掉一次。 */
+  /* 磁碟上那一份的 ui 要先留起來：施測中的分頁不可以把自己的身分寫出去
+     （理由見下面 payloadUi）。合併分支與非合併分支都要拿得到，所以在這裡讀。 */
+  let diskUi = null;
   try {
     const raw = localStorage.getItem(STORE_KEY);
     if (raw){
       const disk = JSON.parse(raw);
+      if (disk && disk.ui) diskUi = disk.ui;
       if (disk && (disk.rev || 0) > STATE_REV && disk.writer !== TAB_ID){
         state = mergeOntoDisk(disk);
         STATE_REV = disk.rev || 0;
@@ -3592,6 +3618,21 @@ function save(){
       const clone = Object.assign({}, state, {ui: Object.assign({}, state.ui, {
         role: imp.realRole, impersonate: undefined})});
       localStorage.setItem(STORE_KEY, JSON.stringify(clone));
+      return true;
+    }
+    /* 施測中的分頁不可以把自己的身分寫出去。它依設計拒絕同步外部更新
+       （見 measuringNow），所以它手上的 ui 一定是進入作答那一刻的舊值；
+       老師在另一個分頁用 #/unlock 換成下一位同學之後，這個還停在作答頁、
+       沒關掉的舊分頁只要再落地一次（關掉它就會：beforeunload 無條件
+       flushLogs → save），磁碟上的 ui.role 與 deviceUnlock 就被寫回上一位。
+       活著的那個分頁不在施測狀態，收到 storage 事件立刻 adoptForeignState，
+       身分整個倒退，而施測中頂列的身分下拉是隱藏的，孩子看不到自己變成誰。
+       這一步只影響「寫出去的那一份」，state.ui 仍然是本頁自己的
+       （mergeOntoDisk 的 out.ui = state.ui 負責那一半）。 */
+    const measuring = typeof measuringNow === 'function' ? measuringNow() : null;
+    if (measuring && diskUi){
+      const clone2 = Object.assign({}, state, {ui: diskUi});
+      localStorage.setItem(STORE_KEY, JSON.stringify(clone2));
       return true;
     }
     localStorage.setItem(STORE_KEY, JSON.stringify(state));
@@ -8681,10 +8722,23 @@ function viewResult(aid){
            「需要更多人完成」，孩子會以為再等一下就會出現。 */
         !mc.length ? '這一次作答的題目太少，畫不出來'
                    : (ps ? '和所有做過的同學比起來的位置' : '要等老師把大家的資料合起來')) +
-      statCard('可惜的題目', ps ? ps.q[2] : '—', '這幾題你其實讀得懂，只是這次沒答對') +
-      statCard('厲害的題目', ps ? ps.q[1] : '—', '這幾題比較難，你答對了', 'good') +
+      /* 這兩張卡與下面整張閱讀地圖也吃 keyLocked。原本只有那顆逐題 pill 與
+         <div class="opts"> 被擋——而閱讀地圖把 displayNo 印在每顆圓點上、
+         x 軸兩欄標籤就是「答錯」與「答對」、每顆點的 <title> 寫「第 8 題 ·
+         你穩穩答對」、<desc> 再把「可惜的題目：第 8 題、第 12 題。」念給
+         報讀器，下面還用 <li> 逐條列出所有 q===2 的題號與題幹；鎖定說明的
+         結尾甚至主動把孩子指過去看那張圖。
+         三個出口裡只修了最不顯眼的一個，等於沒修：孩子記得自己每題選了
+         什麼，「第 8 題 答對」＝正解、「答錯」＝刪掉一個選項，而同教室
+         二十幾人正在同一份題本上作答。前測那一份在後測釋出前同樣照印，
+         Δθ 直接混入記憶效應。 */
+      statCard('可惜的題目', (ps && !keyLocked) ? ps.q[2] : '—',
+        keyLocked ? '答案打開之後才會算給你看' : '這幾題你其實讀得懂，只是這次沒答對') +
+      statCard('厲害的題目', (ps && !keyLocked) ? ps.q[1] : '—',
+        keyLocked ? '答案打開之後才會算給你看' : '這幾題比較難，你答對了',
+        keyLocked ? '' : 'good') +
     '</div>' +
-    (ps ? '<div class="card" style="margin-bottom:16px"><div class="card-h"><h3>你這次的閱讀地圖</h3>' +
+    ((ps && !keyLocked) ? '<div class="card" style="margin-bottom:16px"><div class="card-h"><h3>你這次的閱讀地圖</h3>' +
       '<span class="muted small">每一個圓點是一題</span></div><div class="card-p">' +
       kidmapSVG(diag, ps, true) + '<div class="row" style="margin-top:10px">' + quadLegendStudent() + '</div>' +
       (ps.q[2] ? '<div class="ai-out" style="margin-top:12px"><p><strong>有 ' + ps.q[2] +
@@ -8706,8 +8760,13 @@ function viewResult(aid){
          自己那一筆，同班別人交不交都不會讓這裡長出東西。真正的條件是
          老師把四個班的資料合併起來跑一次共同校準——講清楚它，孩子才不會
          一直回來看一個永遠不會變的畫面。 */
-      : '<div class="card card-p" style="margin-bottom:16px"><p class="muted small">閱讀地圖要把四個班的作答放在一起才算得出來，' +
-        '老師還沒把大家的資料合起來。這一頁下面的逐題檢視現在就可以看。</p></div>') +
+      : '<div class="card card-p" style="margin-bottom:16px"><p class="muted small">' +
+        (keyLocked
+          ? '閱讀地圖要等答案打開之後才會出現——它會直接指出你哪幾題答錯，' +
+            '而班上還有同學正在做同一份題目。'
+          : '閱讀地圖要把四個班的作答放在一起才算得出來，' +
+            '老師還沒把大家的資料合起來。這一頁下面的逐題檢視現在就可以看。') +
+        '</p></div>') +
     '<div class="card" style="margin-bottom:16px"><div class="card-h"><h3>逐題檢視</h3>' +
     (keyLocked ? '<span class="pill"><span class="dot"></span>答案還沒打開</span>' : '') + '</div>' +
     /* 文案要講真正的條件。原本寫「這一節課上完之後」，而實際條件是
@@ -8715,7 +8774,8 @@ function viewResult(aid){
        孩子會以為壞掉了。 */
     (keyLocked ? '<div class="card-p"><p class="small" style="max-width:70ch;margin:0">' +
       (function(){
-        const tail = '現在先看上面的閱讀地圖——它已經告訴你哪幾題值得回去重讀。';
+        /* 鎖著的時候閱讀地圖也不會出現了（見上面），所以不能再把孩子指過去。 */
+        const tail = '這一頁下面的題目與你寫的字現在就可以回頭看。';
         /* 三種鎖定原因要講清楚是哪一種。原本一律說「這一節課上完之後」，
            而作答不到門檻的孩子課已經上完了、也沒有補答路徑——
            那句話對他永遠是假的，畫面卻一直承諾它會打開。 */
@@ -8911,8 +8971,18 @@ function padPayload(padId){
      那個座標系裡，strokesSvg 的 viewBox 用它才對得起來。記成當下尺寸的話，
      孩子在 100% 寫、交卷前把字級調到 175%，viewBox 就會比座標大一圈，
      評閱端看到的字擠在左上角。 */
-  return {w: p.w0 || p.w || (p.cv && p.cv.clientWidth) || 600,
-    h: p.h0 || p.h || padBaseHeight(),
+  /* viewBox 至少要涵蓋所有落下的墨水。size() 已經讓 w0／h0 涵蓋可寫範圍，
+     這一層是保險：日後任何一條路徑讓座標跑到盒子外，交出去的那一份
+     也不會把它裁掉——評閱端寧可看到一張比較空的圖，也不要看到缺一角的字。 */
+  const used = p.strokes.reduce(function(m, s){
+    (s.pts || []).forEach(function(pt){
+      if (pt[0] > m.x) m.x = pt[0];
+      if (pt[1] > m.y) m.y = pt[1];
+    });
+    return m;
+  }, {x:0, y:0});
+  return {w: Math.ceil(Math.max(p.w0 || p.w || (p.cv && p.cv.clientWidth) || 600, used.x + 4)),
+    h: Math.ceil(Math.max(p.h0 || p.h || padBaseHeight(), used.y + 4)),
     lines: p.strokes.filter(function(s){ return s.pts && s.pts.length > 1; })
       .map(function(s){
         return {color:s.color, width:s.width, pts:s.pts.map(function(pt){ return pt.slice(); })};
@@ -9043,7 +9113,6 @@ function initPads(){
     const id = cv.dataset.pad;
     if (cv._init) return;
     cv._init = true;
-    const dpr = window.devicePixelRatio || 1;
     function size(){
       /* 量不到寬度時什麼都不要做。原本 `cv.clientWidth || 600` 在畫布已經
          脫離文件（交卷、換題、換頁之後）時會退回 600，然後拿它去換算座標，
@@ -9064,11 +9133,36 @@ function initPads(){
          就是愈來愈小、愈來愈細的字，而他無從復原。
          改成：w0/h0 記下「這些座標是在多大的板子上寫的」，之後永遠不動。 */
       if (p && !p.w0){ p.w0 = w; p.h0 = h; }
+      /* 書寫座標系必須涵蓋「現在寫得到的每一個點」。
+         k = min(w/w0, h/h0) 是單一等比因子，但畫布的長寬比並不固定
+         （width:100% 由版面決定、height:11rem 跟著 --fs 走），取 min 之後
+         必有一軸的可寫範圍嚴格大於 w0／h0：字級 100%→175% 時寬度不變、
+         k=1，y 寫得到 385 而 h0 還是 220；橫轉直 k=0.733，y 寫得到 300。
+         而 padPayload 記 w0／h0、strokesSvg 的 viewBox 就是 0 0 w0 h0
+         （svg 預設 overflow:hidden），那些點在教師評閱、學生成績頁、
+         唯讀重播與匯出檔全部被裁掉——孩子寫的時候畫布上看得到，
+         所以他不會舉手；老師拿到一張缺了下半截的圖，只能給低分。
+         盒子只長不縮：長到涵蓋當下可寫範圍就停（一步到不動點），
+         座標仍然永遠不動，而 k 對同一個盒子仍是可逆的。
+         代價是「用過比較高的板子之後回到矮的」會整體縮小顯示——
+         那是誠實的：內容確實比視窗高，縮到看得完才對，總比裁掉好。 */
+      if (p && p.w0 && p.h0){
+        const k0 = Math.min(w / p.w0, h / p.h0);
+        if (isFinite(k0) && k0 > 0){
+          p.w0 = Math.max(p.w0, w / k0);
+          p.h0 = Math.max(p.h0, h / k0);
+        }
+      }
       /* 筆畫是 CSS px 絕對座標。原本 resize 只重設畫布尺寸就直接重畫舊座標，
          平板由橫轉直（約 1024→768）之後，寫在右半邊的字整片落在畫布外——
          資料還在、畫面沒了，而孩子最可能的反應是按〈清空〉整題重寫。
          這裡依新舊寬度比例換算，字跟著縮，不會掉出去。 */
       if (p){ p.w = w; p.h = h; }
+      /* dpr 要即時讀，不能用 initPads 當下擷取的那一個。backing store 用舊值、
+         redraw 的 setTransform 用新值的話（Chromebook 顯示縮放、瀏覽器頁面
+         縮放、視窗換到不同 DPI 的螢幕都會觸發 resize），筆跡會以
+         dprNew/dprOld 的倍率偏離筆尖，右／下緣被切掉。 */
+      const dpr = window.devicePixelRatio || 1;
       cv.width = w * dpr; cv.height = h * dpr;
       /* 變換交給 redraw 每次自己算——它要跟著當下的 w0→w 比例走，
          而那個比例會隨字級與轉向改變。 */
@@ -9106,7 +9200,11 @@ function initPads(){
     cv.addEventListener('pointerdown', function(e){
       if (!drawableFrom(e)) return;
       e.preventDefault();
-      cv.setPointerCapture(e.pointerId);
+      /* setPointerCapture 對某些指標會丟 NotFoundError（指標已經抬起、
+         或事件不是來自真的硬體）。原本沒有防護，一丟例外整筆就沒被推進去——
+         孩子按下去卻什麼都沒畫出來，而他不會知道發生什麼事。
+         抓不到捕獲只是「指標離開畫布時不再收到事件」，不該連筆畫都放棄。 */
+      try { cv.setPointerCapture(e.pointerId); } catch (err) {}
       cur = {color:PADS[id].color, width:PADS[id].width, pts:[at(e)]};
       PADS[id].strokes.push(cur);
     });
@@ -10655,7 +10753,13 @@ async function aalSay(){
         /* 條件要傳進去：攔截後的替換文依角色而異，三個角色共用一句
            施教者口吻的話會把 tutee／peer 的社會框架直接否定。 */
         const g = leakGuard(raw, it, ctx.cond);
-        reply = {text:g.text, qfn:qfnNow,
+        /* 被攔下時 qfn 也要清成 null，與 agentTurn 同一條不變量。
+           正式施測跑的是外部模型，而內建語料現在是守門乾淨的——
+           攔截幾乎只發生在這條路徑上：qfn 照排程記著的話，每一則被攔的
+           回合都在日誌與語料檔裡宣稱送出了一個從未送到孩子面前的提問功能，
+           RQ4 的提問功能覆蓋率高報的量恰好等於攔截數，而攔截數由孩子
+           逼問答案的頻率決定，與投入、能力共變。 */
+        reply = {text:g.text, qfn: g.blocked ? null : qfnNow,
                  sub:null, engine:'llm', blocked:g.blocked, hits:g.hits, kinds:g.kinds};
       } catch (err) {
         /* 退回內建規則引擎。fallback 原本只賦值、沒有任何讀取端，於是
@@ -10708,7 +10812,19 @@ async function aalSay(){
     }
     state.dialog.push({t:eaT, sid:ctx.me, cond:ctx.cond, aid:ctx.aid, iid:ctx.it.id,
       proc:ctx.it.process, turn:ctx.turn, speaker:'agent', text:reply.text,
-      qfn:reply.qfn, sub:reply.sub, ucode:reply.process || ctx.it.process, sent:0,
+      qfn:reply.qfn, sub:reply.sub,
+      /* ucode 被攔下時也要清掉。原本 reply.process 仍指向那一輪排定的
+         子歷程（F5 還會是往上一層），於是同一列資料自相矛盾：qfn=null、
+         sub=null（那一輪沒問出來），ucode 卻宣稱夥伴在 II 層發話，
+         而實際送出的是替換文那一句 FR 層的話。toENACsv 就用 d.ucode
+         產生四個歷程二元欄，rENA 網路會多一個假節點。 */
+      ucode: reply.blocked ? null : (reply.process || ctx.it.process), sent:0,
+      /* state.dialog 才是 export-json 的 dialog 欄位與 toENACsv 的來源，
+         原本兩條路徑都沒有把 blocked 寫進來——llm 的攔截列因此逐欄與
+         正常回合相同（sub 本來就恆為 null），交到分析軟體手上的語料
+         仍然無聲吞掉攔截，事後補不回來。 */
+      blocked: !!reply.blocked,
+      blockKinds: (reply.kinds && reply.kinds.length) ? reply.kinds.join('+') : null,
       engine:reply.engine, engineWanted: useLlm ? 'llm' : 'builtin',
       fallback: reply.fallback || null});
     save();
@@ -13062,6 +13178,12 @@ function bindEvents(){
       }, function(){
         if (!PADS[id]) return;
         PADS[id].strokes = [];
+        /* 書寫座標系也要跟著重來。清空之後盒子還留著上一次長出來的尺寸的話，
+           孩子重寫的第一筆就落在一個比畫布還大的座標系裡——顯示會被縮小，
+           而「寫壞了清掉重寫」正是他遇到版面變動時最常見的反應。
+           下一次 size() 會依當下的畫布重新立一個。 */
+        PADS[id].w0 = 0; PADS[id].h0 = 0;
+        if (PADS[id]._resize) PADS[id]._resize();
         redraw(id); padChanged(id);
       });
       return; }
@@ -14021,6 +14143,22 @@ function submitQuiz(aid){
 function submitQuizCommit(aid){
   if (!QUIZ) return;
   const a = getAssignment(aid), me = currentUser();
+  /* 前測也要這道門，形狀與 aalSubmitCommit 完全相同。下面那圈 filter+push
+     是一模一樣的覆寫，而 measuringNow() 對停在 #/quiz 的分頁回傳 'quiz'——
+     它的 state.submissions 對「另一個分頁剛剛交了卷」同樣是瞎的。
+     前測 θ 是 ANCOVA 的共變數與基線，而這一份連草稿都只在記憶體裡、
+     也沒有補交路徑：被覆寫的孩子會以 16 題 null 進 Rasch。
+     擋下時不要動 QUIZ——那半份作答是唯一還留著的救援材料。 */
+  if (typeof submittedOnDisk === 'function' && submittedOnDisk(aid, me.id)){
+    alertModal({
+      title: '這一份已經交出去了',
+      body: '另一個分頁（或另一次開啟）已經把這一份交出去了，所以這裡不會再存一次——' +
+            '再存一次會把先交的那一份蓋掉。',
+      strong: '你剛剛在這一頁寫的東西沒有被存進去。',
+      note: '請舉手告訴老師，不要自己關掉分頁。'
+    });
+    return;
+  }
   const items = a.itemIds.map(getItem).filter(Boolean);
   items.forEach(function(it){
     state.responses = state.responses.filter(function(r){

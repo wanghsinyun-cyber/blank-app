@@ -643,6 +643,12 @@ function bindEvents(){
       }, function(){
         if (!PADS[id]) return;
         PADS[id].strokes = [];
+        /* 書寫座標系也要跟著重來。清空之後盒子還留著上一次長出來的尺寸的話，
+           孩子重寫的第一筆就落在一個比畫布還大的座標系裡——顯示會被縮小，
+           而「寫壞了清掉重寫」正是他遇到版面變動時最常見的反應。
+           下一次 size() 會依當下的畫布重新立一個。 */
+        PADS[id].w0 = 0; PADS[id].h0 = 0;
+        if (PADS[id]._resize) PADS[id]._resize();
         redraw(id); padChanged(id);
       });
       return; }
@@ -1602,6 +1608,22 @@ function submitQuiz(aid){
 function submitQuizCommit(aid){
   if (!QUIZ) return;
   const a = getAssignment(aid), me = currentUser();
+  /* 前測也要這道門，形狀與 aalSubmitCommit 完全相同。下面那圈 filter+push
+     是一模一樣的覆寫，而 measuringNow() 對停在 #/quiz 的分頁回傳 'quiz'——
+     它的 state.submissions 對「另一個分頁剛剛交了卷」同樣是瞎的。
+     前測 θ 是 ANCOVA 的共變數與基線，而這一份連草稿都只在記憶體裡、
+     也沒有補交路徑：被覆寫的孩子會以 16 題 null 進 Rasch。
+     擋下時不要動 QUIZ——那半份作答是唯一還留著的救援材料。 */
+  if (typeof submittedOnDisk === 'function' && submittedOnDisk(aid, me.id)){
+    alertModal({
+      title: '這一份已經交出去了',
+      body: '另一個分頁（或另一次開啟）已經把這一份交出去了，所以這裡不會再存一次——' +
+            '再存一次會把先交的那一份蓋掉。',
+      strong: '你剛剛在這一頁寫的東西沒有被存進去。',
+      note: '請舉手告訴老師，不要自己關掉分頁。'
+    });
+    return;
+  }
   const items = a.itemIds.map(getItem).filter(Boolean);
   items.forEach(function(it){
     state.responses = state.responses.filter(function(r){

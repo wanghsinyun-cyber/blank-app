@@ -942,7 +942,13 @@ async function aalSay(){
         /* 條件要傳進去：攔截後的替換文依角色而異，三個角色共用一句
            施教者口吻的話會把 tutee／peer 的社會框架直接否定。 */
         const g = leakGuard(raw, it, ctx.cond);
-        reply = {text:g.text, qfn:qfnNow,
+        /* 被攔下時 qfn 也要清成 null，與 agentTurn 同一條不變量。
+           正式施測跑的是外部模型，而內建語料現在是守門乾淨的——
+           攔截幾乎只發生在這條路徑上：qfn 照排程記著的話，每一則被攔的
+           回合都在日誌與語料檔裡宣稱送出了一個從未送到孩子面前的提問功能，
+           RQ4 的提問功能覆蓋率高報的量恰好等於攔截數，而攔截數由孩子
+           逼問答案的頻率決定，與投入、能力共變。 */
+        reply = {text:g.text, qfn: g.blocked ? null : qfnNow,
                  sub:null, engine:'llm', blocked:g.blocked, hits:g.hits, kinds:g.kinds};
       } catch (err) {
         /* 退回內建規則引擎。fallback 原本只賦值、沒有任何讀取端，於是
@@ -995,7 +1001,19 @@ async function aalSay(){
     }
     state.dialog.push({t:eaT, sid:ctx.me, cond:ctx.cond, aid:ctx.aid, iid:ctx.it.id,
       proc:ctx.it.process, turn:ctx.turn, speaker:'agent', text:reply.text,
-      qfn:reply.qfn, sub:reply.sub, ucode:reply.process || ctx.it.process, sent:0,
+      qfn:reply.qfn, sub:reply.sub,
+      /* ucode 被攔下時也要清掉。原本 reply.process 仍指向那一輪排定的
+         子歷程（F5 還會是往上一層），於是同一列資料自相矛盾：qfn=null、
+         sub=null（那一輪沒問出來），ucode 卻宣稱夥伴在 II 層發話，
+         而實際送出的是替換文那一句 FR 層的話。toENACsv 就用 d.ucode
+         產生四個歷程二元欄，rENA 網路會多一個假節點。 */
+      ucode: reply.blocked ? null : (reply.process || ctx.it.process), sent:0,
+      /* state.dialog 才是 export-json 的 dialog 欄位與 toENACsv 的來源，
+         原本兩條路徑都沒有把 blocked 寫進來——llm 的攔截列因此逐欄與
+         正常回合相同（sub 本來就恆為 null），交到分析軟體手上的語料
+         仍然無聲吞掉攔截，事後補不回來。 */
+      blocked: !!reply.blocked,
+      blockKinds: (reply.kinds && reply.kinds.length) ? reply.kinds.join('+') : null,
       engine:reply.engine, engineWanted: useLlm ? 'llm' : 'builtin',
       fallback: reply.fallback || null});
     save();

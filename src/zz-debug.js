@@ -764,6 +764,28 @@ window.assertLeakGuard = function(){
   });
   if (selfBlocked) fails.push('內建引擎被自己的守門攔下 ' + selfBlocked + ' 次（' + firstSelf + '）');
 
+  /* (1c) 提示詞裡被指定為「要講出來的字句」也不可以踩到守門。
+     這一輪踩過兩次同一個形狀：tutee 的開場句含「錯了」（VERDICT_SOFT）、
+     peer 的提示詞指定口頭禪「我們對一下」而『對』在 LETTER_NEAR 裡——
+     骨幹又強制「第一句回應學生剛剛說的內容」，孩子報 A–D 是常態，
+     於是那句話與字母同段就被攔成「選項代號＋判定語」。
+     指定語氣可以，指定字句不行。這裡掃 PROMPT_ROLE 裡所有「」引號中的字句。 */
+  Object.keys(PROMPT_ROLE || {}).forEach(function(c){
+    const src = String(PROMPT_ROLE[c] || '');
+    const quoted = src.match(/「[^」]{2,}」/g) || [];
+    quoted.forEach(function(q){
+      const phrase = q.slice(1, -1);
+      const g = leakGuard(phrase, ITEMS.find(function(i){ return i.type === 'mc'; }), c);
+      if (g.blocked)
+        fails.push(c + ' 的提示詞指定了一句會被自己守門攔下的話：「' + phrase + '」→ ' + g.hits.join(','));
+      /* 更狠一點：那句話與一個裸露的選項字母同段時也不可以被攔——
+         那正是實際會發生的情況。 */
+      const g2 = leakGuard('你覺得是 B 啊，' + phrase + '——那你怎麼看？', ITEMS.find(function(i){ return i.type === 'mc'; }), c);
+      if (g2.blocked)
+        fails.push(c + ' 的提示詞指定的「' + phrase + '」與選項字母同句時會被攔：' + g2.hits.join(','));
+    });
+  });
+
   /* (2) 三句替換文等長 */
   const lens = roles.map(function(c){ return String(GUARD_REPLY[c] || '').length; });
   if (new Set(lens).size !== 1)
@@ -998,9 +1020,24 @@ window.assertPadAspect = function(){
     const h = Math.max.apply(null, ys) - Math.min.apply(null, ys);
     return h ? w / h : 0;
   }
+  /* 要比書寫座標系（w0／h0），不是螢幕 px。改制之後這兩者不再是同一個單位，
+     而字級掃描時畫布會變大——拿 clientWidth 比只會愈來愈寬鬆，
+     永遠不可能抓到「座標跑到 viewBox 外」這個形狀，也就是這一輪
+     對抗性覆核抓到的那個 blocker。 */
   function inside(){
-    return PADS[id].strokes[0].pts.every(function(p){
-      return p[0] >= -1 && p[1] >= -1 && p[0] <= cv.clientWidth + 1 && p[1] <= cv.clientHeight + 1;
+    const p = PADS[id];
+    return p.strokes.every(function(s){
+      return (s.pts || []).every(function(pt){
+        return pt[0] >= -1 && pt[1] >= -1 && pt[0] <= p.w0 + 1 && pt[1] <= p.h0 + 1;
+      });
+    });
+  }
+  /* padPayload 的 viewBox 也要涵蓋所有墨水——那是評閱端唯一看得到的框。 */
+  function payloadCovers(){
+    const pay = padPayload(id);
+    if (!pay) return true;
+    return (pay.lines || []).every(function(s){
+      return (s.pts || []).every(function(pt){ return pt[0] <= pay.w + 1 && pt[1] <= pay.h + 1; });
     });
   }
   const base = aspect();
@@ -1014,13 +1051,17 @@ window.assertPadAspect = function(){
      (c) 長寬比與「有沒有掉出畫布」照舊。
      第 8 輪的 min() 修法只滿足 (c)：它是就地改資料的變換，橫轉直縮 0.733、
      直轉橫不還原，來回三次筆跡只剩 39%——而那正是平板上最常發生的動作。 */
-  /* alsoW0：只有「不該有人動 w0」的步驟才檢查它。轉向模擬本來就是靠改
-     w0 來假裝板子變窄，那一段只驗座標有沒有被就地改掉。 */
+  /* 座標永遠不動；書寫座標系只准長大、不准縮小。
+     「只長不縮」是刻意的：k = min(w/w0, h/h0) 之後必有一軸的可寫範圍
+     大於 w0／h0，盒子要長到涵蓋它，否則孩子寫得到的點會落在
+     padPayload 的 viewBox 外、在評閱端被裁掉。
+     alsoW0：轉向模擬本來就是靠改 w0 來假裝板子變窄，那一段不查盒子。 */
   function checkFrozen(step, alsoW0){
     if (JSON.stringify(PADS[id].strokes) !== snap0)
       fails.push(step + '：座標被就地改掉了（縮放應該只發生在畫的那一刻）');
-    if (alsoW0 && (PADS[id].w0 !== w0 || PADS[id].h0 !== h0))
-      fails.push(step + '：書寫座標系被改掉了');
+    if (alsoW0 && (PADS[id].w0 < w0 - 0.5 || PADS[id].h0 < h0 - 0.5))
+      fails.push(step + '：書寫座標系縮小了（' + PADS[id].w0 + '×' + PADS[id].h0 +
+        '，原本 ' + w0 + '×' + h0 + '）——盒子只准長大');
   }
 
   /* 字級掃描：畫布寬高都跟著 --fs 走 */
@@ -1035,11 +1076,23 @@ window.assertPadAspect = function(){
   });
   document.documentElement.style.setProperty('--fs', realFs || '1');
   if (typeof syncPads === 'function') syncPads();
-  if (Math.abs(padScale(id) - 1) > 0.001)
-    fails.push('字級掃一圈回到 100% 之後，縮放因子是 ' + padScale(id).toFixed(3) + '（應該精確回到 1）');
+  /* 可逆性要這樣定義：**同一個盒子、同一個畫布尺寸，k 必須一樣**。
+     不能要求「回到 100% 時 k 精確是 1」——盒子在 175% 那一趟長大了，
+     回到 100% 之後內容確實比視窗高，縮到看得完才是對的。
+     真正要擋的是「來回一趟就少一截」的累積損失。 */
+  const kBack = padScale(id);
+  document.documentElement.style.setProperty('--fs', realFs || '1');
+  if (typeof syncPads === 'function') syncPads();
+  if (Math.abs(padScale(id) - kBack) > 0.001)
+    fails.push('同一個字級量兩次，縮放因子不一樣（' + kBack.toFixed(3) + ' vs ' + padScale(id).toFixed(3) + '）');
+  rows.push({step:'字級掃一圈之後', aspect:+aspect().toFixed(3), 在畫布內:inside(), k:+kBack.toFixed(3),
+             盒子:PADS[id].w0 + '×' + PADS[id].h0});
 
-  /* 模擬平板轉向來回三次：假裝這些字是在一塊比較寬的板子上寫的，
-     再改回來。舊的做法（就地乘 k）在這裡會累積到只剩 39%。 */
+  /* 模擬平板轉向來回三次：假裝這些字是在一塊比較寬的板子上寫的，再改回來。
+     舊的做法（就地乘 k）在這裡會累積到只剩 39%。
+     現在座標不動，所以要驗的是「第一次來回之後就進入不動點」——
+     第 2、3 次的 k 與盒子都不可以再變。 */
+  const seen = [];
   for (let i = 0; i < 3; i++){
     PADS[id].w0 = w0 * 1.4;                       // 橫 → 直
     if (typeof syncPads === 'function') syncPads();
@@ -1047,23 +1100,55 @@ window.assertPadAspect = function(){
     PADS[id].w0 = w0;                             // 直 → 橫
     if (typeof syncPads === 'function') syncPads();
     checkFrozen('轉向第 ' + (i + 1) + ' 次（還原）');
+    seen.push({k:+padScale(id).toFixed(4), w0:PADS[id].w0, h0:PADS[id].h0});
   }
-  rows.push({step:'轉向來回三次', aspect:+aspect().toFixed(3), 在畫布內:inside(), k:+padScale(id).toFixed(3)});
-  if (Math.abs(padScale(id) - 1) > 0.001)
-    fails.push('轉向來回三次之後，縮放因子是 ' + padScale(id).toFixed(3) + '（應該精確回到 1）');
+  rows.push({step:'轉向來回三次', aspect:+aspect().toFixed(3), 在畫布內:inside(),
+             k:seen.map(function(x){ return x.k; }).join(' → ')});
+  if (seen[1].k !== seen[2].k || seen[1].w0 !== seen[2].w0 || seen[1].h0 !== seen[2].h0)
+    fails.push('轉向來回沒有收斂：第 2 次 k=' + seen[1].k + '、第 3 次 k=' + seen[2].k +
+      '（座標不動的話，第一次來回之後就該進入不動點）');
   if (Math.abs(aspect() - base) > 0.001)
     fails.push('轉向來回三次之後長寬比變成 ' + aspect().toFixed(3) + '，起始是 ' + base.toFixed(3));
 
-  /* 交出去的那一份要帶書寫座標系，不是當下的畫布尺寸 */
-  document.documentElement.style.setProperty('--fs', '1.75');
-  if (typeof syncPads === 'function') syncPads();
-  const pay = padPayload(id);
+  /* 真的用指標事件寫一筆。at() 是新座標換算唯一發生的地方，而這一支原本
+     從頭到尾直接把 strokes 陣列塞進 PADS——覆蓋率是零。
+     在放大的板子上寫到最下緣，座標必須仍然落在書寫座標系裡，
+     交出去的 viewBox 也要涵蓋它（這正是覆核抓到的 blocker 的形狀）。 */
+  function penStroke(fromFrac, toFrac){
+    const r = cv.getBoundingClientRect();
+    function ev(type, fx, fy){
+      const e = new PointerEvent(type, {bubbles:true, pointerId:99, pointerType:'mouse',
+        clientX: r.left + r.width * fx, clientY: r.top + r.height * fy});
+      cv.dispatchEvent(e);
+    }
+    ev('pointerdown', fromFrac[0], fromFrac[1]);
+    ev('pointermove', (fromFrac[0] + toFrac[0]) / 2, (fromFrac[1] + toFrac[1]) / 2);
+    ev('pointermove', toFrac[0], toFrac[1]);
+    ev('pointerup', toFrac[0], toFrac[1]);
+  }
+  ['1', '1.75'].forEach(function(fs){
+    document.documentElement.style.setProperty('--fs', fs);
+    if (typeof syncPads === 'function') syncPads();
+    const before = PADS[id].strokes.length;
+    penStroke([0.05, 0.90], [0.95, 0.99]);      // 貼著最下緣寫一筆
+    if (PADS[id].strokes.length === before){
+      fails.push('字級 ' + fs + '：用指標事件寫不出筆畫（at() 沒有被走到）');
+    } else {
+      if (!inside()) fails.push('字級 ' + fs + '：貼著下緣寫的筆畫落在書寫座標系之外');
+      if (!payloadCovers()) fails.push('字級 ' + fs + '：交出去的 viewBox 裁掉了剛寫的筆畫');
+    }
+  });
   document.documentElement.style.setProperty('--fs', realFs || '1');
   if (typeof syncPads === 'function') syncPads();
+  if (!inside()) fails.push('回到 100% 之後，剛才寫的筆畫落在書寫座標系之外');
+  if (!payloadCovers()) fails.push('回到 100% 之後，交出去的 viewBox 裁掉了筆畫');
+
+  const pay = padPayload(id);
   if (!pay) fails.push('padPayload 在有筆畫時回傳 null');
   else {
-    if (pay.w !== w0 || pay.h !== h0)
-      fails.push('padPayload 記的是當下畫布尺寸 ' + pay.w + '×' + pay.h + '，不是書寫座標系 ' + w0 + '×' + h0);
+    if (pay.w < PADS[id].w0 || pay.h < PADS[id].h0)
+      fails.push('padPayload 的 viewBox（' + pay.w + '×' + pay.h + '）小於書寫座標系（' +
+        PADS[id].w0 + '×' + PADS[id].h0 + '）');
     const flat = JSON.stringify(pay.lines[0].pts);
     if (flat !== JSON.stringify(PADS[id].strokes[0].pts))
       fails.push('padPayload 的座標與 PADS 裡的不一致');
@@ -1248,6 +1333,18 @@ window.assertDoubleSubmit = function(){
     if (d2.ui && d2.ui.role !== other)
       fails.push('施測中的分頁把身分寫回磁碟了（現在是 ' + d2.ui.role + '，應該還是 ' + other + '）');
   } catch (e) {}
+  /* 反方向同樣要擋。這一條原本沒驗，於是 P1 把 `out.ui = state.ui` 改成
+     「施測中不寫」時全綠——而那一改讓 save() 的合併分支（state = mergeOntoDisk(disk)）
+     把磁碟的 ui 吃進記憶體：孩子這一頁只要有任何一筆日誌就翻面，
+     下一次 render 走到 AAL.me !== me.id 就重跑 aalInit，
+     這一場的作答、標記、遙測全部被換人重建，AAL.cond 跟著翻面。 */
+  if (state.ui.role !== sid)
+    fails.push('施測中的分頁把磁碟的身分吃進記憶體了（state.ui.role 變成 ' + state.ui.role + '）');
+  if (AAL && AAL.me !== sid)
+    fails.push('施測中的 AAL 被換人了（AAL.me 變成 ' + AAL.me + '）');
+  /* 再落地一次也要穩定（不可以一次比一次更歪） */
+  save();
+  if (state.ui.role !== sid) fails.push('第二次落地之後身分還是被換走了');
 
   state = buildSeedState(); save();
   AAL = null; SURVEY = null; QUIZ = null;
@@ -1255,5 +1352,77 @@ window.assertDoubleSubmit = function(){
   location.hash = realHash || '#/teacher'; render();
   const r = {pass: fails.length === 0, fails: fails};
   console.log('[assertDoubleSubmit]', r);
+  return r;
+};
+
+/* ==========================================================================
+   答案還沒打開的時候，成績頁不可以逐題揭露對錯
+   三道班級層級的鎖（classKeyReleased、kbLocked 第三道門、a-pre 診斷門）
+   都是為同一個情境寫的：同教室二十幾人正在同一份題本上作答，
+   而教室裡的平板螢幕是公開的。孩子記得自己每一題選了什麼，
+   「第 8 題 答對」＝正解、「答錯」＝刪掉一個選項。
+   第 9 輪 P1 只擋了那顆逐題 pill，而同一頁上閱讀地圖把題號印在每顆圓點上、
+   x 軸兩欄就是「答錯」與「答對」、<title> 寫「第 8 題 · 你穩穩答對」、
+   <desc> 把「可惜的題目：第 8 題、第 12 題」念給報讀器，下面還用 <li>
+   逐條列出所有第二象限的題號與題幹——三個出口只修了最不顯眼的一個。
+   聚合分數（「選擇題答對 12 / 16」）刻意保留：它不指出是哪幾題，
+   而這一頁本來就叫「我的成績」。
+   console 一行：assertKeyLock()
+   ========================================================================== */
+window.assertKeyLock = function(){
+  const realRole = state.ui.role, realHash = location.hash;
+  const fails = [];
+  state = buildSeedState(); save();
+  AAL = null; SURVEY = null; QUIZ = null;
+
+  const k = state.classes.find(function(c){ return c.condition === 'tutor'; }) || state.classes[0];
+  const sid = k.studentIds[0];
+  /* 讓 classKeyReleased 為假：同班有人還沒交、沒到期、教師開關沒開 */
+  state.settings.keyReleased = {};
+  const a = getAssignment('a-post');
+  if (a){ a.due = Date.now() + 86400000; a.dueSet = true; }
+  k.studentIds.slice(1, 3).forEach(function(x){
+    state.submissions = state.submissions.filter(function(s){ return !(s.aid === 'a-post' && s.sid === x); });
+  });
+  if (!(state.surveys || []).some(function(s){ return s.sid === sid && s.phase === 'post'; }))
+    state.surveys.push({sid:sid, phase:'post', at:Date.now(), resp:{}});
+  state.ui.role = sid; renderShell();
+
+  function look(){
+    location.hash = '#/result/a-post'; render();
+    const v = document.getElementById('view');
+    return {text: v.innerText, html: v.innerHTML,
+            map: !!v.querySelector('svg.kidmap'),
+            pills: (v.innerText.match(/已作答/g) || []).length};
+  }
+
+  if (keyUnlocked('a-post', sid)) fails.push('前置條件不成立：答案卡沒有鎖住');
+  const locked = look();
+  /* 逐題的三個出口都要閉嘴 */
+  if (locked.map) fails.push('鎖著的時候還畫出閱讀地圖（圓點帶題號、x 軸就是答對／答錯）');
+  if (/穩穩答對|你其實讀得懂|可惜的題目：/.test(locked.text))
+    fails.push('鎖著的時候還印出象限標籤或可惜的題目清單');
+  if (/題很可惜|題你很厲害/.test(locked.text))
+    fails.push('鎖著的時候還逐條列出第一／第二象限的題號');
+  if (!locked.pills) fails.push('鎖著的時候逐題沒有改成中性的「已作答」');
+  /* 逐行掃：除了聚合分數與說明文字，不可以有任何「答對／答錯」 */
+  const leaky = locked.text.split('\n').filter(function(l){
+    return /答對|答錯/.test(l) && !/^選擇題答對$/.test(l.trim()) && !/閱讀地圖要等答案打開/.test(l);
+  });
+  if (leaky.length) fails.push('鎖著的時候仍然出現逐題對錯：' + leaky.slice(0, 3).join(' ／ '));
+  /* 報讀器那一條路也要一起（kidmapSVG 的 <desc>） */
+  if (/可惜的題目：/.test(locked.html)) fails.push('鎖著的時候 <desc> 仍然把可惜的題目念出來');
+
+  /* 打開之後要真的變回去 */
+  state.settings.keyReleased = {'a-post': true};
+  const open = look();
+  if (!open.map) fails.push('答案卡打開之後閱讀地圖沒有回來');
+  if (!/答對/.test(open.text)) fails.push('答案卡打開之後逐題狀態沒有回來');
+
+  state = buildSeedState(); save();
+  state.ui.role = realRole; renderShell();
+  location.hash = realHash || '#/teacher'; render();
+  const r = {pass: fails.length === 0, fails: fails};
+  console.log('[assertKeyLock]', r);
   return r;
 };

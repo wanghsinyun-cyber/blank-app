@@ -203,18 +203,19 @@ function mergeOntoDisk(disk){
     if (added && typeof console !== 'undefined' && console.info)
       console.info('[KAIROS] 合併：' + kind + ' 補回 ' + added + ' 列');
   });
-  /* ui 是「這台裝置現在是誰在用」，不是分頁自己的事。
-     施測中的分頁依設計拒絕同步外部更新（見 measuringNow），那它也必須
-     拒絕把自己的 ui 寫出去——否則老師在另一個分頁用 #/unlock 換成下一位
-     同學之後，那個還停在作答頁、沒關掉的舊分頁只要再落地一次
-     （關掉它就會：beforeunload 無條件 flushLogs → save），磁碟上的 ui.role
-     與 deviceUnlock 就被寫回上一位；活著的那個分頁不在施測狀態，
-     收到 storage 事件立刻 adoptForeignState，身分整個倒退，
-     而施測中頂列的身分下拉是隱藏的，孩子看不到自己變成誰。
-     下一位同學整節課的作答會記在上一位的 sid 與條件底下，兩個人的資料
-     同時作廢——這條路徑還完全繞過 #/unlock 的教師代碼、退避鎖與 UNLOCK 日誌。 */
-  const measuring = typeof measuringNow === 'function' ? measuringNow() : null;
-  if (!measuring || !out.ui) out.ui = state.ui;
+  /* ui 一律以本頁為準。這一行同時做兩件事，兩件都不能少：
+     (1) 不讓磁碟那一份 ui 被帶進記憶體——save() 的合併分支是
+         `state = mergeOntoDisk(disk)`，整份 state 被這個回傳值取代，
+         所以只要這裡不覆寫，磁碟的 ui.role 就會直接成為 state.ui.role。
+         第 9 輪 P1 曾經改成「施測中不寫」，結果就是把 storage 監聽器
+         擋下來的災難搬進 save()：老師在另一個分頁換成下一位之後，
+         孩子這一頁只要有任何一筆日誌（logEvent → flushLogs → save）
+         就翻面，而 save() 不 renderShell、不 toast，施測中身分下拉又是
+         隱藏的——下一次 render 走到 AAL.me !== me.id 就重跑 aalInit，
+         這一場的作答、標記、遙測全部被換人重建，AAL.cond 跟著翻面。
+     (2) 「不要把自己的 ui 寫出去」是另一件事，屬於 save() 的序列化那一步
+         （見 save() 裡的 payloadUi）——不能靠這一行順便達成。 */
+  out.ui = state.ui;
   if (out.settings && state.settings) out.settings.a11y = state.settings.a11y;
   return out;
 }
@@ -302,10 +303,14 @@ function save(){
   /* 別的分頁在我們這一份之後寫過東西時，不要整份蓋回去（見 mergeOntoDisk）。
      合併結果同時套回記憶體，否則這個分頁會一直拿著舊的那一份，
      下一次存檔又把剛補回去的東西再蓋掉一次。 */
+  /* 磁碟上那一份的 ui 要先留起來：施測中的分頁不可以把自己的身分寫出去
+     （理由見下面 payloadUi）。合併分支與非合併分支都要拿得到，所以在這裡讀。 */
+  let diskUi = null;
   try {
     const raw = localStorage.getItem(STORE_KEY);
     if (raw){
       const disk = JSON.parse(raw);
+      if (disk && disk.ui) diskUi = disk.ui;
       if (disk && (disk.rev || 0) > STATE_REV && disk.writer !== TAB_ID){
         state = mergeOntoDisk(disk);
         STATE_REV = disk.rev || 0;
@@ -323,6 +328,21 @@ function save(){
       const clone = Object.assign({}, state, {ui: Object.assign({}, state.ui, {
         role: imp.realRole, impersonate: undefined})});
       localStorage.setItem(STORE_KEY, JSON.stringify(clone));
+      return true;
+    }
+    /* 施測中的分頁不可以把自己的身分寫出去。它依設計拒絕同步外部更新
+       （見 measuringNow），所以它手上的 ui 一定是進入作答那一刻的舊值；
+       老師在另一個分頁用 #/unlock 換成下一位同學之後，這個還停在作答頁、
+       沒關掉的舊分頁只要再落地一次（關掉它就會：beforeunload 無條件
+       flushLogs → save），磁碟上的 ui.role 與 deviceUnlock 就被寫回上一位。
+       活著的那個分頁不在施測狀態，收到 storage 事件立刻 adoptForeignState，
+       身分整個倒退，而施測中頂列的身分下拉是隱藏的，孩子看不到自己變成誰。
+       這一步只影響「寫出去的那一份」，state.ui 仍然是本頁自己的
+       （mergeOntoDisk 的 out.ui = state.ui 負責那一半）。 */
+    const measuring = typeof measuringNow === 'function' ? measuringNow() : null;
+    if (measuring && diskUi){
+      const clone2 = Object.assign({}, state, {ui: diskUi});
+      localStorage.setItem(STORE_KEY, JSON.stringify(clone2));
       return true;
     }
     localStorage.setItem(STORE_KEY, JSON.stringify(state));
