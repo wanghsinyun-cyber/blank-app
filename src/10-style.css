@@ -671,7 +671,10 @@ html{ scroll-padding-top: calc(var(--sticky-top) + 12px) }
   font-size:0.85rem; color:var(--ink)}
 .imp-bar span{flex:1}
 .unread-dot{color:var(--accent); margin-right:.25rem}
+/* 隔壁的 .card.missing 早就用 ::after 補了一行文字，這一條只有顏色（1.4.1）。
+   被退回來的孩子看到的是幾個紅框，沒有任何一句話說他要做什麼。 */
 .likert.missing{outline:3px solid var(--crit); outline-offset:6px; border-radius:var(--r-m)}
+.likert.missing .q::after{content:"　還沒選"; color:var(--crit); font-weight:600; font-size:0.8rem}
 /* 作答卡被帶回來時的標示。用外框 + 一行文字，不只靠顏色（1.4.1）。 */
 .card.missing{outline:3px solid var(--crit); outline-offset:4px}
 .card.missing .card-h::after{content:"　還沒寫完"; color:var(--crit); font-weight:600; font-size:0.8rem}

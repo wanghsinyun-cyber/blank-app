@@ -295,6 +295,18 @@ function viewAaL(aid){
     rerouteInRender('#/result/' + aid);
     return viewResult(aid);
   }
+  /* 處遇入口的前置門檻。原本這一頁只擋「不是學生」與「已交卷」，
+     不看課前問卷有沒有送出、也不看前置的那份測驗有沒有做完
+     （assignment.linkedTo 全庫沒有讀取端）。而 surveyGate('pre') 在
+     a-post 交卷之後一律轉成擋板：孩子先按了同樣是 .btn.primary 的
+     〈開始這節課 →〉、把課上完，那份課前問卷從此關閉，全站沒有補填路徑。
+     那四個構念（eff／anx／mot_in／mot_ex）是 ANCOVA 的共變數基線，
+     也是 phase:'both' 的前後測配對依變項；而誰會按錯與謹慎程度、
+     閱讀速度共變，不是隨機遺失。前置測驗同理：前後測是同一份題本，
+     沒做前測就上完課，θ 基線會變成處遇後、同一批題目第二次曝光的分數。
+     同一支檔案對課後問卷早就有正確的正向門檻，處遇入口一道都沒有。 */
+  const gate = entryGate(aid, me.id);
+  if (gate) return gate;
   if (!AAL || AAL.aid !== aid || AAL.me !== me.id) aalInit(aid);
 
   const it = aalItem();
@@ -1370,6 +1382,13 @@ function viewSurvey(phase, page){
       '<span class="muted small">中間可以休息，填到哪裡會自動記住</span></div>' +
       '<div class="bar" style="margin-top:8px"><i style="width:' +
       Math.round(100 * SURVEY.page / secs.length) + '%"></i></div>' +
+      /* 缺答提示的固定插入點。原本用 querySelector('#view .card-p') 找容器，
+         而 sectionHead 不含 .card-p，所以第一個命中的永遠是上面那張
+         #svSaveWarn——它平常帶 hidden，整句「這一段還有 N 題沒有選」
+         因此落在 display:none 的子樹裡：看不到，role="alert" 也不會播報，
+         而它正是「為什麼被退回來、還剩幾題」的唯一文字說明。
+         剩下的線索只有 .likert.missing 的紅框，純顏色、沒有文字。 */
+      '<div id="svMissSlot"></div>' +
     '</div>' +
 
     (SURVEY.page === 1
@@ -1447,7 +1466,7 @@ function surveySubmit(phase){
           if (!first) first = el;
         });
         if (n){
-          const box = document.querySelector('#view .card-p');
+          const box = document.getElementById('svMissSlot');
           if (box && !document.getElementById('svMissAlert')){
             box.insertAdjacentHTML('afterbegin',
               '<p id="svMissAlert" role="alert" class="small" style="color:var(--crit);font-weight:600">' +
@@ -1694,14 +1713,8 @@ function inspectCR(it, resp){
   /* 唯讀重播與評閱頁同一個坑：只印 text 的話，用手寫作答的孩子在這裡
      顯示「沒有作答。」——而這一頁的用途正是讓老師與研究者看到
      「學生當時實際看到什麼、做了什麼」。 */
-  const inked = typeof respHasInk === 'function' && respHasInk(resp);
   return '<div class="field"><label>他寫的答案</label>' +
-    '<div class="note-full" style="white-space:pre-wrap">' +
-    (resp.text ? esc(resp.text)
-               : (inked ? '<span class="muted">用手寫作答（見下方）。</span>'
-                        : '<span class="muted">沒有作答。</span>')) + '</div></div>' +
-    (inked ? '<div class="small muted" style="margin-top:8px">手寫作答</div>' +
-             strokesSvg(resp.strokes) : '') +
+    crAnswerHtml(resp, {cls:'note-full'}) + '</div>' +
     '<p class="muted small" style="margin-top:8px">建構反應題不進入 Rasch 估計，評閱在「派題分析 → 建構反應題評閱」。</p>';
 }
 

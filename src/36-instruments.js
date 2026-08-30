@@ -136,12 +136,20 @@ const DEMO_EFFECT = {
   control: {mot_in: 0.00, mot_ex: 0.00, eff: 0.00, cl_in: 0.00, cl_ex: 0.00, cl_ge: 0.00, eng_b: 0.00, eng_e: 0.00, eng_c: 0.00, anx: 0.00}
 };
 
-function buildDemoSurveys(){
+/* st 是選填的：buildSeedState 還沒有把物件指給全域 state 就要用它了。 */
+function buildDemoSurveys(st){
+  st = st || state;
+  /* 第二道守門：清場之後絕對不製造示範資料。界面那一道只擋得住按鈕，
+     日後從別的入口呼叫這一支時還是會把示範資料種到真實受試者名下。 */
+  if (!st || st.demoSeed === false) return [];
   const rnd = mulberry32(20260901);
   const out = [];
-  state.classes.forEach(function(k){
+  /* 不走全域的 getUser：buildSeedState 在把物件指給 state 之前就會呼叫這一支。 */
+  const uById = {};
+  (st.users || []).forEach(function(u){ uById[u.id] = u; });
+  st.classes.forEach(function(k){
     k.studentIds.forEach(function(sid){
-      const stu = getUser(sid);
+      const stu = uById[sid] || {};
       const a = stu.thetaTrue || 0, e = stu.engage != null ? stu.engage : 0.5;
       const trait = {};
       CONSTRUCTS.forEach(function(c){

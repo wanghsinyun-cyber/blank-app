@@ -116,6 +116,14 @@ function render(){
   /* 離開前測作答頁也要先結清去抖的存檔，理由與上面相同：
      這裡是所有離開路徑的共同出口。QUIZ 不釋放（要讓他回來繼續）。 */
   if (QUIZ && ROUTE.name !== 'quiz'){ try { quizSaveFlush(); } catch (e) {} }
+  /* 離開作答頁時把手寫板掛在 window 上的 resize 監聽收掉。畫布隨
+     v.innerHTML 被拆走之後那些監聽器還活著，下一次轉向或軟體鍵盤開合時
+     size() 會跑在脫離文件的 canvas 上——雖然它現在自己會守門，
+     但沒有必要留著一整排指向已死節點的監聽器（記憶體壓力正是平板
+     把分頁丟掉的原因之一）。筆畫本身已經在草稿裡，回來時會還原。 */
+  if (ROUTE.name !== 'quiz' && ROUTE.name !== 'aal'){
+    try { releasePadListeners(); } catch (e) {}
+  }
   const prevY = window.scrollY;
   /* 內層捲動容器的位置。window.scrollY 還原不了它們——v.innerHTML 一換，
      容器就被重建、scrollTop 歸零。同一篇文章換題時，學生每次都要重新捲回
@@ -621,6 +629,19 @@ function bindEvents(){
     /* 研究控制台 */
     if (act === 'rtab'){ RTAB = id; render(); return; }
     if (act === 'reassign'){
+      /* 清場之後絕對不能再重新分派。這條路徑會無條件跑
+         doReassign()（末尾又呼叫 buildDemoLogs）與 buildDemoSurveys()：
+           · 已經送出、文案承諾「送出即定案」的真實問卷整份被換成模擬資料並落地
+           · 對名冊上每一位真實學生種出含 MARK 的示範事件，而 aalInit 一律用
+             inspectMarks(allLogs()) 重建標記－－孩子打開作答頁時文章開頭已經
+             有幾句是亮的、pill 寫「已標記 N 句」，他點下去反而是取消
+           · 四班的條件在施測中途被重抽
+         載入路徑早就有 demoSeed 守門，這條路徑繞過了它。 */
+      if (state.demoSeed === false){
+        alertModal({title:'已經在施測狀態，不能再重新分派',
+          body:'清空示範資料之後，重新分派會覆蓋已經收到的真實問卷，也會把示範歷程種回孩子的畫面。',
+          note:'條件分派必須在清場之前定案。'});
+        return; }
       confirmModal({
         title: '要重新分派條件嗎？',
         body: '每個班級被分到的條件會改變。',
@@ -634,6 +655,32 @@ function bindEvents(){
     /* 評量即學習事件 */
     if (act === 'aal-mark'){ aalMark(+t.dataset.i); return; }
     if (act === 'aal-pick'){ aalPick(+t.dataset.k); return; }
+    /* 施測狀態下的〈換人〉。要代碼才解得開，解開之後強制把待處理的
+       選項、日誌與手寫全部結清並清掉——不然下一個坐下來的孩子會接到
+       上一個人的筆跡與尚未落地的事件。解鎖是一次性的：換完人就再鎖回去。 */
+    if (act === 'device-unlock'){
+      if (state.ui && state.ui.deviceUnlock){
+        state.ui.deviceUnlock = false; saveUiOnly(); renderShell();
+        toast('已經鎖回去了。'); return; }
+      promptModal({
+        title: '要換一位同學使用這台平板嗎？',
+        body: '這是老師的動作。',
+        label: '教師代碼', password: true, inputmode: 'numeric',
+        note: '換人之前系統會先把目前這位同學寫到一半的東西存起來。',
+        yes: '解鎖', no: '取消'
+      }, function(code){
+        if (String(code || '').trim() !== String((state.settings || {}).teacherCode || '')){
+          toast('代碼不對。'); return; }
+        try { if (typeof AAL !== 'undefined' && AAL){ flushPendingPicks(); flushLogs(); aalSave(); } } catch (e) {}
+        try { quizSaveFlush(); } catch (e) {}
+        try { if (typeof SURVEY !== 'undefined' && SURVEY) surveyDraftSave(); } catch (e) {}
+        try { clearPads(); } catch (e) {}
+        AAL = null; SURVEY = null; QUIZ = null;
+        state.ui.deviceUnlock = true; saveUiOnly(); renderShell();
+        go('#/student'); render();
+        toast('可以用右上角的選單換人了。換完之後請再按一次〈換人〉鎖回去。');
+      });
+      return; }
     if (act === 'toast-close'){
       clearTimeout(toast._t);
       const tr = $('#toastRoot'); if (tr) tr.innerHTML = '';
@@ -906,12 +953,16 @@ function bindEvents(){
          學生在施測狀態下不得換身分：換得掉就能變成別班的孩子（看到別的
          條件的 AI 夥伴，受試者間設計失效）、變成同班同學（讀改別人的作答）、
          或變成研究者。 */
-      if (state.demoSeed === false && !isTeacher()){
+      /* 例外：老師用〈換人〉＋教師代碼開過鎖（state.ui.deviceUnlock）。
+         那是這台裝置唯一的出口，見 renderShell 的說明。 */
+      if (state.demoSeed === false && !isTeacher() && !(state.ui && state.ui.deviceUnlock)){
         renderShell();
         toast('施測期間不能切換身分。');
         return; }
       if (AAL){ try { flushPendingPicks(); flushLogs(); } catch (e2) {} }
       state.ui.impersonate = null;
+      /* 解鎖是一次性的：換完人就鎖回去，孩子坐下來時不會有一個還開著的出口。 */
+      if (state.ui) state.ui.deviceUnlock = false;
       clearPads();          // 上一個身分的手寫不能跟過來
       state.ui.role = e.target.value; save(); renderShell();
       go(isTeacher() ? '#/teacher' : '#/student'); render(); return; }

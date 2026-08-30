@@ -688,7 +688,10 @@ html{ scroll-padding-top: calc(var(--sticky-top) + 12px) }
   font-size:0.85rem; color:var(--ink)}
 .imp-bar span{flex:1}
 .unread-dot{color:var(--accent); margin-right:.25rem}
+/* 隔壁的 .card.missing 早就用 ::after 補了一行文字，這一條只有顏色（1.4.1）。
+   被退回來的孩子看到的是幾個紅框，沒有任何一句話說他要做什麼。 */
 .likert.missing{outline:3px solid var(--crit); outline-offset:6px; border-radius:var(--r-m)}
+.likert.missing .q::after{content:"　還沒選"; color:var(--crit); font-weight:600; font-size:0.8rem}
 /* 作答卡被帶回來時的標示。用外框 + 一行文字，不只靠顏色（1.4.1）。 */
 .card.missing{outline:3px solid var(--crit); outline-offset:4px}
 .card.missing .card-h::after{content:"　還沒寫完"; color:var(--crit); font-weight:600; font-size:0.8rem}
@@ -1543,6 +1546,11 @@ function buildSeedState(){
     notes: notes,
     logs: [],
     dialog: [],
+    /* 示範問卷。原本是空陣列，於是示範模式下問卷匯出只有一行標題、
+       儀表板裡所有由問卷推導的面板都是空的－－老師與研究者在正式施測前
+       用示範資料熟悉系統時，看不到問卷那一半長什麼樣。
+       而這一輪加了處遇入口的前置門檻（要先填課前問卷）之後，
+       沒有示範問卷的話連作答頁都進不去，整個示範流程斷掉。 */
     surveys: [],
     assignmentLog: [{at: now - 20 * DAY, seed: 20250827, stratify:'grade',
                      map: classes.map(function(c){ return {cid:c.id, cond:c.condition}; }),
@@ -1556,6 +1564,12 @@ function buildSeedState(){
          原本只硬編碼在函式裡、預設物件沒有這個鍵，也沒有任何 UI 寫得到它——
          正式施測時研究者連調高門檻都做不到。 */
       keyUnlockRatio: 0.5,
+      /* 施測狀態下換人所需的教師代碼。孩子按不出來、老師三秒內輸入得完。
+         沒有它的話，一旦在清場後選成某位學生，這台裝置就永遠回不到教師端
+         （三道守門的解鎖條件都是 isTeacher()，而它讀的是「目前選到的身分」）——
+         現場唯一解法會變成清瀏覽器資料，那會連同這孩子唯一一份作答
+         與 kairos-draft 一起銷毀。研究者可以在系統設定頁改掉它。 */
+      teacherCode: '1234',
       /* 教師按下的答案卡釋出開關（每份派題一個鍵）。
          一人一台平板時，這是唯一真的會成立的釋出路徑。 */
       keyReleased: {},
@@ -1565,6 +1579,9 @@ function buildSeedState(){
     ui: { role:'u-t1', classId:'c-1' },
     seededAt: now
   };
+  /* 示範問卷要在這裡種進去（見上方 surveys 的說明）。
+     buildDemoSurveys 收一個明確的 st，因為此刻全域 state 還沒被指派。 */
+  try { st.surveys = buildDemoSurveys(st); } catch (e) { st.surveys = []; }
   return st;
 }
 
@@ -1753,8 +1770,15 @@ const PROMPT_ROLE = {
          '把問題丟回去給學生，不要幫他整理答案。',
   tutee: '【社會框架】你是剛讀完這篇、但很多地方沒看懂的同學。你想請這位學生講給你聽，' +
          '所以你的問題都要像「我不太懂……你可以說給我聽嗎？」而不是像在考他。',
-  peer:  '【社會框架】你是跟學生同時在讀這一篇的同學。先簡短說一句你自己讀到哪裡或卡在哪裡' +
-         '（不可以是答案，也不可以說第幾段或第幾句），再把同一個問題拋回去問他，語氣是對等的討論。'
+  /* 「先簡短說一句你自己讀到哪裡」已經拿掉。tutor 與 tutee 的角色模組
+     都沒有任何自報進度的要求，只有 peer 有——而且括號只禁「第幾段第幾句」，
+     擋不住「我讀到中間」「我卡在後面那段」這種軟位置線索。
+     內建引擎的 PEER_SHARE_LATER 上一輪才把同一批說法整批清掉，理由就寫在
+     那個常數上方（軟位置線索，而且只有 peer 拿得到）；提示詞這一側漏了。
+     只有 peer 組每一輪都可能收到一個方位線索，RQ1 比的就不再是三種社會框架。
+     改成同層級、不涉位置的對等描述，字數與另兩個角色相當。 */
+  peer:  '【社會框架】你是跟學生同時在讀這一篇的同學。先用一句話說你自己讀這一篇的感覺' +
+         '（不可以是答案，也不可以提到位置），再把同一個問題拋回去問他，語氣是對等的討論。'
 };
 
 /* --- 歷程提示模組（模組 4–7）：提問功能與子歷程提問庫 --- */
@@ -1936,6 +1960,9 @@ function agentTurn(conditionId, item, turn, rnd){
    規則引擎本來就不會產生答案，但外部語言模型會。輸出後一律過這一關，
    攔截次數本身就是一項可報告的實施忠實度指標。 */
 const VERDICT_WORDS = ['答對', '答錯', '正確答案', '你錯了', '你對了', '正解是', '應該選', '答案是', '選項是'];
+/* 指路語。判定詞擋的是「說出答案」，這一組擋的是「帶他去某個地方找」——
+   兩者都是提示。內建引擎不會產生它們，這一組是給外部模型用的。 */
+const POINTER_WORDS = ['線索在', '你去看', '再看看第', '答案在', '提示：', '往前找', '往後找'];
 /* 「第 N 段」「第二段」都要認得。CN 只到十——文本沒有超過十段的。 */
 const CN_NUM = ['零','一','二','三','四','五','六','七','八','九','十'];
 function posRe(n, unit){
@@ -1952,14 +1979,23 @@ function leakGuard(text, item){
     const letter = String.fromCharCode(65 + item.answer);
     if (new RegExp('(選|答案|正解)\\s*' + letter + '\\b').test(t)) hits.push('正解代號');
   }
-  /* 句與段都要擋，而且要認中文數字——原本只有一條阿拉伯數字的句次規則，
-     於是「第二段」「第二句」都通過。 */
-  if (item && item.answerSent != null && posRe(item.answerSent + 1, '句').test(t)){
-    hits.push('指名答案所在句次');
+  /* 位置線索一律擋，不再只擋「這一題正解所在的那一個位置」。
+     原本比對的是 item.answerPara／answerSent：正解在第 2 段而模型回
+     「你再看看第三段」時 hits 為空、blocked 為 false，原文照送——
+     攔得住的只有指對的那一種，活下來的全是指錯的，等於隨機把孩子帶到
+     錯的段落；而 blocked 次數作為實施忠實度指標會系統性低報。
+     更嚴重的是兩題建構反應題的 answerPara／answerSent 都是 null，
+     整條位置規則對它們從來沒有生效過。
+     「AI 不可給提示」是不變量，任何指路都違反它，不管指得對不對。 */
+  for (let n = 1; n <= 10 && !hits.length; n++){
+    if (posRe(n, '段').test(t)) hits.push('指名段落位置');
   }
-  if (item && item.answerPara != null && posRe(item.answerPara + 1, '段').test(t)){
-    hits.push('指名答案所在段落');
+  for (let n = 1; n <= 40; n++){
+    if (posRe(n, '句').test(t)){ hits.push('指名句次位置'); break; }
   }
+  /* 判定詞之外還有指路語。VERDICT_WORDS 只收「答對／正解是」這一類，
+     擋不住「線索在」「你去看」「再看看第」——那些同樣是提示。 */
+  POINTER_WORDS.forEach(function(w){ if (t.indexOf(w) >= 0) hits.push(w); });
   if (hits.length){
     return {text:'這個我不能說喔。換個方式問你：你剛剛是從文章的哪一句得到這個想法的？',
             blocked:true, hits:hits};
@@ -2226,6 +2262,10 @@ function moodTail(cond, rnd){
 }
 
 function buildDemoLogs(){
+  /* 第二道守門：清場之後絕對不製造示範資料。界面那一道只擋得住按鈕，
+     日後從別的入口呼叫這一支時還是會把示範資料種到真實受試者名下。 */
+  if (typeof state !== 'undefined' && state && state.demoSeed === false){
+    DEMO_LOGS = []; DEMO_DIALOG = []; return; }
   const rnd = mulberry32(778899);
   const logs = [], dialog = [];
   const asg = getAssignment('a-post');
@@ -2607,12 +2647,20 @@ const DEMO_EFFECT = {
   control: {mot_in: 0.00, mot_ex: 0.00, eff: 0.00, cl_in: 0.00, cl_ex: 0.00, cl_ge: 0.00, eng_b: 0.00, eng_e: 0.00, eng_c: 0.00, anx: 0.00}
 };
 
-function buildDemoSurveys(){
+/* st 是選填的：buildSeedState 還沒有把物件指給全域 state 就要用它了。 */
+function buildDemoSurveys(st){
+  st = st || state;
+  /* 第二道守門：清場之後絕對不製造示範資料。界面那一道只擋得住按鈕，
+     日後從別的入口呼叫這一支時還是會把示範資料種到真實受試者名下。 */
+  if (!st || st.demoSeed === false) return [];
   const rnd = mulberry32(20260901);
   const out = [];
-  state.classes.forEach(function(k){
+  /* 不走全域的 getUser：buildSeedState 在把物件指給 state 之前就會呼叫這一支。 */
+  const uById = {};
+  (st.users || []).forEach(function(u){ uById[u.id] = u; });
+  st.classes.forEach(function(k){
     k.studentIds.forEach(function(sid){
-      const stu = getUser(sid);
+      const stu = uById[sid] || {};
       const a = stu.thetaTrue || 0, e = stu.engage != null ? stu.engage : 0.5;
       const trait = {};
       CONSTRUCTS.forEach(function(c){
@@ -5286,6 +5334,35 @@ function confirmModal(opts, onYes){
   };
 }
 
+/* 站內的輸入框（目前只有「換人」的教師代碼用它）。理由與 confirmModal
+   相同：原生 prompt() 不吃 --fs 與高對比，而且會凍住整個執行緒。
+   onOk 收到輸入值；按取消或 Esc 不呼叫。 */
+function promptModal(opts, onOk){
+  const o = opts || {};
+  confirmModal._onNo = null;
+  confirmModal._yes = function(){
+    const box = document.getElementById('promptInput');
+    const v = box ? box.value : '';
+    modal._onDismiss = null;
+    closeModal();
+    try { onOk(v); } catch (e) {
+      if (typeof console !== 'undefined' && console.error) console.error(e);
+    }
+  };
+  modal('<div class="modal-h"><h3>' + esc(o.title || '請輸入') + '</h3></div>' +
+    '<div class="modal-b">' +
+    (o.body ? '<p style="margin:0 0 10px;max-width:60ch">' + esc(o.body) + '</p>' : '') +
+    '<div class="field"><label for="promptInput">' + esc(o.label || '') + '</label>' +
+    '<input type="' + (o.password ? 'password' : 'text') + '" id="promptInput" ' +
+    'inputmode="' + esc(o.inputmode || 'text') + '" autocomplete="off"></div>' +
+    (o.note ? '<p class="muted small" style="margin-top:10px;max-width:60ch">' + esc(o.note) + '</p>' : '') +
+    '</div>' +
+    '<div class="modal-f">' +
+    '<button class="btn" data-act="confirm-no">' + esc(o.no || '取消') + '</button>' +
+    '<button class="btn primary" data-act="confirm-yes">' + esc(o.yes || '確定') + '</button>' +
+    '</div>', {focus:'#promptInput'});
+}
+
 /* 站內的告知框。理由與 confirmModal 完全相同，只是沒有「取消」這個選項。
    會走到它的兩個地方都是存檔失敗——原生 alert() 在那一刻特別糟：
    它不吃 --fs 與高對比，而它要傳達的正是「先不要關掉這個分頁」；
@@ -5371,13 +5448,40 @@ function renderShell(){
         esc(u.name) + '（' + roleName(u.role) + '）</option>';
     }).join('') + '</optgroup>';
   }).join('');
-  /* 藏起來還不夠：把選項本身也收掉，控制項就算被翻出來也換不了人。 */
-  if (liveRun && !isTeacher()){
+  /* 藏起來還不夠：把選項本身也收掉，控制項就算被翻出來也換不了人。
+     但「鎖住」不等於「沒有出口」。三道守門的解鎖條件原本都是 isTeacher()，
+     而 isTeacher() 讀的是目前選到的身分——清場之後一旦選成學生就恆為 false，
+     這台裝置永遠回不到教師端：老師把平板交給下一個孩子、或一開始選錯人，
+     現場唯一解法是清瀏覽器資料，那會連同這孩子唯一一份作答與草稿一起銷毀，
+     而且代為檢視、評閱、答案卡開關也全部做不到。
+     多一顆〈換人〉，用 state.settings.teacherCode 開鎖（deviceUnlock）。 */
+  const unlocked = !!(state.ui && state.ui.deviceUnlock);
+  if (liveRun && !isTeacher() && !unlocked){
     const meNow = currentUser();
     sel.innerHTML = '<option value="' + meNow.id + '" selected>' + esc(meNow.name) + '</option>';
     sel.disabled = true;
   } else {
     sel.disabled = false;
+  }
+  /* 這顆鈕只在「施測狀態 + 目前是學生」時出現，所以四個條件的孩子都看得到
+     同一顆，版面幾何不因條件而異；它需要代碼才有作用。 */
+  let sw = document.getElementById('switchWho');
+  if (liveRun && !isTeacher()){
+    if (!sw){
+      sw = document.createElement('button');
+      sw.id = 'switchWho';
+      sw.className = 'btn sm ghost';
+      sw.type = 'button';
+      sw.dataset.act = 'device-unlock';
+      const wrap = $('#whoWrap');
+      if (wrap && wrap.parentNode) wrap.parentNode.insertBefore(sw, wrap.nextSibling);
+      else document.querySelector('.topbar').appendChild(sw);
+    }
+    sw.textContent = unlocked ? '換人（已解鎖）' : '換人';
+    sw.style.display = '';
+    if (whoWrap) whoWrap.style.display = unlocked ? '' : 'none';
+  } else if (sw){
+    sw.style.display = 'none';
   }
 
   /* 教師視角的班級選擇器（學生看不到） */
@@ -6398,13 +6502,7 @@ function tabCR(diag){
            「（未作答）」、給分留白——而手寫正是不會打字的孩子唯一的
            建構反應通道，遺失會與打字能力共變，直接污染 CR 的組間比較。
            兩者都有就兩者都印：孩子可能先打幾個字再用畫的補圖。 */
-        (String(r.text || '').trim()
-          ? '<div class="ai-out" style="white-space:pre-wrap;font-family:var(--f-mono);font-size:0.78rem">' + esc(r.text) + '</div>'
-          : (respHasInk(r) ? '' :
-             '<div class="ai-out" style="white-space:pre-wrap;font-family:var(--f-mono);font-size:0.78rem">（未作答）</div>')) +
-        (respHasInk(r)
-          ? '<div class="small muted" style="margin-top:8px">手寫作答</div>' + strokesSvg(r.strokes)
-          : '') +
+        crAnswerHtml(r, {style:'font-family:var(--f-mono);font-size:0.78rem'}) +
         '<div class="field" style="margin-top:8px"><label for="' + noteId + '">給學生的評語</label>' +
         '<textarea rows="3" style="min-height:4.5rem" id="' + noteId +
         '" aria-label="給 ' + esc(userName(r.sid)) + ' 的評語" data-act="cr-comment" data-sid="' + r.sid + '" data-iid="' + it.id +
@@ -7510,8 +7608,12 @@ function viewStudent(){
             (state.demoSeed !== false && a.aal && !isImpersonating()
               ? ' <button class="btn sm" data-act="redo-demo" data-id="' + a.id +
                 '">再走一次（示範）</button>' : '')
-          : '<a class="btn primary" href="#/' + (a.aal ? 'aal' : 'quiz') + '/' + a.id + '">' +
-            (draftN ? '接著上次繼續 →' : (a.aal ? '開始這節課 →' : '開始作答 →')) + '</a>') + '</div>' +
+          : (entryGate(a.id, me.id)
+              /* 前置沒完成時不要給一顆跟《去填課前問卷》長得一模一樣的主要按鈕，
+                 這兩顆就在同一張畫面上，而按錯的代價是永久的。 */
+              ? '<span class="muted small">' + (surveyOf(me.id, 'pre') ? '要先做前面那一份' : '要先填課前問卷') + '</span>'
+              : '<a class="btn primary" href="#/' + (a.aal ? 'aal' : 'quiz') + '/' + a.id + '">' +
+                (draftN ? '接著上次繼續 →' : (a.aal ? '開始這節課 →' : '開始作答 →')) + '</a>')) + '</div>' +
         '</div></div></div>';
     }).join('') + '</div>' +
     '<div class="card" style="margin-top:16px"><div class="card-p">' +
@@ -7519,6 +7621,28 @@ function viewStudent(){
     '<p class="small" style="margin-top:6px;max-width:70ch">系統會用所有做過這份題目的同學（四個班一起）估出每題的難度與你的能力，' +
     '把「你本來應該答得出來卻答錯」的題目標出來。這些題目不會只變成一個紅色叉叉——' +
     '系統會把它整理出來變成全班的共同問題，貼到知識建構空間，讓大家一起把它想清楚。</p></div></div>';
+}
+
+/* 一份派題的前置條件還沒完成時要擋下來，並回傳一張說明卡。
+   回傳空字串代表可以進去。條件用 assignment.linkedTo 推導，不寫死 'a-pre'。
+   兩個門檻的理由分別寫在 viewAaL 與 viewQuiz 的呼叫點。 */
+function entryGate(aid, sid){
+  const a = getAssignment(aid);
+  if (!a) return '';
+  const needSurvey = !surveyOf(sid, 'pre');
+  const prev = a.linkedTo ? getAssignment(a.linkedTo) : null;
+  const needPrev = !!(prev && !submitted(prev.id, sid));
+  if (!needSurvey && !needPrev) return '';
+  return '<div class="empty"><h3>先完成前面這一步</h3>' +
+    '<p style="max-width:60ch">' +
+    (needSurvey ? '課前問卷要在上課前填，它問的是你「現在」的感覺；上完課就填不到了。'
+                : '這一節要接在前面那一份測驗後面。') + '</p>' +
+    '<div class="row" style="justify-content:center;margin-top:12px">' +
+    (needSurvey ? '<a class="btn primary" href="#/survey/pre">去填課前問卷</a>' : '') +
+    (needPrev ? '<a class="btn' + (needSurvey ? '' : ' primary') + '" href="#/' +
+                (prev.aal ? 'aal' : 'quiz') + '/' + prev.id + '">去做' + esc(prev.title) + '</a>' : '') +
+    '<a class="btn" href="#/student">回我的作業</a>' +
+    '</div></div>';
 }
 
 /* 「交過卷」——純存在檢查。流程與統計用這個就夠了。 */
@@ -7615,6 +7739,9 @@ function viewQuiz(aid){
     rerouteInRender('#/result/' + aid);
     return viewResult(aid);
   }
+  /* 前置門檻，理由與 viewAaL 相同：課前問卷一旦錯過就補不回來。 */
+  const gate = entryGate(aid, me.id);
+  if (gate) return gate;
   /* 進來時先把草稿接回來。沒接的話，重載＝整份歸零（見 QUIZ_DRAFT_KEY）。 */
   if (!QUIZ || QUIZ.aid !== aid){
     QUIZ = {aid:aid, answers:{}, texts:{}, strokes:{}};
@@ -7947,7 +8074,7 @@ function crResultBlock(aid, sid, keyLocked){
         ((aid === 'a-pre' && !submitted('a-post', sid))
           ? '<p class="muted small" style="margin-top:6px">等課後那一份也做完，這裡會打開，' +
             '讓你看到自己當時寫了什麼。</p>'
-          : '<div class="ai-out" style="white-space:pre-wrap">' + esc((r && r.text) || '（未作答）') + '</div>') +
+          : crAnswerHtml(r)) +
         '<div class="row" style="margin-top:8px">' +
         (r && r.score !== null && r.score !== undefined
           ? '<span class="pill q1"><span class="dot"></span>得分 ' + r.score + ' / 6</span>'
@@ -8025,10 +8152,27 @@ function clearPads(){
   });
 }
 
-/* 這塊板子上有沒有東西。空的 strokes 陣列不算。 */
+/* 只收監聽器與畫布參照，筆畫留著。離開作答頁時用——資料還要留給草稿與
+   交卷，但沒有必要留著一整排指向已死節點的 resize 監聽。 */
+function releasePadListeners(){
+  Object.keys(PADS).forEach(function(k){
+    const p = PADS[k];
+    if (!p) return;
+    if (p._onResize){ window.removeEventListener('resize', p._onResize); p._onResize = null; }
+    p.cv = null;
+  });
+}
+
+/* 這塊板子上有沒有東西。只有一個點的筆畫不算——canvas 在描邊前會剪掉
+   單點子路徑，所以它畫不出任何東西，但 strokes.length 會是 1。
+   而「這一題有沒有寫」現在是缺答判定、進度、answeredCount（答案卡的
+   作答比例門檻）與 padPayload 的共同來源：在畫布上點一下就會讓兩題全空的
+   孩子繞過缺答救援，交卷後 respHasInk 為真、評閱頁顯示「手寫作答」加一張
+   全白的圖，只能給 0 分而不是標成缺答。 */
 function padHasInk(padId){
   const p = PADS[padId];
-  return !!(p && p.strokes && p.strokes.length);
+  return !!(p && p.strokes && p.strokes.some(function(s){
+    return s.pts && s.pts.length > 1; }));
 }
 
 /* 落地用的格式。除了筆畫本身還要記下當時的畫布寬度：筆畫存的是 CSS px
@@ -8037,7 +8181,40 @@ function padHasInk(padId){
 function padPayload(padId){
   const p = PADS[padId];
   if (!padHasInk(padId)) return null;
-  return {w: p.w || (p.cv && p.cv.clientWidth) || 600, h: p.h || 240, lines: p.strokes};
+  /* 一定要深複本。原本 lines 直接指向 PADS 裡那個「活的」陣列，交卷之後
+     state.responses 與畫布共用同一份資料：畫布隨 v.innerHTML 被拆走，
+     但掛在 window 上的 size() 還活著，下一次 resize（平板轉向、軟體鍵盤
+     開合）時它跑在脫離文件的 canvas 上，量到寬度 0、退回 600，
+     於是把每個點就地乘上 600/舊寬——已經落地的那一筆跟著被改掉，
+     而它自己記的 w 是個數字、不會跟著動。評閱端於是用舊的 viewBox 去畫
+     被放大過的座標，筆跡被裁掉，接著任何一次 save() 就寫死進匯出檔。
+     只留有效筆畫，順便把點一下留下的單點清掉。 */
+  return {w: p.w || (p.cv && p.cv.clientWidth) || 600, h: p.h || 240,
+    lines: p.strokes.filter(function(s){ return s.pts && s.pts.length > 1; })
+      .map(function(s){
+        return {color:s.color, width:s.width, pts:s.pts.map(function(pt){ return pt.slice(); })};
+      })};
+}
+
+/* 一筆建構反應題作答要怎麼呈現，全站只有這一支說了算。
+   上一輪補讀取端時修好了教師評閱與唯讀重播、漏掉學生自己的成績頁，
+   於是純手寫作答的孩子在「唯一看得到自己 CR 作答的畫面」上被告知
+   兩題都是「（未作答）」——那是他整節課寫最久的兩題，而全站沒有補交
+   或修改路徑；他會舉手說系統把答案弄丟，或帶著「我那兩題沒寫」的認知
+   去填緊接著要量自我效能與焦慮的課後問卷。
+   三個讀取端共用這一支，下一次就不會再漏掉其中一個。 */
+function crAnswerHtml(r, opts){
+  const o = opts || {};
+  const txt = String((r && r.text) || '').trim();
+  const inked = respHasInk(r);
+  if (!txt && !inked){
+    return '<div class="' + (o.cls || 'ai-out') + '" style="white-space:pre-wrap' +
+      (o.style ? ';' + o.style : '') + '">（未作答）</div>';
+  }
+  return (txt ? '<div class="' + (o.cls || 'ai-out') + '" style="white-space:pre-wrap' +
+                (o.style ? ';' + o.style : '') + '">' + esc(txt) + '</div>' : '') +
+    (inked ? '<div class="small muted" style="margin-top:8px">手寫作答</div>' +
+             strokesSvg(r.strokes) : '');
 }
 
 /* 把落地的筆跡畫成 SVG。用 SVG 不用 canvas，因為評閱頁與唯讀重播都只是
@@ -8084,7 +8261,11 @@ function initPads(){
     cv._init = true;
     const dpr = window.devicePixelRatio || 1;
     function size(){
-      const w = cv.clientWidth || 600;
+      /* 量不到寬度時什麼都不要做。原本 `cv.clientWidth || 600` 在畫布已經
+         脫離文件（交卷、換題、換頁之後）時會退回 600，然後拿它去換算座標，
+         把整份筆跡就地乘掉。量不到就是量不到，不是 600。 */
+      if (!cv.isConnected || !cv.clientWidth) return;
+      const w = cv.clientWidth;
       const p = PADS[id];
       /* 筆畫是 CSS px 絕對座標。原本 resize 只重設畫布尺寸就直接重畫舊座標，
          平板由橫轉直（約 1024→768）之後，寫在右半邊的字整片落在畫布外——
@@ -8139,11 +8320,22 @@ function initPads(){
       cur.pts.push([e.clientX - r.left, e.clientY - r.top]);
       redraw(id);
     });
-    cv.addEventListener('pointerup', function(){ cur = null; padChanged(id); });
-    cv.addEventListener('pointerleave', function(){ cur = null; });
+    /* 沒有移動過的「筆畫」要丟掉。pointerdown 在還沒有任何 pointermove
+       之前就先推了一筆進去，而三個收尾原本只把 cur 清掉。
+       單點子路徑畫不出任何東西，却會讓「這一題有沒有寫」變成真。 */
+    function dropEmptyStroke(){
+      if (cur && (!cur.pts || cur.pts.length < 2)){
+        const arr = PADS[id].strokes;
+        const i = arr.lastIndexOf(cur);
+        if (i >= 0) arr.splice(i, 1);
+      }
+      cur = null;
+    }
+    cv.addEventListener('pointerup', function(){ dropEmptyStroke(); padChanged(id); });
+    cv.addEventListener('pointerleave', dropEmptyStroke);
     /* 與畫布同一個坑：手勢被瀏覽器接管時會送 pointercancel，
        不處理的話同一次捲動會在計算紙上留下一條假筆畫。 */
-    cv.addEventListener('pointercancel', function(){ cur = null; });
+    cv.addEventListener('pointercancel', dropEmptyStroke);
   });
 }
 
@@ -8916,6 +9108,18 @@ function viewAaL(aid){
     rerouteInRender('#/result/' + aid);
     return viewResult(aid);
   }
+  /* 處遇入口的前置門檻。原本這一頁只擋「不是學生」與「已交卷」，
+     不看課前問卷有沒有送出、也不看前置的那份測驗有沒有做完
+     （assignment.linkedTo 全庫沒有讀取端）。而 surveyGate('pre') 在
+     a-post 交卷之後一律轉成擋板：孩子先按了同樣是 .btn.primary 的
+     〈開始這節課 →〉、把課上完，那份課前問卷從此關閉，全站沒有補填路徑。
+     那四個構念（eff／anx／mot_in／mot_ex）是 ANCOVA 的共變數基線，
+     也是 phase:'both' 的前後測配對依變項；而誰會按錯與謹慎程度、
+     閱讀速度共變，不是隨機遺失。前置測驗同理：前後測是同一份題本，
+     沒做前測就上完課，θ 基線會變成處遇後、同一批題目第二次曝光的分數。
+     同一支檔案對課後問卷早就有正確的正向門檻，處遇入口一道都沒有。 */
+  const gate = entryGate(aid, me.id);
+  if (gate) return gate;
   if (!AAL || AAL.aid !== aid || AAL.me !== me.id) aalInit(aid);
 
   const it = aalItem();
@@ -9991,6 +10195,13 @@ function viewSurvey(phase, page){
       '<span class="muted small">中間可以休息，填到哪裡會自動記住</span></div>' +
       '<div class="bar" style="margin-top:8px"><i style="width:' +
       Math.round(100 * SURVEY.page / secs.length) + '%"></i></div>' +
+      /* 缺答提示的固定插入點。原本用 querySelector('#view .card-p') 找容器，
+         而 sectionHead 不含 .card-p，所以第一個命中的永遠是上面那張
+         #svSaveWarn——它平常帶 hidden，整句「這一段還有 N 題沒有選」
+         因此落在 display:none 的子樹裡：看不到，role="alert" 也不會播報，
+         而它正是「為什麼被退回來、還剩幾題」的唯一文字說明。
+         剩下的線索只有 .likert.missing 的紅框，純顏色、沒有文字。 */
+      '<div id="svMissSlot"></div>' +
     '</div>' +
 
     (SURVEY.page === 1
@@ -10068,7 +10279,7 @@ function surveySubmit(phase){
           if (!first) first = el;
         });
         if (n){
-          const box = document.querySelector('#view .card-p');
+          const box = document.getElementById('svMissSlot');
           if (box && !document.getElementById('svMissAlert')){
             box.insertAdjacentHTML('afterbegin',
               '<p id="svMissAlert" role="alert" class="small" style="color:var(--crit);font-weight:600">' +
@@ -10315,14 +10526,8 @@ function inspectCR(it, resp){
   /* 唯讀重播與評閱頁同一個坑：只印 text 的話，用手寫作答的孩子在這裡
      顯示「沒有作答。」——而這一頁的用途正是讓老師與研究者看到
      「學生當時實際看到什麼、做了什麼」。 */
-  const inked = typeof respHasInk === 'function' && respHasInk(resp);
   return '<div class="field"><label>他寫的答案</label>' +
-    '<div class="note-full" style="white-space:pre-wrap">' +
-    (resp.text ? esc(resp.text)
-               : (inked ? '<span class="muted">用手寫作答（見下方）。</span>'
-                        : '<span class="muted">沒有作答。</span>')) + '</div></div>' +
-    (inked ? '<div class="small muted" style="margin-top:8px">手寫作答</div>' +
-             strokesSvg(resp.strokes) : '') +
+    crAnswerHtml(resp, {cls:'note-full'}) + '</div>' +
     '<p class="muted small" style="margin-top:8px">建構反應題不進入 Rasch 估計，評閱在「派題分析 → 建構反應題評閱」。</p>';
 }
 
@@ -10553,6 +10758,9 @@ function rAssign(){
 }
 
 function doReassign(){
+  /* 第二道守門：清場之後絕對不製造示範資料。界面那一道只擋得住按鈕，
+     日後從別的入口呼叫這一支時還是會把示範資料種到真實受試者名下。 */
+  if (state && state.demoSeed === false) return;
   const seed = Math.floor(Math.random() * 900000) + 100000;
   const rnd = mulberry32(seed);
   const conds = CONDITIONS.map(function(c){ return c.id; });
@@ -11104,6 +11312,14 @@ function render(){
   /* 離開前測作答頁也要先結清去抖的存檔，理由與上面相同：
      這裡是所有離開路徑的共同出口。QUIZ 不釋放（要讓他回來繼續）。 */
   if (QUIZ && ROUTE.name !== 'quiz'){ try { quizSaveFlush(); } catch (e) {} }
+  /* 離開作答頁時把手寫板掛在 window 上的 resize 監聽收掉。畫布隨
+     v.innerHTML 被拆走之後那些監聽器還活著，下一次轉向或軟體鍵盤開合時
+     size() 會跑在脫離文件的 canvas 上——雖然它現在自己會守門，
+     但沒有必要留著一整排指向已死節點的監聽器（記憶體壓力正是平板
+     把分頁丟掉的原因之一）。筆畫本身已經在草稿裡，回來時會還原。 */
+  if (ROUTE.name !== 'quiz' && ROUTE.name !== 'aal'){
+    try { releasePadListeners(); } catch (e) {}
+  }
   const prevY = window.scrollY;
   /* 內層捲動容器的位置。window.scrollY 還原不了它們——v.innerHTML 一換，
      容器就被重建、scrollTop 歸零。同一篇文章換題時，學生每次都要重新捲回
@@ -11609,6 +11825,19 @@ function bindEvents(){
     /* 研究控制台 */
     if (act === 'rtab'){ RTAB = id; render(); return; }
     if (act === 'reassign'){
+      /* 清場之後絕對不能再重新分派。這條路徑會無條件跑
+         doReassign()（末尾又呼叫 buildDemoLogs）與 buildDemoSurveys()：
+           · 已經送出、文案承諾「送出即定案」的真實問卷整份被換成模擬資料並落地
+           · 對名冊上每一位真實學生種出含 MARK 的示範事件，而 aalInit 一律用
+             inspectMarks(allLogs()) 重建標記－－孩子打開作答頁時文章開頭已經
+             有幾句是亮的、pill 寫「已標記 N 句」，他點下去反而是取消
+           · 四班的條件在施測中途被重抽
+         載入路徑早就有 demoSeed 守門，這條路徑繞過了它。 */
+      if (state.demoSeed === false){
+        alertModal({title:'已經在施測狀態，不能再重新分派',
+          body:'清空示範資料之後，重新分派會覆蓋已經收到的真實問卷，也會把示範歷程種回孩子的畫面。',
+          note:'條件分派必須在清場之前定案。'});
+        return; }
       confirmModal({
         title: '要重新分派條件嗎？',
         body: '每個班級被分到的條件會改變。',
@@ -11622,6 +11851,32 @@ function bindEvents(){
     /* 評量即學習事件 */
     if (act === 'aal-mark'){ aalMark(+t.dataset.i); return; }
     if (act === 'aal-pick'){ aalPick(+t.dataset.k); return; }
+    /* 施測狀態下的〈換人〉。要代碼才解得開，解開之後強制把待處理的
+       選項、日誌與手寫全部結清並清掉——不然下一個坐下來的孩子會接到
+       上一個人的筆跡與尚未落地的事件。解鎖是一次性的：換完人就再鎖回去。 */
+    if (act === 'device-unlock'){
+      if (state.ui && state.ui.deviceUnlock){
+        state.ui.deviceUnlock = false; saveUiOnly(); renderShell();
+        toast('已經鎖回去了。'); return; }
+      promptModal({
+        title: '要換一位同學使用這台平板嗎？',
+        body: '這是老師的動作。',
+        label: '教師代碼', password: true, inputmode: 'numeric',
+        note: '換人之前系統會先把目前這位同學寫到一半的東西存起來。',
+        yes: '解鎖', no: '取消'
+      }, function(code){
+        if (String(code || '').trim() !== String((state.settings || {}).teacherCode || '')){
+          toast('代碼不對。'); return; }
+        try { if (typeof AAL !== 'undefined' && AAL){ flushPendingPicks(); flushLogs(); aalSave(); } } catch (e) {}
+        try { quizSaveFlush(); } catch (e) {}
+        try { if (typeof SURVEY !== 'undefined' && SURVEY) surveyDraftSave(); } catch (e) {}
+        try { clearPads(); } catch (e) {}
+        AAL = null; SURVEY = null; QUIZ = null;
+        state.ui.deviceUnlock = true; saveUiOnly(); renderShell();
+        go('#/student'); render();
+        toast('可以用右上角的選單換人了。換完之後請再按一次〈換人〉鎖回去。');
+      });
+      return; }
     if (act === 'toast-close'){
       clearTimeout(toast._t);
       const tr = $('#toastRoot'); if (tr) tr.innerHTML = '';
@@ -11894,12 +12149,16 @@ function bindEvents(){
          學生在施測狀態下不得換身分：換得掉就能變成別班的孩子（看到別的
          條件的 AI 夥伴，受試者間設計失效）、變成同班同學（讀改別人的作答）、
          或變成研究者。 */
-      if (state.demoSeed === false && !isTeacher()){
+      /* 例外：老師用〈換人〉＋教師代碼開過鎖（state.ui.deviceUnlock）。
+         那是這台裝置唯一的出口，見 renderShell 的說明。 */
+      if (state.demoSeed === false && !isTeacher() && !(state.ui && state.ui.deviceUnlock)){
         renderShell();
         toast('施測期間不能切換身分。');
         return; }
       if (AAL){ try { flushPendingPicks(); flushLogs(); } catch (e2) {} }
       state.ui.impersonate = null;
+      /* 解鎖是一次性的：換完人就鎖回去，孩子坐下來時不會有一個還開著的出口。 */
+      if (state.ui) state.ui.deviceUnlock = false;
       clearPads();          // 上一個身分的手寫不能跟過來
       state.ui.role = e.target.value; save(); renderShell();
       go(isTeacher() ? '#/teacher' : '#/student'); render(); return; }

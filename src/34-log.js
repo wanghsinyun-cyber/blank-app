@@ -186,6 +186,10 @@ function moodTail(cond, rnd){
 }
 
 function buildDemoLogs(){
+  /* 第二道守門：清場之後絕對不製造示範資料。界面那一道只擋得住按鈕，
+     日後從別的入口呼叫這一支時還是會把示範資料種到真實受試者名下。 */
+  if (typeof state !== 'undefined' && state && state.demoSeed === false){
+    DEMO_LOGS = []; DEMO_DIALOG = []; return; }
   const rnd = mulberry32(778899);
   const logs = [], dialog = [];
   const asg = getAssignment('a-post');

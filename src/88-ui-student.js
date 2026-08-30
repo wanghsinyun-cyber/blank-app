@@ -191,8 +191,12 @@ function viewStudent(){
             (state.demoSeed !== false && a.aal && !isImpersonating()
               ? ' <button class="btn sm" data-act="redo-demo" data-id="' + a.id +
                 '">再走一次（示範）</button>' : '')
-          : '<a class="btn primary" href="#/' + (a.aal ? 'aal' : 'quiz') + '/' + a.id + '">' +
-            (draftN ? '接著上次繼續 →' : (a.aal ? '開始這節課 →' : '開始作答 →')) + '</a>') + '</div>' +
+          : (entryGate(a.id, me.id)
+              /* 前置沒完成時不要給一顆跟《去填課前問卷》長得一模一樣的主要按鈕，
+                 這兩顆就在同一張畫面上，而按錯的代價是永久的。 */
+              ? '<span class="muted small">' + (surveyOf(me.id, 'pre') ? '要先做前面那一份' : '要先填課前問卷') + '</span>'
+              : '<a class="btn primary" href="#/' + (a.aal ? 'aal' : 'quiz') + '/' + a.id + '">' +
+                (draftN ? '接著上次繼續 →' : (a.aal ? '開始這節課 →' : '開始作答 →')) + '</a>')) + '</div>' +
         '</div></div></div>';
     }).join('') + '</div>' +
     '<div class="card" style="margin-top:16px"><div class="card-p">' +
@@ -200,6 +204,28 @@ function viewStudent(){
     '<p class="small" style="margin-top:6px;max-width:70ch">系統會用所有做過這份題目的同學（四個班一起）估出每題的難度與你的能力，' +
     '把「你本來應該答得出來卻答錯」的題目標出來。這些題目不會只變成一個紅色叉叉——' +
     '系統會把它整理出來變成全班的共同問題，貼到知識建構空間，讓大家一起把它想清楚。</p></div></div>';
+}
+
+/* 一份派題的前置條件還沒完成時要擋下來，並回傳一張說明卡。
+   回傳空字串代表可以進去。條件用 assignment.linkedTo 推導，不寫死 'a-pre'。
+   兩個門檻的理由分別寫在 viewAaL 與 viewQuiz 的呼叫點。 */
+function entryGate(aid, sid){
+  const a = getAssignment(aid);
+  if (!a) return '';
+  const needSurvey = !surveyOf(sid, 'pre');
+  const prev = a.linkedTo ? getAssignment(a.linkedTo) : null;
+  const needPrev = !!(prev && !submitted(prev.id, sid));
+  if (!needSurvey && !needPrev) return '';
+  return '<div class="empty"><h3>先完成前面這一步</h3>' +
+    '<p style="max-width:60ch">' +
+    (needSurvey ? '課前問卷要在上課前填，它問的是你「現在」的感覺；上完課就填不到了。'
+                : '這一節要接在前面那一份測驗後面。') + '</p>' +
+    '<div class="row" style="justify-content:center;margin-top:12px">' +
+    (needSurvey ? '<a class="btn primary" href="#/survey/pre">去填課前問卷</a>' : '') +
+    (needPrev ? '<a class="btn' + (needSurvey ? '' : ' primary') + '" href="#/' +
+                (prev.aal ? 'aal' : 'quiz') + '/' + prev.id + '">去做' + esc(prev.title) + '</a>' : '') +
+    '<a class="btn" href="#/student">回我的作業</a>' +
+    '</div></div>';
 }
 
 /* 「交過卷」——純存在檢查。流程與統計用這個就夠了。 */
@@ -296,6 +322,9 @@ function viewQuiz(aid){
     rerouteInRender('#/result/' + aid);
     return viewResult(aid);
   }
+  /* 前置門檻，理由與 viewAaL 相同：課前問卷一旦錯過就補不回來。 */
+  const gate = entryGate(aid, me.id);
+  if (gate) return gate;
   /* 進來時先把草稿接回來。沒接的話，重載＝整份歸零（見 QUIZ_DRAFT_KEY）。 */
   if (!QUIZ || QUIZ.aid !== aid){
     QUIZ = {aid:aid, answers:{}, texts:{}, strokes:{}};
@@ -628,7 +657,7 @@ function crResultBlock(aid, sid, keyLocked){
         ((aid === 'a-pre' && !submitted('a-post', sid))
           ? '<p class="muted small" style="margin-top:6px">等課後那一份也做完，這裡會打開，' +
             '讓你看到自己當時寫了什麼。</p>'
-          : '<div class="ai-out" style="white-space:pre-wrap">' + esc((r && r.text) || '（未作答）') + '</div>') +
+          : crAnswerHtml(r)) +
         '<div class="row" style="margin-top:8px">' +
         (r && r.score !== null && r.score !== undefined
           ? '<span class="pill q1"><span class="dot"></span>得分 ' + r.score + ' / 6</span>'
@@ -706,10 +735,27 @@ function clearPads(){
   });
 }
 
-/* 這塊板子上有沒有東西。空的 strokes 陣列不算。 */
+/* 只收監聽器與畫布參照，筆畫留著。離開作答頁時用——資料還要留給草稿與
+   交卷，但沒有必要留著一整排指向已死節點的 resize 監聽。 */
+function releasePadListeners(){
+  Object.keys(PADS).forEach(function(k){
+    const p = PADS[k];
+    if (!p) return;
+    if (p._onResize){ window.removeEventListener('resize', p._onResize); p._onResize = null; }
+    p.cv = null;
+  });
+}
+
+/* 這塊板子上有沒有東西。只有一個點的筆畫不算——canvas 在描邊前會剪掉
+   單點子路徑，所以它畫不出任何東西，但 strokes.length 會是 1。
+   而「這一題有沒有寫」現在是缺答判定、進度、answeredCount（答案卡的
+   作答比例門檻）與 padPayload 的共同來源：在畫布上點一下就會讓兩題全空的
+   孩子繞過缺答救援，交卷後 respHasInk 為真、評閱頁顯示「手寫作答」加一張
+   全白的圖，只能給 0 分而不是標成缺答。 */
 function padHasInk(padId){
   const p = PADS[padId];
-  return !!(p && p.strokes && p.strokes.length);
+  return !!(p && p.strokes && p.strokes.some(function(s){
+    return s.pts && s.pts.length > 1; }));
 }
 
 /* 落地用的格式。除了筆畫本身還要記下當時的畫布寬度：筆畫存的是 CSS px
@@ -718,7 +764,40 @@ function padHasInk(padId){
 function padPayload(padId){
   const p = PADS[padId];
   if (!padHasInk(padId)) return null;
-  return {w: p.w || (p.cv && p.cv.clientWidth) || 600, h: p.h || 240, lines: p.strokes};
+  /* 一定要深複本。原本 lines 直接指向 PADS 裡那個「活的」陣列，交卷之後
+     state.responses 與畫布共用同一份資料：畫布隨 v.innerHTML 被拆走，
+     但掛在 window 上的 size() 還活著，下一次 resize（平板轉向、軟體鍵盤
+     開合）時它跑在脫離文件的 canvas 上，量到寬度 0、退回 600，
+     於是把每個點就地乘上 600/舊寬——已經落地的那一筆跟著被改掉，
+     而它自己記的 w 是個數字、不會跟著動。評閱端於是用舊的 viewBox 去畫
+     被放大過的座標，筆跡被裁掉，接著任何一次 save() 就寫死進匯出檔。
+     只留有效筆畫，順便把點一下留下的單點清掉。 */
+  return {w: p.w || (p.cv && p.cv.clientWidth) || 600, h: p.h || 240,
+    lines: p.strokes.filter(function(s){ return s.pts && s.pts.length > 1; })
+      .map(function(s){
+        return {color:s.color, width:s.width, pts:s.pts.map(function(pt){ return pt.slice(); })};
+      })};
+}
+
+/* 一筆建構反應題作答要怎麼呈現，全站只有這一支說了算。
+   上一輪補讀取端時修好了教師評閱與唯讀重播、漏掉學生自己的成績頁，
+   於是純手寫作答的孩子在「唯一看得到自己 CR 作答的畫面」上被告知
+   兩題都是「（未作答）」——那是他整節課寫最久的兩題，而全站沒有補交
+   或修改路徑；他會舉手說系統把答案弄丟，或帶著「我那兩題沒寫」的認知
+   去填緊接著要量自我效能與焦慮的課後問卷。
+   三個讀取端共用這一支，下一次就不會再漏掉其中一個。 */
+function crAnswerHtml(r, opts){
+  const o = opts || {};
+  const txt = String((r && r.text) || '').trim();
+  const inked = respHasInk(r);
+  if (!txt && !inked){
+    return '<div class="' + (o.cls || 'ai-out') + '" style="white-space:pre-wrap' +
+      (o.style ? ';' + o.style : '') + '">（未作答）</div>';
+  }
+  return (txt ? '<div class="' + (o.cls || 'ai-out') + '" style="white-space:pre-wrap' +
+                (o.style ? ';' + o.style : '') + '">' + esc(txt) + '</div>' : '') +
+    (inked ? '<div class="small muted" style="margin-top:8px">手寫作答</div>' +
+             strokesSvg(r.strokes) : '');
 }
 
 /* 把落地的筆跡畫成 SVG。用 SVG 不用 canvas，因為評閱頁與唯讀重播都只是
@@ -765,7 +844,11 @@ function initPads(){
     cv._init = true;
     const dpr = window.devicePixelRatio || 1;
     function size(){
-      const w = cv.clientWidth || 600;
+      /* 量不到寬度時什麼都不要做。原本 `cv.clientWidth || 600` 在畫布已經
+         脫離文件（交卷、換題、換頁之後）時會退回 600，然後拿它去換算座標，
+         把整份筆跡就地乘掉。量不到就是量不到，不是 600。 */
+      if (!cv.isConnected || !cv.clientWidth) return;
+      const w = cv.clientWidth;
       const p = PADS[id];
       /* 筆畫是 CSS px 絕對座標。原本 resize 只重設畫布尺寸就直接重畫舊座標，
          平板由橫轉直（約 1024→768）之後，寫在右半邊的字整片落在畫布外——
@@ -820,11 +903,22 @@ function initPads(){
       cur.pts.push([e.clientX - r.left, e.clientY - r.top]);
       redraw(id);
     });
-    cv.addEventListener('pointerup', function(){ cur = null; padChanged(id); });
-    cv.addEventListener('pointerleave', function(){ cur = null; });
+    /* 沒有移動過的「筆畫」要丟掉。pointerdown 在還沒有任何 pointermove
+       之前就先推了一筆進去，而三個收尾原本只把 cur 清掉。
+       單點子路徑畫不出任何東西，却會讓「這一題有沒有寫」變成真。 */
+    function dropEmptyStroke(){
+      if (cur && (!cur.pts || cur.pts.length < 2)){
+        const arr = PADS[id].strokes;
+        const i = arr.lastIndexOf(cur);
+        if (i >= 0) arr.splice(i, 1);
+      }
+      cur = null;
+    }
+    cv.addEventListener('pointerup', function(){ dropEmptyStroke(); padChanged(id); });
+    cv.addEventListener('pointerleave', dropEmptyStroke);
     /* 與畫布同一個坑：手勢被瀏覽器接管時會送 pointercancel，
        不處理的話同一次捲動會在計算紙上留下一條假筆畫。 */
-    cv.addEventListener('pointercancel', function(){ cur = null; });
+    cv.addEventListener('pointercancel', dropEmptyStroke);
   });
 }
 

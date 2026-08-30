@@ -730,6 +730,11 @@ function buildSeedState(){
     notes: notes,
     logs: [],
     dialog: [],
+    /* 示範問卷。原本是空陣列，於是示範模式下問卷匯出只有一行標題、
+       儀表板裡所有由問卷推導的面板都是空的－－老師與研究者在正式施測前
+       用示範資料熟悉系統時，看不到問卷那一半長什麼樣。
+       而這一輪加了處遇入口的前置門檻（要先填課前問卷）之後，
+       沒有示範問卷的話連作答頁都進不去，整個示範流程斷掉。 */
     surveys: [],
     assignmentLog: [{at: now - 20 * DAY, seed: 20250827, stratify:'grade',
                      map: classes.map(function(c){ return {cid:c.id, cond:c.condition}; }),
@@ -743,6 +748,12 @@ function buildSeedState(){
          原本只硬編碼在函式裡、預設物件沒有這個鍵，也沒有任何 UI 寫得到它——
          正式施測時研究者連調高門檻都做不到。 */
       keyUnlockRatio: 0.5,
+      /* 施測狀態下換人所需的教師代碼。孩子按不出來、老師三秒內輸入得完。
+         沒有它的話，一旦在清場後選成某位學生，這台裝置就永遠回不到教師端
+         （三道守門的解鎖條件都是 isTeacher()，而它讀的是「目前選到的身分」）——
+         現場唯一解法會變成清瀏覽器資料，那會連同這孩子唯一一份作答
+         與 kairos-draft 一起銷毀。研究者可以在系統設定頁改掉它。 */
+      teacherCode: '1234',
       /* 教師按下的答案卡釋出開關（每份派題一個鍵）。
          一人一台平板時，這是唯一真的會成立的釋出路徑。 */
       keyReleased: {},
@@ -752,6 +763,9 @@ function buildSeedState(){
     ui: { role:'u-t1', classId:'c-1' },
     seededAt: now
   };
+  /* 示範問卷要在這裡種進去（見上方 surveys 的說明）。
+     buildDemoSurveys 收一個明確的 st，因為此刻全域 state 還沒被指派。 */
+  try { st.surveys = buildDemoSurveys(st); } catch (e) { st.surveys = []; }
   return st;
 }
 

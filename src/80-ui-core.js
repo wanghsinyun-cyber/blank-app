@@ -194,6 +194,35 @@ function confirmModal(opts, onYes){
   };
 }
 
+/* 站內的輸入框（目前只有「換人」的教師代碼用它）。理由與 confirmModal
+   相同：原生 prompt() 不吃 --fs 與高對比，而且會凍住整個執行緒。
+   onOk 收到輸入值；按取消或 Esc 不呼叫。 */
+function promptModal(opts, onOk){
+  const o = opts || {};
+  confirmModal._onNo = null;
+  confirmModal._yes = function(){
+    const box = document.getElementById('promptInput');
+    const v = box ? box.value : '';
+    modal._onDismiss = null;
+    closeModal();
+    try { onOk(v); } catch (e) {
+      if (typeof console !== 'undefined' && console.error) console.error(e);
+    }
+  };
+  modal('<div class="modal-h"><h3>' + esc(o.title || '請輸入') + '</h3></div>' +
+    '<div class="modal-b">' +
+    (o.body ? '<p style="margin:0 0 10px;max-width:60ch">' + esc(o.body) + '</p>' : '') +
+    '<div class="field"><label for="promptInput">' + esc(o.label || '') + '</label>' +
+    '<input type="' + (o.password ? 'password' : 'text') + '" id="promptInput" ' +
+    'inputmode="' + esc(o.inputmode || 'text') + '" autocomplete="off"></div>' +
+    (o.note ? '<p class="muted small" style="margin-top:10px;max-width:60ch">' + esc(o.note) + '</p>' : '') +
+    '</div>' +
+    '<div class="modal-f">' +
+    '<button class="btn" data-act="confirm-no">' + esc(o.no || '取消') + '</button>' +
+    '<button class="btn primary" data-act="confirm-yes">' + esc(o.yes || '確定') + '</button>' +
+    '</div>', {focus:'#promptInput'});
+}
+
 /* 站內的告知框。理由與 confirmModal 完全相同，只是沒有「取消」這個選項。
    會走到它的兩個地方都是存檔失敗——原生 alert() 在那一刻特別糟：
    它不吃 --fs 與高對比，而它要傳達的正是「先不要關掉這個分頁」；
@@ -279,13 +308,40 @@ function renderShell(){
         esc(u.name) + '（' + roleName(u.role) + '）</option>';
     }).join('') + '</optgroup>';
   }).join('');
-  /* 藏起來還不夠：把選項本身也收掉，控制項就算被翻出來也換不了人。 */
-  if (liveRun && !isTeacher()){
+  /* 藏起來還不夠：把選項本身也收掉，控制項就算被翻出來也換不了人。
+     但「鎖住」不等於「沒有出口」。三道守門的解鎖條件原本都是 isTeacher()，
+     而 isTeacher() 讀的是目前選到的身分——清場之後一旦選成學生就恆為 false，
+     這台裝置永遠回不到教師端：老師把平板交給下一個孩子、或一開始選錯人，
+     現場唯一解法是清瀏覽器資料，那會連同這孩子唯一一份作答與草稿一起銷毀，
+     而且代為檢視、評閱、答案卡開關也全部做不到。
+     多一顆〈換人〉，用 state.settings.teacherCode 開鎖（deviceUnlock）。 */
+  const unlocked = !!(state.ui && state.ui.deviceUnlock);
+  if (liveRun && !isTeacher() && !unlocked){
     const meNow = currentUser();
     sel.innerHTML = '<option value="' + meNow.id + '" selected>' + esc(meNow.name) + '</option>';
     sel.disabled = true;
   } else {
     sel.disabled = false;
+  }
+  /* 這顆鈕只在「施測狀態 + 目前是學生」時出現，所以四個條件的孩子都看得到
+     同一顆，版面幾何不因條件而異；它需要代碼才有作用。 */
+  let sw = document.getElementById('switchWho');
+  if (liveRun && !isTeacher()){
+    if (!sw){
+      sw = document.createElement('button');
+      sw.id = 'switchWho';
+      sw.className = 'btn sm ghost';
+      sw.type = 'button';
+      sw.dataset.act = 'device-unlock';
+      const wrap = $('#whoWrap');
+      if (wrap && wrap.parentNode) wrap.parentNode.insertBefore(sw, wrap.nextSibling);
+      else document.querySelector('.topbar').appendChild(sw);
+    }
+    sw.textContent = unlocked ? '換人（已解鎖）' : '換人';
+    sw.style.display = '';
+    if (whoWrap) whoWrap.style.display = unlocked ? '' : 'none';
+  } else if (sw){
+    sw.style.display = 'none';
   }
 
   /* 教師視角的班級選擇器（學生看不到） */

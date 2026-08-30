@@ -174,6 +174,9 @@ function rAssign(){
 }
 
 function doReassign(){
+  /* 第二道守門：清場之後絕對不製造示範資料。界面那一道只擋得住按鈕，
+     日後從別的入口呼叫這一支時還是會把示範資料種到真實受試者名下。 */
+  if (state && state.demoSeed === false) return;
   const seed = Math.floor(Math.random() * 900000) + 100000;
   const rnd = mulberry32(seed);
   const conds = CONDITIONS.map(function(c){ return c.id; });
