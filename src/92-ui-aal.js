@@ -99,8 +99,15 @@ function aalInit(aid){
       AAL.tele    = d.tele    || {};
       AAL.drafts  = d.drafts  || {};
       /* 每一題的 enter 重設為現在。不重設的話，離線的那幾個小時會被
-         算進 firstKeyLatency，產生沒有意義的離群值。 */
-      Object.keys(AAL.tele).forEach(function(iid){ AAL.tele[iid].enter = Date.now(); });
+         算進 firstKeyLatency，產生沒有意義的離群值。
+         但只對「還沒下過筆」的題目重設——已經量到 firstKeyLatency 的題目
+         再重設就是把已經正確的值蓋掉。lastKey 也要一併清掉，
+         否則離線的那幾個小時會被記成一次 longPause。 */
+      Object.keys(AAL.tele).forEach(function(iid){
+        const t = AAL.tele[iid];
+        if (t.firstKeyLatency === null) t.enter = Date.now();
+        t.lastKey = null;
+      });
       AAL.t0 = Date.now();
       aalLog('RESUME', 'R', {resumed:true, via:AAL_LEFT_VIA, savedAt:d.savedAt || null});
       AAL_LEFT_VIA = 'reload';
@@ -142,6 +149,36 @@ function aalTele(iid){
     longPauses:0, lastKey:null, enter:Date.now(), prevLen:0};
 }
 
+/* 進出題目的邊界。這一支同時修掉兩個結構性失效的匯出變項：
+
+   (1) first_key_latency_ms 恆為 0。aalTele() 原本唯一的呼叫端是
+       aalTypeTelemetry() 自己——紀錄要到「第一次按鍵」才被建立，
+       enter 就設成那一刻，而下一行 `firstKeyLatency = now - t.enter`
+       在同一個 tick 內算，結果永遠是 0–1 ms。全庫沒有任何路徑
+       在「進入這一題」時建立紀錄。改成進入題目時就建立。
+
+   (2) dwell_ms 量到的是題序，不是停留時間。它是該題所有事件的
+       max(t) − min(t)，而 aalSubmit 會在交卷的同一毫秒替**每一題**
+       補寫 TELEMETRY 與 SUBMIT——於是第一題的 dwell 是整節課、
+       最後一題趨近 0。改成寫出 ENTER／EXIT 邊界，由匯出端累加各次造訪。
+
+   兩者都是要到分析階段才會被發現，而且施測結束無法回頭重建。
+   ENTER／EXIT 的 code 是 null，不會進入 lsa／enaLines／情感軌跡的編碼。 */
+function aalEnterItem(it){
+  if (!AAL || !it) return;
+  if (AAL._curIid === it.id) return;
+  aalExitItem();
+  AAL._curIid = it.id;
+  aalTele(it.id);
+  aalLog('ENTER', null, {}, it);
+}
+function aalExitItem(){
+  if (!AAL || !AAL._curIid) return;
+  const prev = AAL.items.find(function(x){ return x.id === AAL._curIid; });
+  AAL._curIid = null;
+  if (prev) aalLog('EXIT', null, {}, prev);
+}
+
 /* itemArg 是給去抖／節流回呼用的：回呼醒來時學生可能已經翻到下一題，
    aalItem() 會抓到新題，把上一題的事件記到別題的 iid 與 proc 上。
    末位參數，不影響既有呼叫端。 */
@@ -168,6 +205,10 @@ function viewAaL(aid){
   if (!AAL || AAL.aid !== aid || AAL.me !== me.id) aalInit(aid);
 
   const it = aalItem();
+  /* 進入題目的邊界。放在 viewAaL 而不是逐個導覽處理器，
+     是因為換題的路徑不只一條（上一題／下一題／回來續作／略過導覽），
+     漏一條就少一段停留時間。aalEnterItem 對同一題重入是無作用的。 */
+  aalEnterItem(it);
   const cond = condition(AAL.cond);
   const text = getText(it.unit);
   const sents = passageSentences(text);
@@ -189,6 +230,9 @@ function viewAaL(aid){
       /* tabindex="-1"：〈回到題目導覽〉的焦點落在這個容器上，
          而不是落在某一顆按鈕。落在容器上，下一次 Tab 才依序碰到
          〈上一題〉〈下一題〉〈交卷〉——不會讓鍵盤使用者一按 Enter 就交卷。 */
+      /* 存檔失敗的常駐警示。aalSave 早就會在連續兩次失敗時去掀開
+         id="aalSaveWarn"，但全站從來沒有這個節點——整條安全網是死碼。
+         role="alert" 讓報讀器也聽得到；平常 hidden。 */
       '<div class="row" id="aalNav" tabindex="-1">' +
       '<button class="btn sm" data-act="aal-leave">← 先離開（進度會保留）</button>' +
       '<span class="pill">第 ' + (AAL.idx + 1) + ' / ' + AAL.items.length + ' 題</span>' +
@@ -197,6 +241,13 @@ function viewAaL(aid){
       '<button class="btn sm" data-act="aal-next"' + (AAL.idx < AAL.items.length - 1 ? '' : ' disabled') + '>下一題 →</button>' +
       '<button class="btn primary sm" data-act="aal-submit">交卷</button></div>' +
     '</div>' +
+
+    '<div class="card card-p" id="aalSaveWarn" role="alert"' +
+      (AAL._saveOff ? '' : ' hidden') +
+      ' style="margin-bottom:12px;border-left:3px solid var(--crit)">' +
+      '<p class="small" style="margin:0"><strong>你寫的東西沒能存起來。</strong>' +
+      '這台平板的儲存空間可能滿了。先不要關掉這個分頁——畫面上的內容還在，' +
+      '請舉手告訴老師。</p></div>' +
 
     '<div class="aal">' +
     /* ---- 左欄：文本，逐句可標記 ---- */
@@ -458,6 +509,8 @@ function flushPendingPicks(){
   clearTimeout(aalTypeTelemetry._saveT); aalTypeTelemetry._saveT = null;
   Object.keys(aalPick._pending || {}).forEach(commitPick);
   flushTypeTelemetry();
+  /* 離開這一題（換題、交卷、離開路由）——寫出停留時間的右邊界 */
+  aalExitItem();
 }
 
 /* 打字的「遙測節流」與「草稿落地」是兩件事，節奏不該綁在一起。
@@ -803,7 +856,24 @@ function aalSubmit(){
   });
   state.submissions = state.submissions.filter(function(s){ return !(s.aid === AAL.aid && s.sid === me.id); });
   state.submissions.push({aid:AAL.aid, sid:me.id, at:Date.now()});
-  save();
+  /* 落地失敗就不能刪草稿，也不能說「已交卷」。
+     原本是 save(); aalDropDraft(); ——而 save() 把例外整個吞掉，
+     於是配額爆掉時：作答只剩在記憶體裡、草稿被刪、畫面說已交卷，
+     平板一闔上 16 題全沒，而 submitted() 之後回傳 false。
+     他、監考老師與研究者當下都不會知道。
+     一台共用平板一整天輪過二十幾個孩子，kairos-draft 每人一筆
+     tele／drafts／marks／checks——aalSave 自己的註解就寫著
+     「配額問題不再是偶發」。 */
+  if (!save()){
+    /* 交卷紀錄退回去，避免畫面顯示「已完成」但資料根本沒存下來 */
+    state.submissions = state.submissions.filter(function(s){ return !(s.aid === AAL.aid && s.sid === me.id); });
+    AAL._saveOff = true;
+    const warn = document.getElementById('aalSaveWarn');
+    if (warn) warn.hidden = false;
+    alert('這一份沒能存起來（裝置的儲存空間可能滿了）。\n\n' +
+          '**先不要關掉這個分頁**，你寫的東西還在畫面上。請舉手告訴老師。');
+    return;
+  }
   aalDropDraft();          // 交出去了，草稿不用留
   AAL = null;
   toast('已交卷。接下來是這節課的問卷。');

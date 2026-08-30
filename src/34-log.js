@@ -249,6 +249,9 @@ function buildDemoLogs(){
       const nC = Math.min(SELF_CHECKS.length, Math.round((0.4 + eng * 1.2) * (1 + rnd() * 2)));
       for (let i = 0; i < nC; i++) push('CHECK', 'C', {idx:i});
       push('SUBMIT', 'S', {selfCheck:nC});
+      /* 停留時間的右邊界。示範產生器本來只寫 ENTER，
+         沒有 EXIT 就配不成一次造訪，dwell 會退回 max−min 的舊算法。 */
+      push('EXIT', null, {});
     });
   });
 
@@ -352,9 +355,18 @@ function toTelemetryCsv(){
   allLogs().forEach(function(e){
     const k = e.sid + '|' + e.iid;
     const r = byKey[k] = byKey[k] || {sid:e.sid, iid:e.iid, cond:e.cond, proc:e.proc,
-      fkl:'', keys:'', del:'', pause:'', mEv:[], cEv:[], opts:0, turns:0,
+      fkl:'', keys:'', del:'', pause:'', mEv:[], cEv:[], opts:0, turns:0, visits:[],
       t0:e.t, t1:e.t, sent:[], };
     r.t0 = Math.min(r.t0, e.t); r.t1 = Math.max(r.t1, e.t);
+    /* 停留時間要用 ENTER→EXIT 的區間累加，不能用 max(t) − min(t)：
+       aalSubmit 會在交卷的同一毫秒替每一題補寫 TELEMETRY 與 SUBMIT，
+       於是第一題的 max−min 是整節課、最後一題趨近 0——量到的是題序。
+       沒有邊界事件的舊資料才退回 max−min（見下面的 fallback）。 */
+    if (e.type === 'ENTER') r.visits.push({in:e.t, out:null});
+    if (e.type === 'EXIT'){
+      const open = r.visits.filter(function(v){ return v.out === null; }).pop();
+      if (open) open.out = e.t;
+    }
     if (e.type === 'TELEMETRY'){ r.fkl = e.firstKeyLatency; r.keys = e.keystrokes; r.del = e.deletions; r.pause = e.longPauses; }
     /* 標記與檢核是切換型事件，取消也會寫一筆——不能在這裡 ++。
        先收起來，輸出時用 foldToggleLog 折成「最後還開著幾個」。
@@ -368,9 +380,14 @@ function toTelemetryCsv(){
     const r = byKey[k], kl = classOfStudent(r.sid), it = getItem(r.iid);
     r.marks = foldToggleLog(r.mEv, 'M', 'sent').length;
     r.checks = foldToggleLog(r.cEv, 'C', 'idx').length;
+    /* 有邊界事件就累加各次造訪；沒有（舊資料）才退回 max−min */
+    const spans = r.visits.filter(function(v){ return v.out != null && v.out >= v.in; });
+    r.dwell = spans.length
+      ? spans.reduce(function(s, v){ return s + (v.out - v.in); }, 0)
+      : (r.t1 - r.t0);
     rows.push([r.sid, userName(r.sid), kl ? kl.name : '', r.cond, r.iid, r.proc,
       r.fkl, r.keys, r.del, r.pause, r.marks, r.opts, r.turns, r.checks,
-      r.t1 - r.t0, r.sent.length ? (r.sent.reduce(function(a, b){ return a + b; }, 0) / r.sent.length).toFixed(3) : '']);
+      r.dwell, r.sent.length ? (r.sent.reduce(function(a, b){ return a + b; }, 0) / r.sent.length).toFixed(3) : '']);
   });
   return rows.map(function(r){
     return r.map(function(c){ return '"' + String(c).replace(/"/g, '""') + '"'; }).join(',');

@@ -66,7 +66,7 @@ function save(){
   if (isImpersonating() && !save._allowUiWrite){
     if (typeof console !== 'undefined' && console.warn)
       console.warn('[KAIROS] 代為檢視期間的落地被擋下', new Error().stack);
-    return;
+    return true;   // 刻意不落地，不是失敗
   }
   /* 版次要在序列化之前掛上去，兩個分支寫出的物件才都帶得到 */
   state.rev = nextRev();
@@ -79,10 +79,16 @@ function save(){
       const clone = Object.assign({}, state, {ui: Object.assign({}, state.ui, {
         role: imp.realRole, impersonate: undefined})});
       localStorage.setItem(STORE_KEY, JSON.stringify(clone));
-      return;
+      return true;
     }
     localStorage.setItem(STORE_KEY, JSON.stringify(state));
-  } catch (e) { /* 無痕模式等情況：僅存在記憶體 */ }
+    return true;
+  } catch (e) {
+    /* 回傳成功與否。原本一律吞掉，於是 aalSubmit 在靜默失敗之後照樣
+       刪掉草稿並說「已交卷」——作答只剩在記憶體裡，平板一闔上就全沒，
+       而 submitted() 之後回傳 false。呼叫端要有辦法知道。 */
+    return false;
+  }
 }
 /* 只給「進入／離開代為檢視」這一種變更用——而且只寫 ui 這一個切片。
    舊版是把守門整個掀開再 save() 整份 state：代為檢視期間任何漏了守門的
